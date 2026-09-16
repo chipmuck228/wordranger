@@ -1,7 +1,6 @@
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import type { Lexeme } from "@/domain/vocabulary/lexeme";
 import type { LexemeRelation } from "@/domain/vocabulary/lexeme-relation";
-import type { VocabularyRepository } from "@/domain/vocabulary/vocabulary-repository";
 import {
   MappedLearningContentCapability,
   V1_BLOCKED_SKILL_REASONS,
@@ -19,6 +18,41 @@ function hasUsableMeaning(lexeme: Lexeme): boolean {
 
 function hasUsableLemma(lexeme: Lexeme): boolean {
   return usableText(lexeme.lemma) || usableText(lexeme.display);
+}
+
+/**
+ * Index production-approved relations the same way getRelations() does:
+ * fromLexemeId always, toLexemeId only when the edge is symmetric.
+ * O(R). Guards against adding the same edge twice if from === to.
+ */
+export function indexRelationsByLexeme(
+  relations: readonly LexemeRelation[],
+): Map<string, LexemeRelation[]> {
+  const byLexeme = new Map<string, LexemeRelation[]>();
+  const seenIds = new Map<string, Set<string>>();
+
+  function add(lexemeId: string, relation: LexemeRelation): void {
+    const ids = seenIds.get(lexemeId) ?? new Set<string>();
+    if (ids.has(relation.id)) {
+      return;
+    }
+    ids.add(relation.id);
+    seenIds.set(lexemeId, ids);
+    const list = byLexeme.get(lexemeId) ?? [];
+    list.push(relation);
+    byLexeme.set(lexemeId, list);
+  }
+
+  for (const relation of relations) {
+    add(relation.fromLexemeId, relation);
+    if (
+      relation.symmetric &&
+      relation.toLexemeId !== relation.fromLexemeId
+    ) {
+      add(relation.toLexemeId, relation);
+    }
+  }
+  return byLexeme;
 }
 
 export function lexemeLearningCapabilityFromContent(
@@ -70,16 +104,23 @@ export function lexemeLearningCapabilityFromContent(
   };
 }
 
-export async function buildVocabularyLearningContentCapability(
-  vocabulary: VocabularyRepository,
-): Promise<LearningContentCapability> {
-  const lexemes = await vocabulary.listLexemes();
+/**
+ * Pure O(L + R) capability map from already-loaded production lexemes
+ * and production-approved relations. Does not query VocabularyRepository.
+ */
+export function buildVocabularyLearningContentCapability(
+  lexemes: readonly Lexeme[],
+  relations: readonly LexemeRelation[],
+): LearningContentCapability {
+  const relationsByLexemeId = indexRelationsByLexeme(relations);
   const capabilities = new Map<string, LexemeLearningCapability>();
   for (const lexeme of lexemes) {
-    const relations = await vocabulary.getRelations(lexeme.id);
     capabilities.set(
       lexeme.id,
-      lexemeLearningCapabilityFromContent(lexeme, relations),
+      lexemeLearningCapabilityFromContent(
+        lexeme,
+        relationsByLexemeId.get(lexeme.id) ?? [],
+      ),
     );
   }
   return new MappedLearningContentCapability(capabilities, "unsupported");

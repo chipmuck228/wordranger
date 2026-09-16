@@ -76,10 +76,10 @@ Skill-global support is not enough. `SEMANTIC_CONNECTION` can be feasible for on
 
 - `MEANING_RECOGNITION` — at least one non-blank `meaningsZh`
 - `ACTIVE_RECALL` / `SPELLING_RECALL` — usable meaning **and** usable lemma/display
-- `SEMANTIC_CONNECTION` — at least one **production-approved** relation from `VocabularyRepository.getRelations()` (policy applied; `rule_inferred` stays out of production)
+- `SEMANTIC_CONNECTION` — at least one **production-approved** relation from the bulk `VocabularyRepository.listRelations()` graph (same `VocabularyContentPolicy` as `getRelations()`; `rule_inferred` stays out of production)
 - `LISTENING_RECOGNITION` / `CONTEXT_USE` — unsupported in V1 (not faked from IPA or generated text)
 
-`planLearningSession` builds these facts from vocabulary on the server and passes a capability object into the domain scheduler. The scheduler does **not** call Task Generator to probe feasibility. Feasibility means *enough approved content to attempt generation*, not that every random path will succeed.
+`planLearningSession` loads lexemes and production-approved relations once, builds these facts locally, and passes a capability object into the domain scheduler. The scheduler does **not** call Task Generator to probe feasibility. Feasibility means *enough approved content to attempt generation*, not that every random path will succeed.
 
 The generator may still emit a pedagogical need for an unsupported skill. The scheduler then marks it `BLOCKED` with `UNSUPPORTED_CONTENT_CAPABILITY` and optional `capabilityReason`. That blocked row stays in `SchedulerTrace`.
 
@@ -192,6 +192,27 @@ Injected:
 - `createId`
 
 The domain does not call `Math.random()`, `new Date()`, or `crypto.randomUUID()`.
+
+## Performance characteristics
+
+Session planning remote vocabulary query count is constant with respect to lexeme count:
+
+```text
+Promise.all:
+  vocabulary.listLexemes()
+  vocabulary.listRelations()
+  learning-state models
+  recent activity
+→ local O(L + R) capability map
+→ Scheduler
+```
+
+- `L` = lexemes, `R` = production-approved relations
+- no per-lexeme relation request during planning
+- `listRelations()` is deterministically ordered by `type`, `fromLexemeId`, `toLexemeId`, `id`
+- Task Generator still uses single-lexeme `getRelations(lexemeId)` at task-generation time
+
+Do not replace this bulk read with `Promise.all` over N `getRelations()` calls. That is still N+1.
 
 ## Why the scheduler is read-only
 

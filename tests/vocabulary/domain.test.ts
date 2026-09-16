@@ -3,6 +3,7 @@ import { EvidenceOutcome } from "@/domain/learning/evidence.types";
 import { processEvidence } from "@/domain/learning/engine/process-evidence";
 import { LexemeRelationType } from "@/domain/vocabulary/lexeme-relation";
 import { assertRelationInvariants } from "@/domain/vocabulary/validate-relation";
+import { sortLexemeRelations } from "@/domain/vocabulary/relation-policy";
 import { InMemoryLearningRepository } from "@/server/learning/in-memory-learning-repository";
 import { InMemoryVocabularyRepository } from "@/server/vocabulary/in-memory-vocabulary-repository";
 import { InMemoryVocabularyInspectionRepository } from "@/server/vocabulary/in-memory-vocabulary-inspection-repository";
@@ -162,6 +163,73 @@ describe("Vocabulary Domain", () => {
           relation.toLexemeId === quite.id || relation.fromLexemeId === quite.id,
       ),
     ).toBe(true);
+  });
+
+  it("TEST V13: listRelations excludes rule_inferred under production policy", async () => {
+    const listed = await repository.listRelations();
+    expect(
+      listed.some((relation) => relation.provenance === "rule_inferred"),
+    ).toBe(false);
+    const approvedStructural = dataset.relations.find(
+      (relation) =>
+        relation.provenance === "source_structural" &&
+        relation.confidence >= 0.95,
+    );
+    const approvedCurated = dataset.relations.find(
+      (relation) =>
+        relation.provenance === "curated_model" && relation.confidence >= 0.8,
+    );
+    expect(approvedStructural).toBeTruthy();
+    expect(approvedCurated).toBeTruthy();
+    expect(listed.some((relation) => relation.id === approvedStructural!.id)).toBe(
+      true,
+    );
+    expect(listed.some((relation) => relation.id === approvedCurated!.id)).toBe(
+      true,
+    );
+  });
+
+  it("TEST V14: listRelations provenances filter cannot bypass production policy", async () => {
+    const bypass = await repository.listRelations({
+      provenances: ["rule_inferred"],
+    });
+    expect(bypass).toEqual([]);
+  });
+
+  it("TEST V15: listRelations caller filters only narrow production-approved results", async () => {
+    const all = await repository.listRelations();
+    const byType = await repository.listRelations({
+      types: [LexemeRelationType.CONFUSABLE],
+    });
+    const byProvenance = await repository.listRelations({
+      provenances: ["source_structural"],
+    });
+    const byConfidence = await repository.listRelations({ minConfidence: 0.99 });
+    const approvedIds = new Set(all.map((relation) => relation.id));
+    expect(byType.length).toBeGreaterThan(0);
+    expect(byProvenance.length).toBeGreaterThan(0);
+    expect(byConfidence.length).toBeGreaterThan(0);
+    expect(byType.length).toBeLessThanOrEqual(all.length);
+    expect(byProvenance.length).toBeLessThanOrEqual(all.length);
+    expect(byConfidence.length).toBeLessThanOrEqual(all.length);
+    expect(byType.every((relation) => relation.type === LexemeRelationType.CONFUSABLE)).toBe(
+      true,
+    );
+    expect(
+      byProvenance.every((relation) => relation.provenance === "source_structural"),
+    ).toBe(true);
+    expect(byConfidence.every((relation) => relation.confidence >= 0.99)).toBe(
+      true,
+    );
+    for (const subset of [byType, byProvenance, byConfidence]) {
+      expect(subset.every((relation) => approvedIds.has(relation.id))).toBe(true);
+    }
+  });
+
+  it("TEST V16: listRelations is ordered by type, fromLexemeId, toLexemeId, id", async () => {
+    const listed = await repository.listRelations();
+    expect(listed.length).toBeGreaterThan(1);
+    expect(listed).toEqual(sortLexemeRelations(listed));
   });
 
   it("TEST V12: source facts are not rewritten by canonical correction", () => {

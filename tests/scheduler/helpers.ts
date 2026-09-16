@@ -16,6 +16,8 @@ import {
   type SchedulerPolicy,
 } from "@/domain/scheduler";
 import { SeededRandomSource } from "@/domain/tasks/random-source";
+import type { VocabularyRepository } from "@/domain/vocabulary/vocabulary-repository";
+import { buildVocabularyLearningContentCapability } from "@/server/scheduler/vocabulary-learning-content-capability";
 import { sequentialIdFactory } from "../learning/helpers";
 
 export const NOW = "2026-09-16T12:00:00.000Z";
@@ -114,6 +116,16 @@ export function policyWith(
       ...overrides.diversity,
     },
   };
+}
+
+export async function capabilityFromVocabulary(
+  vocabulary: VocabularyRepository,
+) {
+  const [lexemes, relations] = await Promise.all([
+    vocabulary.listLexemes(),
+    vocabulary.listRelations(),
+  ]);
+  return buildVocabularyLearningContentCapability(lexemes, relations);
 }
 
 export { MasteryStage, RetentionState, VocabularySkill, WeaknessType, sequentialIdFactory };

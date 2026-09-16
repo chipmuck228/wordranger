@@ -125,7 +125,17 @@ Need generation and scheduling are separate:
 5. Quotas classify by **all merged reasons**; diversity uses primary reason
 6. `LearningSessionPlan`
 
-The scheduler does not call Task Generator to test feasibility. Content capability is computed on the application side from `VocabularyRepository` and passed in as facts.
+The scheduler does not call Task Generator to test feasibility. Content capability is computed on the application side from bulk `VocabularyRepository` reads and passed in as facts.
+
+```text
+VocabularyRepository
+  → listLexemes()
+  → listRelations()
+  → in-memory capability map
+  → Scheduler
+```
+
+Session planning loads lexemes once and production-approved relations once, then builds the lexeme capability map locally. There is no per-lexeme `getRelations()` during planning.
 
 The scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY` v1). Session plans are ephemeral. See `docs/LEARNING_SCHEDULER.md`.
 

@@ -27,15 +27,19 @@ export async function planLearningSession(
   request: ScheduleLearningSessionRequest,
 ): Promise<LearningSessionPlan> {
   const policy = request.policy ?? DEFAULT_SCHEDULER_POLICY;
-  const [lexemes, models, recentActivity, capability] = await Promise.all([
+  const [lexemes, relations, models, recentActivity] = await Promise.all([
     request.vocabulary.listLexemes(),
+    request.vocabulary.listRelations(),
     request.query.listStudentLexemeModels(request.userId),
     request.query.getRecentLearningActivity(
       request.userId,
       Math.max(policy.recency.recentActivityWindow, 40),
     ),
-    buildVocabularyLearningContentCapability(request.vocabulary),
   ]);
+  const capability = buildVocabularyLearningContentCapability(
+    lexemes,
+    relations,
+  );
   const scheduler = request.scheduler ?? new DeterministicScheduler();
   return scheduler.planSession({
     userId: request.userId,

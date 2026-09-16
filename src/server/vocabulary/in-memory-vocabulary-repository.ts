@@ -1,7 +1,7 @@
 import type { Lexeme } from "@/domain/vocabulary/lexeme";
 import type { LexemeRelation } from "@/domain/vocabulary/lexeme-relation";
 import type { LexemeTags } from "@/domain/vocabulary/lexeme-tags";
-import { selectApprovedRelations } from "@/domain/vocabulary/relation-policy";
+import { selectApprovedRelations, sortLexemeRelations } from "@/domain/vocabulary/relation-policy";
 import {
   DEFAULT_VOCABULARY_CONTENT_POLICY,
   type VocabularyContentPolicy,
@@ -74,6 +74,12 @@ export class InMemoryVocabularyRepository implements VocabularyRepository {
   ): Promise<LexemeRelation[]> {
     const candidates = this.relationsByLexeme.get(lexemeId) ?? [];
     return selectApprovedRelations(candidates, this.policy, options);
+  }
+
+  async listRelations(options: GetRelationsOptions = {}): Promise<LexemeRelation[]> {
+    return sortLexemeRelations(
+      selectApprovedRelations(this.allRelations, this.policy, options),
+    );
   }
 
   async getTags(lexemeId: string): Promise<LexemeTags | null> {

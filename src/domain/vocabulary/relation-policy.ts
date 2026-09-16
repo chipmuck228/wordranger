@@ -54,3 +54,23 @@ export function selectApprovedRelations(
     return true;
   });
 }
+
+export function sortLexemeRelations(
+  relations: readonly LexemeRelation[],
+): LexemeRelation[] {
+  return [...relations].sort((left, right) => {
+    const type = left.type.localeCompare(right.type);
+    if (type !== 0) {
+      return type;
+    }
+    const from = left.fromLexemeId.localeCompare(right.fromLexemeId);
+    if (from !== 0) {
+      return from;
+    }
+    const to = left.toLexemeId.localeCompare(right.toLexemeId);
+    if (to !== 0) {
+      return to;
+    }
+    return left.id.localeCompare(right.id);
+  });
+}

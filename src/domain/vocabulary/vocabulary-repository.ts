@@ -21,5 +21,11 @@ export interface VocabularyRepository {
     lexemeId: string,
     options?: GetRelationsOptions,
   ): Promise<LexemeRelation[]>;
+  /**
+   * Production-approved relation graph. Same policy ∩ caller-filter
+   * contract as getRelations(). Order is deterministic:
+   * type, fromLexemeId, toLexemeId, id.
+   */
+  listRelations(options?: GetRelationsOptions): Promise<LexemeRelation[]>;
   getTags(lexemeId: string): Promise<LexemeTags | null>;
 }

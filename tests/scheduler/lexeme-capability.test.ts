@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import { LexemeRelationType } from "@/domain/vocabulary/lexeme-relation";
 import { InMemoryVocabularyRepository } from "@/server/vocabulary/in-memory-vocabulary-repository";
-import { buildVocabularyLearningContentCapability } from "@/server/scheduler/vocabulary-learning-content-capability";
 import {
   makeApprovedRelation,
   tinyDataset,
 } from "../tasks/helpers";
+import { capabilityFromVocabulary } from "./helpers";
 
 function lexeme(id: string, meaningsZh: string[], lemma = id) {
   return {
@@ -22,7 +22,7 @@ describe("Lexeme-aware vocabulary capability", () => {
     const vocabulary = new InMemoryVocabularyRepository(
       tinyDataset({ lexemes: [lexeme("a", ["安静"])] }),
     );
-    const capability = await buildVocabularyLearningContentCapability(vocabulary);
+    const capability = await capabilityFromVocabulary(vocabulary);
     expect(capability.supports("a", VocabularySkill.MEANING_RECOGNITION)).toBe(true);
   });
 
@@ -32,7 +32,7 @@ describe("Lexeme-aware vocabulary capability", () => {
         lexemes: [lexeme("blank", ["  "]), lexeme("empty", [])],
       }),
     );
-    const capability = await buildVocabularyLearningContentCapability(vocabulary);
+    const capability = await capabilityFromVocabulary(vocabulary);
     expect(capability.supports("blank", VocabularySkill.MEANING_RECOGNITION)).toBe(
       false,
     );
@@ -45,7 +45,7 @@ describe("Lexeme-aware vocabulary capability", () => {
     const vocabulary = new InMemoryVocabularyRepository(
       tinyDataset({ lexemes: [lexeme("quiet", ["安静"])] }),
     );
-    const capability = await buildVocabularyLearningContentCapability(vocabulary);
+    const capability = await capabilityFromVocabulary(vocabulary);
     expect(capability.supports("quiet", VocabularySkill.ACTIVE_RECALL)).toBe(true);
   });
 
@@ -53,7 +53,7 @@ describe("Lexeme-aware vocabulary capability", () => {
     const vocabulary = new InMemoryVocabularyRepository(
       tinyDataset({ lexemes: [lexeme("quiet", ["安静"])] }),
     );
-    const capability = await buildVocabularyLearningContentCapability(vocabulary);
+    const capability = await capabilityFromVocabulary(vocabulary);
     expect(capability.supports("quiet", VocabularySkill.SPELLING_RECALL)).toBe(true);
   });
 
@@ -71,7 +71,7 @@ describe("Lexeme-aware vocabulary capability", () => {
         ],
       }),
     );
-    const capability = await buildVocabularyLearningContentCapability(vocabulary);
+    const capability = await capabilityFromVocabulary(vocabulary);
     expect(capability.supports("a", VocabularySkill.SEMANTIC_CONNECTION)).toBe(true);
   });
 
@@ -79,7 +79,7 @@ describe("Lexeme-aware vocabulary capability", () => {
     const vocabulary = new InMemoryVocabularyRepository(
       tinyDataset({ lexemes: [lexeme("solo", ["单独"])] }),
     );
-    const capability = await buildVocabularyLearningContentCapability(vocabulary);
+    const capability = await capabilityFromVocabulary(vocabulary);
     expect(capability.supports("solo", VocabularySkill.SEMANTIC_CONNECTION)).toBe(
       false,
     );
@@ -108,7 +108,7 @@ describe("Lexeme-aware vocabulary capability", () => {
         ],
       }),
     );
-    const capability = await buildVocabularyLearningContentCapability(vocabulary);
+    const capability = await capabilityFromVocabulary(vocabulary);
     expect(capability.supports("a", VocabularySkill.SEMANTIC_CONNECTION)).toBe(
       false,
     );
@@ -118,7 +118,7 @@ describe("Lexeme-aware vocabulary capability", () => {
     const vocabulary = new InMemoryVocabularyRepository(
       tinyDataset({ lexemes: [lexeme("a", ["A"])] }),
     );
-    const capability = await buildVocabularyLearningContentCapability(vocabulary);
+    const capability = await capabilityFromVocabulary(vocabulary);
     expect(
       capability.supports("a", VocabularySkill.LISTENING_RECOGNITION),
     ).toBe(false);
@@ -128,7 +128,7 @@ describe("Lexeme-aware vocabulary capability", () => {
     const vocabulary = new InMemoryVocabularyRepository(
       tinyDataset({ lexemes: [lexeme("a", ["A"])] }),
     );
-    const capability = await buildVocabularyLearningContentCapability(vocabulary);
+    const capability = await capabilityFromVocabulary(vocabulary);
     expect(capability.supports("a", VocabularySkill.CONTEXT_USE)).toBe(false);
   });
 });

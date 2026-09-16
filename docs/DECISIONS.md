@@ -210,6 +210,12 @@ Primary reason remains explanation precedence. `maxNewWords` and `minReviewNeeds
 
 If FADING prefers an unsupported skill, that candidate stays blocked in the trace. A separate supported recovery fallback may be generated from practiced/supported skills. No fallback is invented when none is feasible.
 
+## ADR-036 — Scheduler capability preparation uses bulk production-approved vocabulary relations
+
+**Status:** accepted
+
+Session planning must not issue one relation query per lexeme. `planLearningSession` loads `listLexemes()` and `listRelations()` once (plus learner models and recent activity), then builds the lexeme capability map in memory in O(L + R). `listRelations()` uses the same `VocabularyContentPolicy` helper as `getRelations()`; caller filters may only narrow. Task Generator may still call `getRelations(lexemeId)` for a single task.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

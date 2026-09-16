@@ -7,13 +7,17 @@ import { SeededRandomSource } from "@/domain/tasks/random-source";
 import { LexemeRelationType } from "@/domain/vocabulary/lexeme-relation";
 import { InMemoryVocabularyRepository } from "@/server/vocabulary/in-memory-vocabulary-repository";
 import { loadVocabularyDataset } from "@/server/vocabulary/load-vocabulary-dataset";
-import { buildVocabularyLearningContentCapability } from "@/server/scheduler/vocabulary-learning-content-capability";
 import {
   makeApprovedRelation,
   tinyDataset,
 } from "../tasks/helpers";
 import { sequentialIdFactory } from "../learning/helpers";
-import { makeLexeme, makeModel, plan } from "./helpers";
+import {
+  capabilityFromVocabulary,
+  makeLexeme,
+  makeModel,
+  plan,
+} from "./helpers";
 
 describe("Scheduler lexeme feasibility", () => {
   it("blocks SEMANTIC_CONNECTION only for lexemes without approved relations", async () => {
@@ -34,7 +38,7 @@ describe("Scheduler lexeme feasibility", () => {
         ],
       }),
     );
-    const capability = await buildVocabularyLearningContentCapability(vocabulary);
+    const capability = await capabilityFromVocabulary(vocabulary);
     expect(
       capability.supports("has-rel", VocabularySkill.SEMANTIC_CONNECTION),
     ).toBe(true);
@@ -80,7 +84,7 @@ describe("Scheduler lexeme feasibility", () => {
   it("selected supported-skill needs generate tasks (test-level only)", async () => {
     const vocabulary = new InMemoryVocabularyRepository(loadVocabularyDataset());
     const [quiet] = await vocabulary.findLexemeByLemma("quiet");
-    const capability = await buildVocabularyLearningContentCapability(vocabulary);
+    const capability = await capabilityFromVocabulary(vocabulary);
     const result = plan({
       lexemes: [
         {

@@ -6,7 +6,7 @@ import {
   type LexemeRelation,
 } from "@/domain/vocabulary/lexeme-relation";
 import type { LexemeTags } from "@/domain/vocabulary/lexeme-tags";
-import { selectApprovedRelations } from "@/domain/vocabulary/relation-policy";
+import { selectApprovedRelations, sortLexemeRelations } from "@/domain/vocabulary/relation-policy";
 import {
   DEFAULT_VOCABULARY_CONTENT_POLICY,
   type VocabularyContentPolicy,
@@ -173,6 +173,17 @@ export class SupabaseVocabularyRepository implements VocabularyRepository {
         return true;
       });
     return selectApprovedRelations(mapped, this.policy, options);
+  }
+
+  async listRelations(options: GetRelationsOptions = {}): Promise<LexemeRelation[]> {
+    const { data, error } = await this.client.from("lexeme_relations").select("*");
+    if (error) {
+      throw error;
+    }
+    const mapped = ((data ?? []) as RelationRow[]).map(mapRelation);
+    return sortLexemeRelations(
+      selectApprovedRelations(mapped, this.policy, options),
+    );
   }
 
   async getTags(lexemeId: string): Promise<LexemeTags | null> {
