@@ -55,7 +55,7 @@ create table if not exists lexeme_relations (
   type text not null,
   from_lexeme_id uuid not null references lexemes (id),
   to_lexeme_id uuid not null references lexemes (id),
-  symmetric boolean not null,
+  is_symmetric boolean not null,
   confidence numeric not null check (confidence >= 0 and confidence <= 1),
   provenance text not null,
   note text,

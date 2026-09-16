@@ -5,6 +5,7 @@ import { LexemeRelationType } from "@/domain/vocabulary/lexeme-relation";
 import { assertRelationInvariants } from "@/domain/vocabulary/validate-relation";
 import { InMemoryLearningRepository } from "@/server/learning/in-memory-learning-repository";
 import { InMemoryVocabularyRepository } from "@/server/vocabulary/in-memory-vocabulary-repository";
+import { InMemoryVocabularyInspectionRepository } from "@/server/vocabulary/in-memory-vocabulary-inspection-repository";
 import { planVocabularyImport } from "@/server/vocabulary/import/plan-import";
 import { loadVocabularyDataset } from "@/server/vocabulary/load-vocabulary-dataset";
 import { validateVocabularyDataset } from "@/server/vocabulary/qa";
@@ -118,12 +119,16 @@ describe("Vocabulary Domain", () => {
     expect(
       returned.some((relation) => relation.provenance === "rule_inferred"),
     ).toBe(false);
-    const inspected = await repository.getRelations(inferred!.fromLexemeId, {
-      provenances: ["rule_inferred"],
-    });
+    const inspected = await new InMemoryVocabularyInspectionRepository(
+      repository,
+    ).getRawRelations(inferred!.fromLexemeId);
     expect(inspected.some((relation) => relation.id === inferred!.id)).toBe(
       true,
     );
+    const bypass = await repository.getRelations(inferred!.fromLexemeId, {
+      provenances: ["rule_inferred"],
+    });
+    expect(bypass).toEqual([]);
   });
 
   it("TEST V10: curated_model must meet the confidence policy", async () => {

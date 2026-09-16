@@ -17,6 +17,12 @@ export default function Home() {
           Open Vocabulary Debug Lab
         </Link>
         <Link
+          href="/debug/tasks"
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Open Task Protocol Debug Lab
+        </Link>
+        <Link
           href="/debug/learning"
           className="text-sm font-medium underline underline-offset-4"
         >

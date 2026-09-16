@@ -112,7 +112,7 @@ export async function applyVocabularyImport(
       type: relation.type,
       from_lexeme_id: relation.fromLexemeId,
       to_lexeme_id: relation.toLexemeId,
-      symmetric: relation.symmetric,
+      is_symmetric: relation.symmetric,
       confidence: relation.confidence,
       provenance: relation.provenance,
       note: relation.note,

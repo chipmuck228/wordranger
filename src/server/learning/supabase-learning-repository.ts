@@ -76,6 +76,7 @@ interface EvidenceRow {
   id: string;
   user_id: string;
   lexeme_id: string;
+  task_id: string | null;
   session_id: string | null;
   game_id: string | null;
   task_type: string | null;
@@ -107,6 +108,7 @@ function mapEvidence(row: EvidenceRow): LearningEvidence {
     id: row.id,
     userId: row.user_id,
     lexemeId: row.lexeme_id,
+    taskId: row.task_id,
     sessionId: row.session_id ?? "",
     gameId: row.game_id ?? "unknown",
     taskType: row.task_type ?? "unknown",
@@ -277,6 +279,7 @@ export class SupabaseLearningRepository implements LearningRepository {
       id: evidence.id,
       user_id: evidence.userId,
       lexeme_id: evidence.lexemeId,
+      task_id: evidence.taskId,
       session_id: evidence.sessionId,
       game_id: evidence.gameId,
       task_type: evidence.taskType,

@@ -7,7 +7,8 @@ WordRanger stores five different kinds of data. They must not be collapsed into 
 | Source facts | `vocabulary_source_entries`, `data/vocabulary/source/` | Immutable-ish PDF facts. Canonical corrections must not rewrite them. |
 | Canonical facts | `lexemes`, `data/vocabulary/canonical/` | Trainable vocabulary units. Identified by UUID + `canonical_key`. |
 | Enrichment | `lexeme_relations`, `lexeme_tags`, `data/vocabulary/enrichment/` | Relations and tags with `confidence` / `provenance`. |
-| Learning event log | `learning_evidence` | Append-only source of truth. |
+| Learning event log | `learning_evidence` | Append-only source of truth. Optional `task_id`. |
+| Generated tasks | `learning_tasks` | Public payload + server-only answer key + generation trace. |
 | Learning snapshot | `student_lexeme_models` + skill states + weaknesses | Derived projection. Rebuildable from evidence. |
 
 ## Vocabulary tables
@@ -26,7 +27,17 @@ Word-graph edges. Constraints: `from_lexeme_id <> to_lexeme_id`, `confidence` in
 
 ### `lexeme_tags`
 
-One row per lexeme. `game_tags` describe present data capabilities, not which game to play.
+One row per lexeme. `game_tags` describe present data capabilities, not which game to play. Confidence columns are nullable with a `0..1` check.
+
+## Learning tasks
+
+`learning_tasks` stores one generated task:
+
+- `public_payload` — student-safe `PublicLearningTask`
+- `answer_key` — **server-only**. Never `select("*")` this table from a browser client. Evaluation must run on the server (or in Debug Lab in-process).
+- `generation_trace` — why this task was built (candidates, blocked relations, policy version)
+
+`learning_evidence.task_id` references `learning_tasks(id)` and is unique when not null (one task → one terminal evidence). Legacy Debug Lab evidence may still have `task_id` null.
 
 ## Learning tables
 

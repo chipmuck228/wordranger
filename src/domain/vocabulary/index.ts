@@ -14,7 +14,7 @@ export {
   DEFAULT_VOCABULARY_CONTENT_POLICY,
   type VocabularyContentPolicy,
 } from "./vocabulary-content-policy";
-export { relationMeetsContentPolicy } from "./relation-policy";
+export { relationMeetsContentPolicy, selectApprovedRelations } from "./relation-policy";
 export {
   relationInvariantIssues,
   assertRelationInvariants,

@@ -1,36 +1,49 @@
 # WordRanger Architecture
 
-WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 02 integrates the **Vocabulary Domain** with the completed **Learning Core**. No production games, scheduler, or student login are included yet.
+WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 03 adds the **Learning Task Protocol**. No production games, scheduler, or student login are included yet.
 
 ## Formal layers
 
 ```mermaid
 flowchart TD
-  source[VocabularySourceEntry]
-  lexeme[Lexeme]
-  graph[Word Graph]
-  model[StudentLexemeModel]
+  vocab[Vocabulary Domain]
   need[LearningNeed]
-  scheduler[Scheduler]
-  task[Game Task]
+  gen[Task Generator]
+  generated[GeneratedLearningTask]
+  publicTask[PublicLearningTask]
+  answerKey[TaskAnswerKey]
+  renderer[Game Renderer]
+  action[StudentAction]
+  evaluator[TaskEvaluator]
   evidence[LearningEvidence]
-  engine[Learning Core]
+  core[Learning Core]
+  model[StudentLexemeModel]
 
-  source --> lexeme
-  lexeme --> graph
-  lexeme --> model
-  model --> need
-  graph --> scheduler
-  need --> scheduler
-  scheduler --> task
-  task --> evidence
-  evidence --> engine
-  engine --> model
+  vocab --> need
+  need --> gen
+  gen --> generated
+  generated --> publicTask
+  generated --> answerKey
+  publicTask --> renderer
+  renderer --> action
+  action --> evaluator
+  answerKey --> evaluator
+  evaluator --> evidence
+  evidence --> core
+  core --> model
 ```
 
-- **Vocabulary Domain** decides what a word is and how words relate.
-- **Learning Core** decides how well a student knows a lexeme.
-- **Games** only produce `LearningEvidence`. They never write mastery state.
+Responsibilities:
+
+- **Vocabulary Domain** — what a lexeme is, and which content is production-approved
+- **LearningNeed** — what the student should practice now
+- **Task Generator** — which task to emit
+- **Game Renderer** — how the public task is presented
+- **TaskEvaluator** — what the student action means
+- **LearningEvidence** — the immutable fact
+- **Learning Core** — how evidence changes the student model
+
+Games never write mastery. Games never grade.
 
 ## Vocabulary Domain
 

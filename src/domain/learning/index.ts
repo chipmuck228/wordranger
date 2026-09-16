@@ -17,7 +17,7 @@ export {
   type SkillState,
 } from "./student-lexeme-model";
 export type { GameCapability } from "./game-capability";
-export type { LearningNeed, LearningNeedReason } from "./learning-need";
+export type { LearningNeed, LearningNeedReason, LearningNeedWeaknessFocus } from "./learning-need";
 export type { TransitionReason, TransitionResult } from "./transition.types";
 export type { LearningPolicy } from "./policies/learning-policy";
 export { DEFAULT_LEARNING_POLICY } from "./policies/default-learning-policy";

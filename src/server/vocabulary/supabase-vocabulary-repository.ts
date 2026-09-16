@@ -6,7 +6,7 @@ import {
   type LexemeRelation,
 } from "@/domain/vocabulary/lexeme-relation";
 import type { LexemeTags } from "@/domain/vocabulary/lexeme-tags";
-import { relationMeetsContentPolicy } from "@/domain/vocabulary/relation-policy";
+import { selectApprovedRelations } from "@/domain/vocabulary/relation-policy";
 import {
   DEFAULT_VOCABULARY_CONTENT_POLICY,
   type VocabularyContentPolicy,
@@ -43,7 +43,7 @@ interface RelationRow {
   type: string;
   from_lexeme_id: string;
   to_lexeme_id: string;
-  symmetric: boolean;
+  is_symmetric: boolean;
   confidence: number;
   provenance: string;
   note: string | null;
@@ -91,7 +91,7 @@ function mapRelation(row: RelationRow): LexemeRelation {
     type: parseLexemeRelationType(row.type),
     fromLexemeId: row.from_lexeme_id,
     toLexemeId: row.to_lexeme_id,
-    symmetric: row.symmetric,
+    symmetric: row.is_symmetric,
     confidence: Number(row.confidence),
     provenance: parseLexemeRelationProvenance(row.provenance),
     note: row.note,
@@ -141,6 +141,14 @@ export class SupabaseVocabularyRepository implements VocabularyRepository {
     return ((data ?? []) as LexemeRow[]).map(mapLexeme);
   }
 
+  async listLexemes(): Promise<Lexeme[]> {
+    const { data, error } = await this.client.from("lexemes").select("*");
+    if (error) {
+      throw error;
+    }
+    return ((data ?? []) as LexemeRow[]).map(mapLexeme);
+  }
+
   async getRelations(
     lexemeId: string,
     options: GetRelationsOptions = {},
@@ -152,7 +160,7 @@ export class SupabaseVocabularyRepository implements VocabularyRepository {
     if (error) {
       throw error;
     }
-    return ((data ?? []) as RelationRow[])
+    const mapped = ((data ?? []) as RelationRow[])
       .map(mapRelation)
       .filter((relation) => {
         if (
@@ -162,26 +170,9 @@ export class SupabaseVocabularyRepository implements VocabularyRepository {
         ) {
           return false;
         }
-        if (options.types && !options.types.includes(relation.type)) {
-          return false;
-        }
-        if (
-          options.provenances &&
-          !options.provenances.includes(relation.provenance)
-        ) {
-          return false;
-        }
-        if (
-          options.minConfidence !== undefined &&
-          relation.confidence < options.minConfidence
-        ) {
-          return false;
-        }
-        if (options.provenances) {
-          return relation.confidence >= 0 && relation.confidence <= 1;
-        }
-        return relationMeetsContentPolicy(relation, this.policy);
+        return true;
       });
+    return selectApprovedRelations(mapped, this.policy, options);
   }
 
   async getTags(lexemeId: string): Promise<LexemeTags | null> {

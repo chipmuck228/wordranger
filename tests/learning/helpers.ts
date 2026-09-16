@@ -40,6 +40,7 @@ export interface EvidenceOverrides {
   distractorLexemeIds?: string[];
   metadata?: Record<string, unknown>;
   lexemeId?: string;
+  taskId?: string | null;
 }
 
 export function makeEvidence(
@@ -53,6 +54,7 @@ export function makeEvidence(
     id,
     userId: TEST_USER_ID,
     lexemeId: overrides.lexemeId ?? TEST_LEXEME_ID,
+    taskId: overrides.taskId === undefined ? null : overrides.taskId,
     sessionId,
     gameId: overrides.gameId ?? "demo-lab",
     taskType: overrides.taskType ?? `task-${skill.toLowerCase()}`,

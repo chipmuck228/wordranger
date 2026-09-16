@@ -2,15 +2,14 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const sql = readFileSync(
-  path.join(
-    process.cwd(),
-    "supabase/migrations/202609160001_vocabulary_domain.sql",
-  ),
-  "utf8",
-);
+const sql = [
+  "supabase/migrations/202609160001_vocabulary_domain.sql",
+  "supabase/migrations/202609160002_learning_tasks.sql",
+]
+  .map((file) => readFileSync(path.join(process.cwd(), file), "utf8"))
+  .join("\n");
 
-describe("Phase 02 schema", () => {
+describe("Schema", () => {
   it("points learning_evidence.lexeme_id at lexemes(id)", () => {
     expect(sql).toMatch(/lexeme_id uuid not null references lexemes \(id\)/);
     expect(sql).toContain("create table if not exists lexemes");
@@ -30,5 +29,16 @@ describe("Phase 02 schema", () => {
     expect(sql).toContain("related_lexeme_id uuid references lexemes (id)");
     expect(sql).toContain("distractor_lexeme_ids");
     expect(sql).toContain("selected_lexeme_id");
+  });
+
+  it("adds learning_tasks and evidence task_id with tag confidence checks", () => {
+    expect(sql).toContain("create table if not exists learning_tasks");
+    expect(sql).toMatch(/learning_evidence[\s\S]*task_id uuid references learning_tasks \(id\)/);
+    expect(sql).toContain("lexeme_id uuid not null references lexemes (id)");
+    expect(sql).toContain("lexeme_tags_topic_confidence_range");
+    expect(sql).toContain("difficulty numeric not null check (difficulty >= 0 and difficulty <= 1)");
+    expect(sql).toContain("prevent_learning_evidence_mutation");
+    expect(sql).toContain("INDEPENDENT_CORRECT");
+    expect(sql).toContain("hint_count = 0");
   });
 });

@@ -152,6 +152,7 @@ export function LearningDebugLab({
         id: crypto.randomUUID(),
         userId: DEBUG_USER_ID,
         lexemeId: selected.id,
+        taskId: null,
         sessionId: form.sessionId,
         gameId: "debug-lab",
         taskType: form.taskType,

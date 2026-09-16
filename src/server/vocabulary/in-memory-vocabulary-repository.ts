@@ -1,7 +1,7 @@
 import type { Lexeme } from "@/domain/vocabulary/lexeme";
 import type { LexemeRelation } from "@/domain/vocabulary/lexeme-relation";
 import type { LexemeTags } from "@/domain/vocabulary/lexeme-tags";
-import { relationMeetsContentPolicy } from "@/domain/vocabulary/relation-policy";
+import { selectApprovedRelations } from "@/domain/vocabulary/relation-policy";
 import {
   DEFAULT_VOCABULARY_CONTENT_POLICY,
   type VocabularyContentPolicy,
@@ -64,32 +64,16 @@ export class InMemoryVocabularyRepository implements VocabularyRepository {
     return [...(this.lemmaIndex.get(lemma.toLowerCase()) ?? [])];
   }
 
+  async listLexemes(): Promise<Lexeme[]> {
+    return [...this.lexemes.values()];
+  }
+
   async getRelations(
     lexemeId: string,
     options: GetRelationsOptions = {},
   ): Promise<LexemeRelation[]> {
     const candidates = this.relationsByLexeme.get(lexemeId) ?? [];
-    return candidates.filter((relation) => {
-      if (options.types && !options.types.includes(relation.type)) {
-        return false;
-      }
-      if (
-        options.provenances &&
-        !options.provenances.includes(relation.provenance)
-      ) {
-        return false;
-      }
-      if (
-        options.minConfidence !== undefined &&
-        relation.confidence < options.minConfidence
-      ) {
-        return false;
-      }
-      if (options.provenances) {
-        return relation.confidence >= 0 && relation.confidence <= 1;
-      }
-      return relationMeetsContentPolicy(relation, this.policy);
-    });
+    return selectApprovedRelations(candidates, this.policy, options);
   }
 
   async getTags(lexemeId: string): Promise<LexemeTags | null> {

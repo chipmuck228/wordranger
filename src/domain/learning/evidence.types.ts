@@ -52,6 +52,11 @@ export interface LearningEvidence {
   id: string;
   userId: string;
   lexemeId: string;
+  /**
+   * Null only for legacy Debug Lab / Phase 01–02 evidence that was not
+   * produced by the Task Protocol. Task-generated evidence must set this.
+   */
+  taskId: string | null;
   sessionId: string;
   gameId: string;
   taskType: string;

@@ -16,6 +16,7 @@ export interface VocabularyRepository {
   getLexeme(lexemeId: string): Promise<Lexeme | null>;
   getLexemes(lexemeIds: string[]): Promise<Lexeme[]>;
   findLexemeByLemma(lemma: string): Promise<Lexeme[]>;
+  listLexemes(): Promise<Lexeme[]>;
   getRelations(
     lexemeId: string,
     options?: GetRelationsOptions,

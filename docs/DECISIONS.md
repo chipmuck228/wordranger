@@ -78,6 +78,54 @@ Phase 01 used `wordId` against a placeholder `words` table. Phase 02 performs a 
 
 Each `StudentLexemeModel` stores `policyVersion` from the `LearningPolicy` used by `processEvidence`. This makes it obvious which rule set produced the snapshot when a future policy v2 replays evidence.
 
+## ADR-014 — Games render tasks; games do not grade learning
+
+**Status:** accepted
+
+A Game Renderer displays `PublicLearningTask` and submits `StudentAction`. It must not choose `EvidenceOutcome`, `EvidenceErrorType`, weaknesses, or mastery.
+
+## ADR-015 — PublicLearningTask and TaskAnswerKey are separate
+
+**Status:** accepted
+
+Student clients receive only the public task. Correct option ids and option→lexeme maps stay in `TaskAnswerKey` / `learning_tasks.answer_key`.
+
+## ADR-016 — TaskEvaluator is the only semantic grading path
+
+**Status:** accepted
+
+All games share `DefaultTaskEvaluator`. Correctness, confusion, and spelling diagnosis are protocol concerns, not per-game rules.
+
+## ADR-017 — Production Task Generator consumes only policy-approved vocabulary content
+
+**Status:** accepted
+
+`VocabularyRepository.getRelations()` is always `policy ∩ caller filters`. Caller filters cannot enlarge the set. Raw relations are inspection-only.
+
+## ADR-018 — Task generation is deterministic via injected time and randomness
+
+**Status:** accepted
+
+Generator and evaluator do not call `new Date()` or `Math.random()`. Tests inject `SeededRandomSource` and `request.now`.
+
+## ADR-019 — Audio/context tasks remain unavailable until approved content exists
+
+**Status:** accepted
+
+IPA text and browser TTS are not listening curriculum. LLM sentences are not context curriculum. Those skills return `MISSING_REQUIRED_CONTENT`.
+
+## ADR-020 — One generated task produces one terminal LearningEvidence
+
+**Status:** accepted
+
+`learning_evidence.task_id` is unique when present. Retries must not double-score. Multiple attempts would require an explicit `taskAttemptId` later.
+
+## ADR-021 — LearningEvidence traces to taskId
+
+**Status:** accepted
+
+Task-generated evidence sets `taskId`. Legacy Debug Lab / Phase 01–02 helpers may still use `taskId: null` so existing Learning Core tests stay valid.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

@@ -13,6 +13,7 @@ const evidenceSchema = z.object({
   id: z.string().min(1),
   userId: z.string().min(1),
   lexemeId: z.string().min(1),
+  taskId: z.string().min(1).nullable(),
   sessionId: z.string().min(1),
   gameId: z.string().min(1),
   taskType: z.string().min(1),

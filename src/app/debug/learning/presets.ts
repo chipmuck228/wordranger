@@ -37,6 +37,7 @@ function evidence(
     id: crypto.randomUUID(),
     userId: DEBUG_USER_ID,
     lexemeId,
+    taskId: null,
     sessionId,
     gameId: "debug-lab",
     taskType: "debug-task",
