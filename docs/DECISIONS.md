@@ -216,6 +216,36 @@ If FADING prefers an unsupported skill, that candidate stays blocked in the trac
 
 Session planning must not issue one relation query per lexeme. `planLearningSession` loads `listLexemes()` and `listRelations()` once (plus learner models and recent activity), then builds the lexeme capability map in memory in O(L + R). `listRelations()` uses the same `VocabularyContentPolicy` helper as `getRelations()`; caller filters may only narrow. Task Generator may still call `getRelations(lexemeId)` for a single task.
 
+## ADR-037 — Game Renderers consume PublicLearningTask and emit user action only
+
+**Status:** accepted
+
+A renderer displays `PublicLearningTask` and emits choice/text intent. It must not compute `EvidenceOutcome`, `EvidenceErrorType`, weaknesses, or mastery. Task type may change copy, not correctness. Interaction follows `responseContract.kind`.
+
+## ADR-038 — Ranger Trial is the first reference renderer for CHOICE and TEXT_INPUT contracts
+
+**Status:** accepted
+
+Ranger Trial (单词闯关) at `/play/ranger-trial` renders the five executable V1 task types. Later games should be able to replace it without changing Scheduler, Task Generator, TaskEvaluator, or Learning Core.
+
+## ADR-039 — AnswerKey never crosses the server/client boundary
+
+**Status:** accepted
+
+`TaskAnswerKey` is loaded only inside `submitTaskAction`. Client payloads, `sessionStorage`, and renderer props must not contain `answerKey`, `correctOptionIds`, `optionLexemeIds`, `expectedAnswer`, or `semanticAcceptedTexts`. Post-submit `GameSubmissionFeedback.correction` is a safe presentation string computed after evaluation.
+
+## ADR-040 — Game Session Controller orchestrates Scheduler → Task → Submission without owning learning semantics
+
+**Status:** accepted
+
+The controller plans once, generates one assigned task at a time, skips `UNAVAILABLE` needs with a bounded loop, and always grades through `submitTaskAction`. Session stats are UI counts, not learning state. No Ranger Trial tables.
+
+## ADR-041 — Core V1 remains frozen during Renderer integration unless a documented integration blocker is found
+
+**Status:** accepted
+
+Phase 05 must not invent learning architecture. If a renderer cannot consume a frozen contract, document `CORE_INTEGRATION_BLOCKER` instead of silently changing Core. Ranger Trial found none.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

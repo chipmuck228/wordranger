@@ -1,6 +1,6 @@
 # WordRanger Architecture
 
-WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 04 adds the **Learning Need Generator** and **Deterministic Scheduler**. No production games or student login are included yet.
+WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 05 adds **Ranger Trial** (单词闯关), the first Game Renderer that consumes Core V1. There is still no student login.
 
 ## Formal layers
 
@@ -19,7 +19,8 @@ flowchart TD
   publicTask[PublicLearningTask]
   renderer[Game Renderer]
   action[StudentAction]
-  submit[Submission Service]
+  sessionCtl[Game Session Controller]
+  submit[submitTaskAction]
   answerKey[server-side TaskAnswerKey]
   evaluator[TaskEvaluator]
   evidence[LearningEvidence]
@@ -37,13 +38,46 @@ flowchart TD
   assignment --> publicTask
   publicTask --> renderer
   renderer --> action
-  action --> submit
+  action --> sessionCtl
+  sessionCtl --> submit
   assignment --> answerKey
   answerKey --> submit
   submit --> evaluator
   evaluator --> evidence
   evidence --> core
   core --> model
+```
+
+```text
+StudentLexemeModel
+        ↓
+Need Generator
+        ↓
+Scheduler
+        ↓
+LearningNeed
+        ↓
+Task Generator
+        ↓
+Task Assignment
+        ↓
+PublicLearningTask
+        ↓
+Game Renderer
+        ↓
+StudentAction
+        ↓
+Game Session Controller
+        ↓
+submitTaskAction
+        ↓
+TaskEvaluator
+        ↓
+LearningEvidence
+        ↓
+Learning Core
+        ↓
+StudentLexemeModel
 ```
 
 Responsibilities:
@@ -55,7 +89,8 @@ Responsibilities:
 - **LearningNeed** — stable contract passed downstream; not a task
 - **Task Generator** — which task should represent the need
 - **Task Assignment** — which user/session owns the generated task
-- **Game Renderer** — how the public task is presented; emits only `StudentAction`
+- **Game Renderer** — how the public task is presented; emits only student action intent
+- **Game Session Controller** — plans once, generates one assigned task at a time, calls `submitTaskAction`, returns a safe feedback DTO
 - **Submission Service** (`submitTaskAction`) — loads the server-side answer key, verifies ownership, then grades
 - **TaskEvaluator** — what the student action means
 - **LearningEvidence** — the immutable fact
@@ -112,7 +147,7 @@ These three dimensions stay separate. A lexeme may be `MASTERED`, `FADING`, and 
 
 ## GameCapability
 
-Games describe what they can train (`supportedSkills`, prompt/answer modes, weakness types, difficulty range). The engine does not hard-code `SnakeGame` or `MatchingGame`. Capabilities do not list lexemes.
+Games describe what they can train (`supportedSkills`, prompt/answer modes, weakness types, difficulty range). The engine does not hard-code `SnakeGame` or `MatchingGame`. Capabilities do not list lexemes. Ranger Trial publishes `RANGER_TRIAL_CAPABILITY` for display feasibility only.
 
 ## Scheduler
 
@@ -145,8 +180,8 @@ The scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY` v1). Se
 
 Allowed:
 
-- `games → domain/learning` (emit evidence)
-- `task generator / debug UI → domain/vocabulary` (via `VocabularyRepository`)
+- `games → domain/learning` types for `PublicLearningTask` / skills (display only)
+- `task generator / debug UI / game session controller → domain/vocabulary` (via `VocabularyRepository`)
 
 Forbidden:
 
@@ -155,10 +190,11 @@ Forbidden:
 - games querying Supabase vocabulary tables directly
 - `domain/vocabulary` containing scheduler policy
 - `domain/scheduler` importing Task Generator, TaskEvaluator, or `submitTaskAction`
+- Game Renderers importing `TaskAnswerKey`, `LearningRepository`, or `submitTaskAction`
 
-UI, API routes, and repositories contain no stage-transition rules. Those live in `src/domain/learning/engine`. Scheduler numeric behavior lives in `SchedulerPolicy`.
+UI, API routes, and repositories contain no stage-transition rules. Those live in `src/domain/learning/engine`. Scheduler numeric behavior lives in `SchedulerPolicy`. See `docs/GAME_RENDERER_PROTOCOL.md` and `docs/CORE_V1_BASELINE.md`.
 
 ## Runtime today
 
-Debug Labs run against in-memory repositories loaded from `data/vocabulary/**`. `npm test` and `npm run dev` work without Supabase credentials. `SupabaseLearningRepository`, `SupabaseVocabularyRepository`, and `SupabaseLearningStateQueryRepository` are persistence adapters only. `/debug/scheduler` plans sessions from in-memory student snapshots.
+Debug Labs and `/play/ranger-trial` run against in-memory repositories loaded from `data/vocabulary/**`. `npm test` and `npm run dev` work without Supabase credentials. There is no auth; Ranger Trial uses `V1_PLACEHOLDER_USER_ID`. `SupabaseLearningRepository`, `SupabaseVocabularyRepository`, and `SupabaseLearningStateQueryRepository` are persistence adapters only. `/debug/scheduler` plans sessions from in-memory student snapshots.
 

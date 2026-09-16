@@ -11,6 +11,12 @@ export default function Home() {
       </div>
       <div className="flex flex-col gap-3">
         <Link
+          href="/play/ranger-trial"
+          className="text-base font-medium underline underline-offset-4"
+        >
+          单词闯关
+        </Link>
+        <Link
           href="/debug/vocabulary"
           className="text-sm font-medium underline underline-offset-4"
         >
