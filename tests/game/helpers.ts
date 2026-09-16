@@ -6,43 +6,38 @@ import {
   TASK_GENERATOR_VERSION,
   TASK_PROTOCOL_VERSION,
 } from "@/domain/tasks/task-type";
-import { SeededRandomSource } from "@/domain/tasks/random-source";
-import { RangerTrialSessionController } from "@/server/game-session/ranger-trial-session";
-import { InMemoryRangerTrialSessionStore } from "@/server/game-session/in-memory-ranger-trial-session-store";
-import { InMemoryLearningRepository } from "@/server/learning/in-memory-learning-repository";
-import { InMemoryLearningStateQueryRepository } from "@/server/scheduler/in-memory-learning-state-query-repository";
-import { InMemoryLearningTaskRepository } from "@/server/tasks/in-memory-learning-task-repository";
-import { loadVocabularyDataset } from "@/server/vocabulary/load-vocabulary-dataset";
-import { InMemoryVocabularyRepository } from "@/server/vocabulary/in-memory-vocabulary-repository";
+import { createInMemoryRangerTrialRuntime } from "@/server/runtime/create-in-memory-ranger-trial-runtime";
+import type { InMemoryRangerTrialRuntime } from "@/server/runtime/create-in-memory-ranger-trial-runtime";
 import { sequentialIdFactory } from "../learning/helpers";
 
 export const RANGER_NOW = "2026-09-16T12:00:00.000Z";
 export const RANGER_USER = "ranger-test-user";
 
-const dataset = loadVocabularyDataset();
-
 export function createRangerTrialWorld(userId = RANGER_USER) {
-  const vocabulary = new InMemoryVocabularyRepository(dataset);
-  const learning = new InMemoryLearningRepository();
-  const query = new InMemoryLearningStateQueryRepository(learning);
-  const tasks = new InMemoryLearningTaskRepository();
-  const sessions = new InMemoryRangerTrialSessionStore();
-  const controller = new RangerTrialSessionController({
+  const runtime = createInMemoryRangerTrialRuntime({
     userId,
-    vocabulary,
-    query,
-    tasks,
-    learning,
-    sessions,
     now: () => RANGER_NOW,
     createSessionId: sequentialIdFactory("sess"),
     createId: sequentialIdFactory("rid"),
     createEvidenceId: sequentialIdFactory("ev"),
-    random: new SeededRandomSource("ranger-test"),
     requestedNeedCount: 8,
   });
-  return { vocabulary, learning, query, tasks, sessions, controller, userId };
+  const controller = runtime.createController();
+  return {
+    vocabulary: runtime.vocabulary,
+    learning: runtime.learning,
+    query: runtime.learningStateQuery,
+    tasks: runtime.tasks,
+    sessions: runtime.rangerTrialSessions,
+    controller,
+    userId,
+    createController: () => runtime.createController(),
+    runtime,
+  };
 }
+
+export type RangerTrialWorld = ReturnType<typeof createRangerTrialWorld>;
+export type SharedRangerTrialRuntime = InMemoryRangerTrialRuntime;
 
 export function collectKeys(value: unknown, keys = new Set<string>()): Set<string> {
   if (Array.isArray(value)) {
@@ -72,7 +67,15 @@ export const ANSWER_KEY_FIELDS = [
 
 export function makePublicTask(
   overrides: Partial<PublicLearningTask> &
-    Pick<PublicLearningTask, "taskType" | "targetSkill" | "promptMode" | "answerMode" | "prompt" | "responseContract">,
+    Pick<
+      PublicLearningTask,
+      | "taskType"
+      | "targetSkill"
+      | "promptMode"
+      | "answerMode"
+      | "prompt"
+      | "responseContract"
+    >,
 ): PublicLearningTask {
   return {
     id: "public-task-1",

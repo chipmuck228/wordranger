@@ -172,7 +172,7 @@ VocabularyRepository
 
 Session planning loads lexemes once and production-approved relations once, then builds the lexeme capability map locally. There is no per-lexeme `getRelations()` during planning.
 
-The scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY` v1). Session plans are ephemeral. See `docs/LEARNING_SCHEDULER.md`.
+The scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY` v1). Scheduler output is still generated on demand; Ranger Trial persists a copy of the planned `LearningNeed`s as **game orchestration** so a cold start does not re-plan. That copy is not learning truth. See `docs/LEARNING_SCHEDULER.md`.
 
 `LearningNeed.lexemeId` remains the protocol later game selection will match against `GameCapability`. Phase 04 does not select games.
 
@@ -196,5 +196,24 @@ UI, API routes, and repositories contain no stage-transition rules. Those live i
 
 ## Runtime today
 
-Debug Labs and `/play/ranger-trial` run against in-memory repositories loaded from `data/vocabulary/**`. `npm test` and `npm run dev` work without Supabase credentials. There is no auth; Ranger Trial uses `V1_PLACEHOLDER_USER_ID`. `SupabaseLearningRepository`, `SupabaseVocabularyRepository`, and `SupabaseLearningStateQueryRepository` are persistence adapters only. `/debug/scheduler` plans sessions from in-memory student snapshots.
+```text
+browser
+  → Ranger Trial Server Action
+  → RangerTrialSessionController
+  → durable Game Session (`game_sessions`)
+  → durable LearningTask assignment (`learning_tasks`)
+  → durable learner state (`student_lexeme_models` + `learning_evidence`)
+  → submitTaskAction
+  → TaskEvaluator
+  → LearningEvidence
+  → Learning Core
+```
+
+Student-facing `/play/ranger-trial` production wiring uses `createSupabaseRangerTrialRuntime()`: `SupabaseLearningRepository`, `SupabaseLearningStateQueryRepository`, `SupabaseLearningTaskRepository`, and `SupabaseRangerTrialSessionStore` share one server Supabase client. There is no production in-memory Map for learning state, assigned tasks, or session orchestration.
+
+Vocabulary on the student path is the bundled JSON dataset (`InMemoryVocabularyRepository` over git-versioned files). That is immutable reference data, not learner state.
+
+Debug Labs and unit tests may still use in-memory repositories. Explicit `RANGER_TRIAL_RUNTIME=memory` is a local/e2e fixture only. Missing Supabase config in production fails closed.
+
+There is no auth; Ranger Trial uses `V1_PLACEHOLDER_USER_ID` (a UUID placeholder). Auth/RLS is future work. Server actions must not accept `userId` from the browser.
 

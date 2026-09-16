@@ -10,6 +10,7 @@ WordRanger stores five different kinds of data. They must not be collapsed into 
 | Learning event log | `learning_evidence` | Append-only source of truth. Optional `task_id`. |
 | Generated tasks | `learning_tasks` | Public payload + server-only answer key + generation trace. |
 | Learning snapshot | `student_lexeme_models` + skill states + weaknesses | Derived projection. Rebuildable from evidence. |
+| Game orchestration | `game_sessions` | Resume/navigation only. Not learning truth. |
 
 ## Vocabulary tables
 
@@ -76,9 +77,29 @@ Honest limitation: V1 does **not** fake atomicity. A later `process_evidence` Po
 
 `npm run import:vocabulary -- --validate` and `--dry-run` never write. `--apply` upserts by `canonical_key` / deterministic UUID and requires Supabase env vars. Tests use `InMemoryVocabularyRepository` and local JSON only.
 
+## Game sessions
+
+`game_sessions` stores **orchestration state only** so Ranger Trial can survive serverless cold starts. It does **not** replace `learning_tasks`, `learning_evidence`, or `student_lexeme_models`.
+
+| Column | Role |
+| --- | --- |
+| `id` | Session id (uuid) |
+| `user_id` | Owner (uuid). V1 is the placeholder user, not real auth. |
+| `game_type` | `RANGER_TRIAL` today; reusable for later games |
+| `plan_id` | Scheduler plan id |
+| `status` | `active` / `completed` / `failed` |
+| `state` | JSON orchestration (`stateVersion: "v1"`, planned needs, `currentNeedIndex`, `currentTaskId`, phase, presentation stats, last safe feedback, `lastCompletedTaskId`) |
+| `created_at` / `updated_at` | `updated_at` is written on every save |
+
+`state` must not contain AnswerKey, Evidence copies, or `StudentLexemeModel`. `currentTaskId` points at `learning_tasks`. Session stats are UI counters.
+
+V1 uses trusted server actions + the placeholder user. Do not treat RLS as solved.
+
+Cleanup/TTL is future work. A failed session save after `learning_tasks` insert can leave an orphan assigned task; do not delete it.
+
 ## Phase 04 persistence
 
-Phase 04 adds **no required persistence tables**. `LearningSessionPlan` is generated on demand and is not stored.
+Phase 04 adds **no required persistence tables**. The scheduler still generates `LearningSessionPlan` on demand. Ranger Trial (Phase 05.1) persists a copy of that plan's needs inside `game_sessions.state` so refresh does not re-run the Scheduler.
 
 The scheduler reads:
 
@@ -92,7 +113,7 @@ The scheduler reads:
 
 ## RLS TODO
 
-There is no student auth context yet. Do not add `using (true)` write policies. When Supabase Auth lands:
+There is no student auth context yet. Current V1 uses trusted server actions and `V1_PLACEHOLDER_USER_ID`. Do not add `using (true)` write policies. When Supabase Auth lands:
 
 - students insert their own evidence and read their own snapshots
 - no one updates evidence

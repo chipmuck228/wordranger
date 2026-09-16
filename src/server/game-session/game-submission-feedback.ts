@@ -24,10 +24,11 @@ export function mapOutcomeToFeedbackStatus(
   }
 }
 
-export function toGameSubmissionFeedback(
-  evaluation: TaskEvaluation,
+export function toGameSubmissionFeedbackFromOutcome(
+  outcome: EvidenceOutcome,
+  expectedAnswer: string | null,
 ): GameSubmissionFeedback {
-  const status = mapOutcomeToFeedbackStatus(evaluation.outcome);
+  const status = mapOutcomeToFeedbackStatus(outcome);
   if (status === "CORRECT" || status === "ASSISTED") {
     return {
       status,
@@ -36,7 +37,7 @@ export function toGameSubmissionFeedback(
     };
   }
   if (status === "INCORRECT") {
-    const text = evaluation.expectedAnswer?.trim() ?? "";
+    const text = expectedAnswer?.trim() ?? "";
     return {
       status,
       message: text ? `正确答案：${text}` : "回答不正确。",
@@ -56,4 +57,13 @@ export function toGameSubmissionFeedback(
     message: "这一题已超时。",
     continueAvailable: true,
   };
+}
+
+export function toGameSubmissionFeedback(
+  evaluation: TaskEvaluation,
+): GameSubmissionFeedback {
+  return toGameSubmissionFeedbackFromOutcome(
+    evaluation.outcome,
+    evaluation.expectedAnswer,
+  );
 }

@@ -20,5 +20,9 @@ export default defineConfig({
     url: "http://127.0.0.1:3317",
     reuseExistingServer: false,
     timeout: 120_000,
+    env: {
+      ...process.env,
+      RANGER_TRIAL_RUNTIME: "memory",
+    },
   },
 });

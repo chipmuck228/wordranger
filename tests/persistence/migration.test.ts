@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const sql = [
   "supabase/migrations/202609160001_vocabulary_domain.sql",
   "supabase/migrations/202609160002_learning_tasks.sql",
+  "supabase/migrations/202609170001_game_sessions.sql",
 ]
   .map((file) => readFileSync(path.join(process.cwd(), file), "utf8"))
   .join("\n");
@@ -40,5 +41,17 @@ describe("Schema", () => {
     expect(sql).toContain("prevent_learning_evidence_mutation");
     expect(sql).toContain("INDEPENDENT_CORRECT");
     expect(sql).toContain("hint_count = 0");
+  });
+
+  it("adds generic game_sessions orchestration without ranger_trial learning tables", () => {
+    expect(sql).toContain("create table if not exists game_sessions");
+    expect(sql).toContain("game_type text not null");
+    expect(sql).toContain("state jsonb not null");
+    expect(sql).toContain("game_sessions_user_id_idx");
+    expect(sql).toContain("game_sessions_game_type_idx");
+    expect(sql).toContain("game_sessions_updated_at_idx");
+    expect(sql).not.toContain("ranger_trial_answers");
+    expect(sql).not.toContain("ranger_trial_weak_words");
+    expect(sql).not.toContain("ranger_trial_mastery");
   });
 });

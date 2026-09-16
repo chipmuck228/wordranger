@@ -299,6 +299,12 @@ export class SupabaseLearningRepository implements LearningRepository {
       metadata: evidence.metadata ?? {},
     });
     if (error) {
+      if (error.code === "23505") {
+        throw new LearningDomainError(
+          "DUPLICATE_TASK_EVIDENCE",
+          `Task ${evidence.taskId} already has terminal evidence`,
+        );
+      }
       throw error;
     }
   }

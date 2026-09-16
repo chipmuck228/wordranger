@@ -1,4 +1,5 @@
 import type { LearningEvidence } from "@/domain/learning/evidence.types";
+import { LearningDomainError } from "@/domain/learning/engine/math";
 import type { LearningRepository } from "@/domain/learning/learning-repository";
 import type { StudentLexemeModel } from "@/domain/learning/student-lexeme-model";
 
@@ -55,7 +56,10 @@ export class InMemoryLearningRepository implements LearningRepository {
       evidence.taskId &&
       this.evidence.some((item) => item.taskId === evidence.taskId)
     ) {
-      throw new Error(`Task ${evidence.taskId} already has terminal evidence`);
+      throw new LearningDomainError(
+        "DUPLICATE_TASK_EVIDENCE",
+        `Task ${evidence.taskId} already has terminal evidence`,
+      );
     }
     this.evidence.push(clone(evidence));
   }

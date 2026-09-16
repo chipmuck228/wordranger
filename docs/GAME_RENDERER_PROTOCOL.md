@@ -108,6 +108,41 @@ It does not answer what the student should practice (Scheduler) or whether the a
 
 Session stats (`attempted`, `correct`, `incorrect`) are UI counts. They are not `StudentLexemeModel`.
 
+## Durable runtime (Phase 05.1)
+
+Ranger Trial student-facing actions compose a durable runtime. A cold start or a different serverless instance must be able to resume the same session.
+
+```text
+browser
+  → Server Action
+  → RangerTrialSessionController
+  → durable game_sessions (orchestration)
+  → durable learning_tasks (assignment + AnswerKey)
+  → durable learning_evidence / student_lexeme_models
+  → same submitTaskAction / TaskEvaluator / Learning Core
+```
+
+`sessionId` may live in `sessionStorage` so refresh can call `resumeRangerTrialSession`. The browser must not store the LearningNeed plan, AnswerKey, StudentLexemeModel, or Evidence.
+
+Responsibilities:
+
+| Store | Holds | Does not hold |
+| --- | --- | --- |
+| `game_sessions.state` | plan needs, navigation, phase, presentation stats, last safe feedback | AnswerKey, Evidence, StudentLexemeModel, vocabulary copies |
+| `learning_tasks` | generated task + AnswerKey + assignment | session progress |
+| `learning_evidence` | immutable grading facts | UI counters |
+| `student_lexeme_models` | Learning Core snapshot | game orchestration |
+
+Refresh does **not** re-run the Scheduler. The original planned needs are persisted and resumed.
+
+If Evidence write succeeds and session save fails, a retry maps `TASK_ALREADY_COMPLETED` / duplicate evidence into a one-time recovery onto `awaiting_continue`. Stats increment once per task via `lastCompletedTaskId`.
+
+Randomization is recreated from `scheduler:${sessionId}` and `task:${sessionId}:${needId}`. The RandomSource object is not persisted.
+
+Production uses Supabase adapters for learner/task/session state. Bundled vocabulary JSON is immutable reference data. `RANGER_TRIAL_RUNTIME=memory` is an explicit local/e2e fixture; production must not silently fall back to in-memory Maps.
+
+If session persistence fails after `learning_tasks` insert, that assigned task may be orphaned. Do not delete it. Recovery starts a new session or regenerates from the persisted need; it does not treat `game_sessions` as learning truth.
+
 ## Feedback DTO
 
 After evaluation, the browser receives:

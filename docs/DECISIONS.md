@@ -246,6 +246,30 @@ The controller plans once, generates one assigned task at a time, skips `UNAVAIL
 
 Phase 05 must not invent learning architecture. If a renderer cannot consume a frozen contract, document `CORE_INTEGRATION_BLOCKER` instead of silently changing Core. Ranger Trial found none.
 
+## ADR-042 — Student-facing game sessions must use durable server-side persistence
+
+**Status:** accepted
+
+`/play/ranger-trial` production wiring must not keep learning state, assigned tasks, or session orchestration in process-local Maps. Serverless cold starts and different instances load the same session from durable adapters. In-memory repositories remain valid for tests and explicit local fixtures only. Missing Supabase configuration fails closed.
+
+## ADR-043 — Game session persistence stores orchestration state only; learning truth remains in existing Core tables
+
+**Status:** accepted
+
+`game_sessions` is a generic orchestration table (`game_type = RANGER_TRIAL`). It stores the planned needs, navigation, phase, and presentation stats. AnswerKey stays in `learning_tasks`. Evidence stays in `learning_evidence`. `StudentLexemeModel` stays in snapshot tables. Do not create `ranger_trial_*` learning tables.
+
+## ADR-044 — Ranger Trial randomization is derived deterministically from session/need identity, not process-local RNG state
+
+**Status:** accepted
+
+Scheduler seed is `scheduler:${sessionId}`. Task generation seed is `task:${sessionId}:${needId}`. Recreate `SeededRandomSource` per call. Do not persist the RandomSource object and do not reuse one global seed for every session.
+
+## ADR-045 — Game submission/session transition must be idempotent across retries and cold starts
+
+**Status:** accepted
+
+Evidence uniqueness remains the concurrency guard (`learning_evidence.task_id` unique; duplicate maps to `TASK_ALREADY_COMPLETED`). If Evidence succeeds and session save fails, retry recovers `awaiting_continue` once using `lastCompletedTaskId` so presentation stats are not double-counted. Continue while `awaiting_action` returns the current task and does not skip a need.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

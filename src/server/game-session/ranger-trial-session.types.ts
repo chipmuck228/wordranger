@@ -58,6 +58,7 @@ export interface RangerTrialSessionRecord {
   completed: number;
   stats: RangerTrialSessionStats;
   lastFeedback: GameSubmissionFeedback | null;
+  lastCompletedTaskId: string | null;
   generationFailures: RangerTrialGenerationFailure[];
   recentTasks: RecentTaskSummary[];
 }

@@ -1,5 +1,6 @@
-import type { LearningPolicy } from "@/domain/learning/policies/learning-policy";
+import { LearningDomainError } from "@/domain/learning/engine/math";
 import type { LearningRepository } from "@/domain/learning/learning-repository";
+import type { LearningPolicy } from "@/domain/learning/policies/learning-policy";
 import {
   processEvidence,
   type ProcessEvidenceResult,
@@ -93,17 +94,30 @@ export async function submitTaskAction(
     gameId: input.gameId,
     evidenceId: input.evidenceId,
   });
-  const learningResult = await processEvidence({
-    evidence,
-    repository: input.learningRepository,
-    policy: input.learningPolicy,
-    now: input.now ?? input.action.occurredAt,
-    createId: input.createId,
-  });
-  return {
-    task: assigned.task.publicTask,
-    evaluation,
-    evidence,
-    learningResult,
-  };
+  try {
+    const learningResult = await processEvidence({
+      evidence,
+      repository: input.learningRepository,
+      policy: input.learningPolicy,
+      now: input.now ?? input.action.occurredAt,
+      createId: input.createId,
+    });
+    return {
+      task: assigned.task.publicTask,
+      evaluation,
+      evidence,
+      learningResult,
+    };
+  } catch (error) {
+    if (
+      error instanceof LearningDomainError &&
+      error.code === "DUPLICATE_TASK_EVIDENCE"
+    ) {
+      throw new TaskProtocolError(
+        "TASK_ALREADY_COMPLETED",
+        error.message,
+      );
+    }
+    throw error;
+  }
 }
