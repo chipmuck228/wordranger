@@ -8,6 +8,7 @@ import {
   type UserMarkedLexeme,
 } from "@/domain/scheduler";
 import type { LearningStateQueryRepository } from "./learning-state-query-repository";
+import { buildVocabularyLearningContentCapability } from "./vocabulary-learning-content-capability";
 
 export interface ScheduleLearningSessionRequest {
   userId: string;
@@ -26,13 +27,14 @@ export async function planLearningSession(
   request: ScheduleLearningSessionRequest,
 ): Promise<LearningSessionPlan> {
   const policy = request.policy ?? DEFAULT_SCHEDULER_POLICY;
-  const [lexemes, models, recentActivity] = await Promise.all([
+  const [lexemes, models, recentActivity, capability] = await Promise.all([
     request.vocabulary.listLexemes(),
     request.query.listStudentLexemeModels(request.userId),
     request.query.getRecentLearningActivity(
       request.userId,
       Math.max(policy.recency.recentActivityWindow, 40),
     ),
+    buildVocabularyLearningContentCapability(request.vocabulary),
   ]);
   const scheduler = request.scheduler ?? new DeterministicScheduler();
   return scheduler.planSession({
@@ -50,5 +52,6 @@ export async function planLearningSession(
     createId: request.createId,
     random: request.random,
     policy,
+    capability,
   });
 }

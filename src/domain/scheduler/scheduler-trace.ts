@@ -20,6 +20,7 @@ export interface SchedulerCandidateTrace {
   priorityBreakdown?: PriorityBreakdown;
   status: SchedulerCandidateStatus;
   blockedReason?: SchedulerBlockedReason;
+  capabilityReason?: string;
   mergedInto?: string;
 }
 

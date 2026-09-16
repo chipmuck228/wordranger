@@ -20,9 +20,12 @@ import { avoidRecentTaskTypesForLexeme, scoreCandidate } from "./score-candidate
 import { SchedulerBlockedReason } from "./scheduler-errors";
 import {
   DEFAULT_SCHEDULER_POLICY,
-  isReviewReason,
   type SchedulerPolicy,
 } from "./scheduler-policy";
+import {
+  isNewIntroductionNeed,
+  isReviewNeed,
+} from "./need-classification";
 import {
   emptySchedulerTrace,
   type SchedulerCandidateTrace,
@@ -31,7 +34,7 @@ import {
 } from "./scheduler-trace";
 import type { LearningSessionPlan } from "./session-plan";
 import { preferredPromptModesForSkill } from "./session-plan";
-import { fallbackSkillForUnsupported } from "./stage-skill-map";
+import { fallbackSkillForUnsupported, selectFadingRecoveryFallbackSkill } from "./stage-skill-map";
 
 export interface SchedulerInput {
   userId: string;
@@ -59,7 +62,7 @@ interface RankedNeed {
   canonicalKey: string;
 }
 
-const FALLBACK_REASONS = new Set(["STAGE_PROGRESS", "REVIEW_DUE"]);
+const FALLBACK_REASONS = new Set(["STAGE_PROGRESS", "REVIEW_DUE", "FADING"]);
 
 export class DeterministicScheduler implements LearningScheduler {
   planSession(input: SchedulerInput): LearningSessionPlan {
@@ -88,7 +91,17 @@ export class DeterministicScheduler implements LearningScheduler {
       trace.generatedCandidates.push(toTrace(candidate, "GENERATED"));
       const blocked = classifyBlocked(candidate, lexemeIds, capability);
       if (blocked) {
-        trace.blockedCandidates.push(toTrace(candidate, "BLOCKED", blocked));
+        trace.blockedCandidates.push(
+          toTrace(
+            candidate,
+            "BLOCKED",
+            blocked,
+            undefined,
+            blocked === SchedulerBlockedReason.UNSUPPORTED_CONTENT_CAPABILITY
+              ? capabilityReasonFor(capability, candidate)
+              : undefined,
+          ),
+        );
         maybeAddFallback({
           candidate,
           blocked,
@@ -184,10 +197,23 @@ function classifyBlocked(
   if (candidate.metadata?.invalidLexeme || !lexemeIds.has(candidate.lexemeId)) {
     return SchedulerBlockedReason.INVALID_LEXEME;
   }
-  if (!capability.supportsSkill(candidate.targetSkill)) {
+  if (!capability.supports(candidate.lexemeId, candidate.targetSkill)) {
     return SchedulerBlockedReason.UNSUPPORTED_CONTENT_CAPABILITY;
   }
   return null;
+}
+
+function capabilityReasonFor(
+  capability: LearningContentCapability,
+  candidate: LearningNeedCandidate,
+): string | undefined {
+  const reasons = capability.getCapability(candidate.lexemeId)?.reasons[
+    candidate.targetSkill
+  ];
+  if (!reasons || reasons.length === 0) {
+    return undefined;
+  }
+  return reasons.join("; ");
 }
 
 function maybeAddFallback(input: {
@@ -207,11 +233,18 @@ function maybeAddFallback(input: {
   ) {
     return;
   }
-  const fallback = fallbackSkillForUnsupported(
-    input.candidate.targetSkill,
-    input.model,
-  );
-  if (!fallback || !input.capability.supportsSkill(fallback)) {
+  const fallback =
+    input.candidate.reason === "FADING"
+      ? selectFadingRecoveryFallbackSkill(
+          input.model,
+          input.candidate.targetSkill,
+          input.capability,
+        )
+      : fallbackSkillForUnsupported(input.candidate.targetSkill, input.model);
+  if (
+    !fallback ||
+    !input.capability.supports(input.candidate.lexemeId, fallback)
+  ) {
     return;
   }
   const alreadyPresent = [...input.generated, ...input.usable].some(
@@ -229,8 +262,14 @@ function maybeAddFallback(input: {
     targetSkill: fallback,
     preferredPromptModes: preferredPromptModesForSkill(fallback),
     source: {
-      ruleId: `${input.candidate.source.ruleId}_FALLBACK`,
-      explanation: `Fallback from unsupported ${input.candidate.targetSkill} to ${fallback}`,
+      ruleId:
+        input.candidate.reason === "FADING"
+          ? "FADING_RECOVERY_FALLBACK"
+          : `${input.candidate.source.ruleId}_FALLBACK`,
+      explanation:
+        input.candidate.reason === "FADING"
+          ? `Preferred ${input.candidate.targetSkill} recovery unavailable; fallback to ${fallback}`
+          : `Fallback from unsupported ${input.candidate.targetSkill} to ${fallback}`,
     },
     metadata: {
       ...input.candidate.metadata,
@@ -332,29 +371,29 @@ function selectNeeds(
   let recordedMaxNewWords = false;
   let recordedFillWithNew = false;
   const reviewAvailable = ranked.filter((item) =>
-    isReviewReason(item.item.need.reason),
+    isReviewNeed(item.item.need),
   ).length;
 
   function newCount(): number {
-    return selected.filter((item) => item.item.need.reason === "NEW_WORD").length;
+    return selected.filter((item) => isNewIntroductionNeed(item.item.need)).length;
   }
   function reviewCount(): number {
-    return selected.filter((item) => isReviewReason(item.item.need.reason)).length;
+    return selected.filter((item) => isReviewNeed(item.item.need)).length;
   }
   function remainingNonNew(): number {
-    return remaining.filter((item) => item.item.need.reason !== "NEW_WORD").length;
+    return remaining.filter((item) => !isNewIntroductionNeed(item.item.need)).length;
   }
   function remainingReview(): number {
-    return remaining.filter((item) => isReviewReason(item.item.need.reason)).length;
+    return remaining.filter((item) => isReviewNeed(item.item.need)).length;
   }
 
   function quotaAllows(candidate: RankedNeed): boolean {
-    const isNew = candidate.item.need.reason === "NEW_WORD";
+    const isNew = isNewIntroductionNeed(candidate.item.need);
     if (isNew && newCount() >= policy.session.maxNewWords && remainingNonNew() > 0) {
       return false;
     }
     if (
-      !isReviewReason(candidate.item.need.reason) &&
+      !isReviewNeed(candidate.item.need) &&
       reviewCount() < policy.session.minReviewNeeds &&
       remainingReview() > 0 &&
       reviewAvailable >= policy.session.minReviewNeeds
@@ -402,8 +441,8 @@ function selectNeeds(
         });
         continue;
       }
-      const fillerIndex = remaining.findIndex(
-        (item) => item.item.need.reason === "NEW_WORD",
+      const fillerIndex = remaining.findIndex((item) =>
+        isNewIntroductionNeed(item.item.need),
       );
       if (fillerIndex >= 0) {
         if (!recordedFillWithNew) {
@@ -423,7 +462,7 @@ function selectNeeds(
 
     const [picked] = remaining.splice(pickedIndex, 1);
     if (
-      picked.item.need.reason === "NEW_WORD" &&
+      isNewIntroductionNeed(picked.item.need) &&
       newCount() + 1 === policy.session.maxNewWords &&
       !recordedMaxNewWords
     ) {
@@ -467,6 +506,7 @@ function toTrace(
   status: SchedulerCandidateTrace["status"],
   blockedReason?: SchedulerBlockedReason,
   breakdown?: PriorityBreakdown,
+  capabilityReason?: string,
 ): SchedulerCandidateTrace {
   return {
     id: candidate.id,
@@ -478,6 +518,7 @@ function toTrace(
     priorityBreakdown: breakdown,
     status,
     blockedReason,
+    capabilityReason,
   };
 }
 

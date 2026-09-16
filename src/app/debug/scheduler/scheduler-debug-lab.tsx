@@ -435,6 +435,7 @@ export function SchedulerDebugLab({
                 </p>
                 <p className="text-muted-foreground">
                   BLOCKED · {item.blockedReason}
+                  {item.capabilityReason ? ` · ${item.capabilityReason}` : ""}
                 </p>
               </div>
             ))}

@@ -192,6 +192,24 @@ Multiple reasons for the same lexeme and skill merge into one need. Primary reas
 
 Every selected or scored candidate can show reason base, weakness/overdue/fading/skill-gap boosts, confidence, recency penalty, and final score. Unexplained priority numbers are not acceptable.
 
+## ADR-033 — Learning content capability is lexeme-aware, not skill-global
+
+**Status:** accepted
+
+`supports(lexemeId, skill)` is the contract. A skill that is generally teachable can still be infeasible for a specific lexeme (no meaning, no lemma, no production-approved relation). Capability facts are built from `VocabularyRepository`, not by calling Task Generator.
+
+## ADR-034 — Scheduler quotas classify by all merged reasons, not primary reason only
+
+**Status:** accepted
+
+Primary reason remains explanation precedence. `maxNewWords` and `minReviewNeeds` inspect `reason` plus `supportingReasons`, so `USER_MARKED` cannot hide `NEW_WORD` or `REVIEW_DUE`.
+
+## ADR-035 — FADING preserves blocked preferred need and may emit a supported recovery fallback
+
+**Status:** accepted
+
+If FADING prefers an unsupported skill, that candidate stays blocked in the trace. A separate supported recovery fallback may be generated from practiced/supported skills. No fallback is invented when none is feasible.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

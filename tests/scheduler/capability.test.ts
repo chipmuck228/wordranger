@@ -7,34 +7,40 @@ import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import { MasteryStage } from "@/domain/learning/mastery-stage";
 import { makeLexeme, makeModel, plan } from "./helpers";
 
+const ANY = "lexeme-any";
+
 describe("Learning content capability", () => {
-  it("C1: MEANING_RECOGNITION supported", () => {
+  it("C1: MEANING_RECOGNITION supported by default overlay", () => {
     expect(
-      DEFAULT_LEARNING_CONTENT_CAPABILITY.supportsSkill(
+      DEFAULT_LEARNING_CONTENT_CAPABILITY.supports(
+        ANY,
         VocabularySkill.MEANING_RECOGNITION,
       ),
     ).toBe(true);
   });
 
-  it("C2: SEMANTIC_CONNECTION supported", () => {
+  it("C2: SEMANTIC_CONNECTION supported by default overlay", () => {
     expect(
-      DEFAULT_LEARNING_CONTENT_CAPABILITY.supportsSkill(
+      DEFAULT_LEARNING_CONTENT_CAPABILITY.supports(
+        ANY,
         VocabularySkill.SEMANTIC_CONNECTION,
       ),
     ).toBe(true);
   });
 
-  it("C3: ACTIVE_RECALL supported", () => {
+  it("C3: ACTIVE_RECALL supported by default overlay", () => {
     expect(
-      DEFAULT_LEARNING_CONTENT_CAPABILITY.supportsSkill(
+      DEFAULT_LEARNING_CONTENT_CAPABILITY.supports(
+        ANY,
         VocabularySkill.ACTIVE_RECALL,
       ),
     ).toBe(true);
   });
 
-  it("C4: SPELLING_RECALL supported", () => {
+  it("C4: SPELLING_RECALL supported by default overlay", () => {
     expect(
-      DEFAULT_LEARNING_CONTENT_CAPABILITY.supportsSkill(
+      DEFAULT_LEARNING_CONTENT_CAPABILITY.supports(
+        ANY,
         VocabularySkill.SPELLING_RECALL,
       ),
     ).toBe(true);
@@ -42,7 +48,8 @@ describe("Learning content capability", () => {
 
   it("C5: LISTENING_RECOGNITION blocked", () => {
     expect(
-      DEFAULT_LEARNING_CONTENT_CAPABILITY.supportsSkill(
+      DEFAULT_LEARNING_CONTENT_CAPABILITY.supports(
+        ANY,
         VocabularySkill.LISTENING_RECOGNITION,
       ),
     ).toBe(false);
@@ -50,7 +57,8 @@ describe("Learning content capability", () => {
 
   it("C6: CONTEXT_USE blocked", () => {
     expect(
-      DEFAULT_LEARNING_CONTENT_CAPABILITY.supportsSkill(
+      DEFAULT_LEARNING_CONTENT_CAPABILITY.supports(
+        ANY,
         VocabularySkill.CONTEXT_USE,
       ),
     ).toBe(false);
@@ -70,5 +78,6 @@ describe("Learning content capability", () => {
       SchedulerBlockedReason.UNSUPPORTED_CONTENT_CAPABILITY,
     );
     expect(blocked?.reason).toBe("STAGE_PROGRESS");
+    expect(blocked?.capabilityReason).toMatch(/Context/i);
   });
 });

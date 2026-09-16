@@ -3,6 +3,7 @@ import type { SkillState, StudentLexemeModel } from "@/domain/learning/student-l
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import type { LearningContentCapability } from "./learning-content-capability";
 import { DEFAULT_LEARNING_CONTENT_CAPABILITY } from "./learning-content-capability";
+import { targetSkillForWeakness } from "./weakness-skill-map";
 
 const PRODUCTION = [
   VocabularySkill.ACTIVE_RECALL,
@@ -50,10 +51,11 @@ export function weakestPracticedSkill(
 }
 
 function firstSupported(
+  lexemeId: string,
   skills: readonly VocabularySkill[],
   capability: LearningContentCapability,
 ): VocabularySkill | null {
-  return skills.find((skill) => capability.supportsSkill(skill)) ?? null;
+  return skills.find((skill) => capability.supports(lexemeId, skill)) ?? null;
 }
 
 export function selectStageProgressSkill(
@@ -78,7 +80,7 @@ export function selectStageProgressSkill(
     case MasteryStage.MASTERED:
       return null;
     default:
-      return firstSupported(MEANINGFUL_REVIEW, capability);
+      return firstSupported(model.lexemeId, MEANINGFUL_REVIEW, capability);
   }
 }
 
@@ -104,7 +106,7 @@ export function selectReviewSkill(
         model.skills,
       );
     case MasteryStage.USABLE:
-      if (capability.supportsSkill(VocabularySkill.CONTEXT_USE)) {
+      if (capability.supports(model.lexemeId, VocabularySkill.CONTEXT_USE)) {
         return VocabularySkill.CONTEXT_USE;
       }
       return weakerSkill(
@@ -138,7 +140,6 @@ export function fallbackSkillForUnsupported(
 
 export function weakestUnresolvedWeaknessSkill(
   model: StudentLexemeModel,
-  targetSkillForWeakness: (weakness: { skill?: VocabularySkill }) => VocabularySkill | null,
 ): VocabularySkill | null {
   const open = model.weaknesses.filter((weakness) => weakness.resolvedAt === null);
   if (open.length === 0) {
@@ -170,4 +171,54 @@ export function selectFadingRecoverySkill(
   return selectReviewSkill(model) ?? VocabularySkill.MEANING_RECOGNITION;
 }
 
+export function selectFadingRecoveryFallbackSkill(
+  model: StudentLexemeModel,
+  preferred: VocabularySkill,
+  capability: LearningContentCapability,
+): VocabularySkill | null {
+  const supportedPool = MEANINGFUL_REVIEW.filter(
+    (skill) => skill !== preferred && capability.supports(model.lexemeId, skill),
+  );
+  if (supportedPool.length === 0) {
+    return null;
+  }
+
+  const weaknessSkill = weakestUnresolvedWeaknessSkill(model);
+  if (
+    weaknessSkill &&
+    weaknessSkill !== preferred &&
+    capability.supports(model.lexemeId, weaknessSkill)
+  ) {
+    return weaknessSkill;
+  }
+
+  const practiced: VocabularySkill[] = supportedPool.filter(
+    (skill) => model.skills[skill].totalAttempts > 0,
+  );
+  if (practiced.length > 0) {
+    return practiced.reduce((winner, skill) =>
+      weakerSkill(winner, skill, model.skills),
+    );
+  }
+
+  const review = selectReviewSkill(model, capability);
+  if (
+    review &&
+    review !== preferred &&
+    capability.supports(model.lexemeId, review)
+  ) {
+    return review;
+  }
+
+  if (
+    preferred !== VocabularySkill.MEANING_RECOGNITION &&
+    capability.supports(model.lexemeId, VocabularySkill.MEANING_RECOGNITION)
+  ) {
+    return VocabularySkill.MEANING_RECOGNITION;
+  }
+
+  return null;
+}
+
 export type { SkillState };
+export { MEANINGFUL_REVIEW };

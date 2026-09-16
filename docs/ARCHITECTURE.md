@@ -119,10 +119,13 @@ Games describe what they can train (`supportedSkills`, prompt/answer modes, weak
 Need generation and scheduling are separate:
 
 1. Generator emits `LearningNeedCandidate[]` from vocabulary + `StudentLexemeModel` + user marks
-2. Capability filtering records unsupported pedagogical needs as blocked candidates
+2. Vocabulary Domain → content capability facts → Scheduler feasibility filter (lexeme-aware)
 3. Scoring produces an explainable `PriorityBreakdown`
 4. Dedup merges `lexemeId + targetSkill`
-5. Quotas and diversity produce `LearningSessionPlan`
+5. Quotas classify by **all merged reasons**; diversity uses primary reason
+6. `LearningSessionPlan`
+
+The scheduler does not call Task Generator to test feasibility. Content capability is computed on the application side from `VocabularyRepository` and passed in as facts.
 
 The scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY` v1). Session plans are ephemeral. See `docs/LEARNING_SCHEDULER.md`.
 

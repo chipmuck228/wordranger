@@ -15,6 +15,7 @@ export interface DedupedNeed {
   sourceIds: string[];
   explanations: string[];
   sourceRuleIds: string[];
+  allReasons: LearningNeedReason[];
 }
 
 export function candidateKey(lexemeId: string, skill: string): string {
@@ -95,6 +96,7 @@ export function dedupeCandidates(scored: ScoredCandidate[]): {
       sourceIds: group.map((item) => item.candidate.id),
       explanations: group.map((item) => item.candidate.source.explanation),
       sourceRuleIds: group.map((item) => item.candidate.source.ruleId),
+      allReasons: reasons,
     });
   }
   return { needs, mergedInto };

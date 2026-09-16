@@ -17,7 +17,13 @@ Learning Need Generator
 LearningNeedCandidate[]
         │
         ↓
-Candidate scoring / capability filter / dedupe
+Lexeme-aware content feasibility
+        │
+        ↓
+Candidate scoring / dedupe
+        │
+        ↓
+Quota classification using ALL merged reasons
         │
         ↓
 Deterministic Scheduler
@@ -64,14 +70,22 @@ The generator does not call `new Date()` or `Math.random()`. Callers inject `now
 
 ## Capability filtering
 
-`LearningContentCapability` is static in V1:
+Skill-global support is not enough. `SEMANTIC_CONNECTION` can be feasible for one lexeme and blocked for another.
 
-- supported: `MEANING_RECOGNITION`, `SEMANTIC_CONNECTION`, `ACTIVE_RECALL`, `SPELLING_RECALL`
-- blocked: `LISTENING_RECOGNITION`, `CONTEXT_USE`
+`LearningContentCapability` is **lexeme/content-aware**:
 
-The generator may still emit a pedagogical need for an unsupported skill. The scheduler then marks it `BLOCKED` with `UNSUPPORTED_CONTENT_CAPABILITY`.
+- `MEANING_RECOGNITION` — at least one non-blank `meaningsZh`
+- `ACTIVE_RECALL` / `SPELLING_RECALL` — usable meaning **and** usable lemma/display
+- `SEMANTIC_CONNECTION` — at least one **production-approved** relation from `VocabularyRepository.getRelations()` (policy applied; `rule_inferred` stays out of production)
+- `LISTENING_RECOGNITION` / `CONTEXT_USE` — unsupported in V1 (not faked from IPA or generated text)
 
-That blocked row stays in `SchedulerTrace`. For `STAGE_PROGRESS` / `REVIEW_DUE` on `CONTEXT_USE`, a semantically reasonable production fallback may also be generated. Context **weaknesses** are not rewritten into meaning review. If no valid fallback exists, the candidate stays blocked.
+`planLearningSession` builds these facts from vocabulary on the server and passes a capability object into the domain scheduler. The scheduler does **not** call Task Generator to probe feasibility. Feasibility means *enough approved content to attempt generation*, not that every random path will succeed.
+
+The generator may still emit a pedagogical need for an unsupported skill. The scheduler then marks it `BLOCKED` with `UNSUPPORTED_CONTENT_CAPABILITY` and optional `capabilityReason`. That blocked row stays in `SchedulerTrace`.
+
+For `STAGE_PROGRESS` / `REVIEW_DUE` on `CONTEXT_USE`, a production fallback may also be generated. Context **weaknesses** are not rewritten into meaning review.
+
+For `FADING`, the preferred unsupported need stays blocked, and a separate supported recovery fallback may be added (`FADING_RECOVERY_FALLBACK`) if a meaningful practiced/supported skill exists. If none exists, only the blocked candidate remains.
 
 ## Priority scoring
 
@@ -118,11 +132,18 @@ From policy, not hardcoded `10`:
 - `session.maxNewWords`
 - `session.minReviewNeeds`
 
-Review for quota purposes means primary reason `WEAKNESS`, `FADING`, or `REVIEW_DUE`.
+**Primary reason is explanation.** Quota classification uses **all merged sources** (`need.reason` plus `supportingReasons`):
 
-If enough review candidates exist, the plan includes at least `minReviewNeeds` of them, and at most `maxNewWords` `NEW_WORD`-primary needs.
+- new-introduction: any source reason `NEW_WORD` (`isNewIntroductionNeed`)
+- review: any of `WEAKNESS`, `FADING`, `REVIEW_DUE` (`isReviewNeed`)
 
-If fewer review/progress candidates exist than requested slots, remaining slots may be filled with `NEW_WORD`, even above `maxNewWords`. Thousands of unseen lexemes must not dominate a session when review work exists.
+So `USER_MARKED` + `NEW_WORD` still counts against `maxNewWords`, and `USER_MARKED` + `REVIEW_DUE` still counts toward `minReviewNeeds`. One need can belong to both categories.
+
+Diversity still uses the primary reason, because that is the session's explanation pattern.
+
+If enough review candidates exist, the plan includes at least `minReviewNeeds` of them, and at most `maxNewWords` new-introduction needs.
+
+If fewer review/progress candidates exist than requested slots, remaining slots may be filled with new-introduction needs, even above `maxNewWords`. Thousands of unseen lexemes must not dominate a session when review work exists.
 
 ## Diversity
 
@@ -158,7 +179,7 @@ JSON-serializable. Distinguishes:
 - selected
 - deferred
 
-Plus quota and diversity decisions. Each candidate trace includes lexeme, skill, reason, source rule, explanation, and priority breakdown when scored.
+Plus quota and diversity decisions. Each candidate trace includes lexeme, skill, reason, source rule, explanation, optional `capabilityReason`, and priority breakdown when scored.
 
 ## Determinism
 

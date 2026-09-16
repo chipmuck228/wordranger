@@ -12,9 +12,19 @@ export {
   type SchedulerPolicy,
 } from "./scheduler-policy";
 export {
+  learningNeedReasons,
+  learningNeedHasReason,
+  isNewIntroductionNeed,
+  isReviewNeed,
+} from "./need-classification";
+export {
   DefaultLearningContentCapability,
+  MappedLearningContentCapability,
   DEFAULT_LEARNING_CONTENT_CAPABILITY,
+  lexemeCapability,
+  skillGloballySupported,
   type LearningContentCapability,
+  type LexemeLearningCapability,
 } from "./learning-content-capability";
 export { targetSkillForWeakness } from "./weakness-skill-map";
 export {
@@ -24,6 +34,7 @@ export {
   selectReviewSkill,
   fallbackSkillForUnsupported,
   selectFadingRecoverySkill,
+  selectFadingRecoveryFallbackSkill,
 } from "./stage-skill-map";
 export { SchedulerBlockedReason, SchedulerError } from "./scheduler-errors";
 export {
