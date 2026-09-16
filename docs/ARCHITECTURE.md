@@ -1,12 +1,17 @@
 # WordRanger Architecture
 
-WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 03 adds the **Learning Task Protocol**. No production games, scheduler, or student login are included yet.
+WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 04 adds the **Learning Need Generator** and **Deterministic Scheduler**. No production games or student login are included yet.
 
 ## Formal layers
 
 ```mermaid
 flowchart TD
   vocab[Vocabulary Domain]
+  model[StudentLexemeModel]
+  generator[Learning Need Generator]
+  candidates[LearningNeedCandidate]
+  scheduler[Deterministic Scheduler]
+  plan[LearningSessionPlan]
   need[LearningNeed]
   gen[Task Generator]
   generated[GeneratedLearningTask]
@@ -19,9 +24,13 @@ flowchart TD
   evaluator[TaskEvaluator]
   evidence[LearningEvidence]
   core[Learning Core]
-  model[StudentLexemeModel]
 
-  vocab --> need
+  vocab --> model
+  model --> generator
+  generator --> candidates
+  candidates --> scheduler
+  scheduler --> plan
+  plan --> need
   need --> gen
   gen --> generated
   generated --> assignment
@@ -39,9 +48,12 @@ flowchart TD
 
 Responsibilities:
 
-- **Vocabulary Domain** — what a lexeme is, and which content is production-approved
-- **LearningNeed** — what the student should practice now
-- **Task Generator** — which task to emit
+- **Vocabulary Domain** — what content exists, and which of it is production-approved
+- **StudentLexemeModel** — current learner state for one lexeme
+- **Learning Need Generator** — what learning needs exist for this student
+- **Deterministic Scheduler** — which needs should happen now
+- **LearningNeed** — stable contract passed downstream; not a task
+- **Task Generator** — which task should represent the need
 - **Task Assignment** — which user/session owns the generated task
 - **Game Renderer** — how the public task is presented; emits only `StudentAction`
 - **Submission Service** (`submitTaskAction`) — loads the server-side answer key, verifies ownership, then grades
@@ -49,7 +61,8 @@ Responsibilities:
 - **LearningEvidence** — the immutable fact
 - **Learning Core** — how evidence changes the student model
 
-Games never write mastery. Games never grade. Games never receive `TaskAnswerKey` on the production path.
+Games never write mastery. Games never grade. Games never receive `TaskAnswerKey` on the production path. The scheduler never mutates learning state and never generates tasks.
+
 
 ## Vocabulary Domain
 
@@ -101,9 +114,19 @@ These three dimensions stay separate. A lexeme may be `MASTERED`, `FADING`, and 
 
 Games describe what they can train (`supportedSkills`, prompt/answer modes, weakness types, difficulty range). The engine does not hard-code `SnakeGame` or `MatchingGame`. Capabilities do not list lexemes.
 
-## Future Scheduler
+## Scheduler
 
-The Scheduler is not implemented in this phase. The intended loop is the diagram above. `LearningNeed.lexemeId` is the protocol the future Scheduler will match against `GameCapability`.
+Need generation and scheduling are separate:
+
+1. Generator emits `LearningNeedCandidate[]` from vocabulary + `StudentLexemeModel` + user marks
+2. Capability filtering records unsupported pedagogical needs as blocked candidates
+3. Scoring produces an explainable `PriorityBreakdown`
+4. Dedup merges `lexemeId + targetSkill`
+5. Quotas and diversity produce `LearningSessionPlan`
+
+The scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY` v1). Session plans are ephemeral. See `docs/LEARNING_SCHEDULER.md`.
+
+`LearningNeed.lexemeId` remains the protocol later game selection will match against `GameCapability`. Phase 04 does not select games.
 
 ## Dependency rule
 
@@ -118,9 +141,11 @@ Forbidden:
 - `domain/learning → supabase`
 - games querying Supabase vocabulary tables directly
 - `domain/vocabulary` containing scheduler policy
+- `domain/scheduler` importing Task Generator, TaskEvaluator, or `submitTaskAction`
 
-UI, API routes, and repositories contain no stage-transition rules. Those live in `src/domain/learning/engine`.
+UI, API routes, and repositories contain no stage-transition rules. Those live in `src/domain/learning/engine`. Scheduler numeric behavior lives in `SchedulerPolicy`.
 
 ## Runtime today
 
-Debug Labs run against in-memory repositories loaded from `data/vocabulary/**`. `npm test` and `npm run dev` work without Supabase credentials. `SupabaseLearningRepository` and `SupabaseVocabularyRepository` are persistence adapters only.
+Debug Labs run against in-memory repositories loaded from `data/vocabulary/**`. `npm test` and `npm run dev` work without Supabase credentials. `SupabaseLearningRepository`, `SupabaseVocabularyRepository`, and `SupabaseLearningStateQueryRepository` are persistence adapters only. `/debug/scheduler` plans sessions from in-memory student snapshots.
+

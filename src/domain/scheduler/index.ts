@@ -1,0 +1,60 @@
+export type {
+  LearningNeedCandidate,
+  UserMarkedLexeme,
+  RecentLearningActivity,
+  SchedulerLexemeRef,
+} from "./learning-need-candidate";
+export {
+  DEFAULT_SCHEDULER_POLICY,
+  PRIMARY_REASON_PRECEDENCE,
+  REVIEW_REASONS,
+  isReviewReason,
+  type SchedulerPolicy,
+} from "./scheduler-policy";
+export {
+  DefaultLearningContentCapability,
+  DEFAULT_LEARNING_CONTENT_CAPABILITY,
+  type LearningContentCapability,
+} from "./learning-content-capability";
+export { targetSkillForWeakness } from "./weakness-skill-map";
+export {
+  weakerSkill,
+  weakestPracticedSkill,
+  selectStageProgressSkill,
+  selectReviewSkill,
+  fallbackSkillForUnsupported,
+  selectFadingRecoverySkill,
+} from "./stage-skill-map";
+export { SchedulerBlockedReason, SchedulerError } from "./scheduler-errors";
+export {
+  assemblePriority,
+  type PriorityBreakdown,
+} from "./priority-breakdown";
+export {
+  scoreCandidate,
+  avoidRecentTaskTypesForLexeme,
+} from "./score-candidate";
+export {
+  DefaultLearningNeedGenerator,
+  type LearningNeedGenerator,
+  type LearningNeedGenerationInput,
+} from "./learning-need-generator";
+export { candidateKey, dedupeCandidates } from "./candidate-dedup";
+export type { ScoredCandidate, DedupedNeed } from "./candidate-dedup";
+export {
+  emptySchedulerTrace,
+  type SchedulerTrace,
+  type SchedulerCandidateTrace,
+  type SchedulerCandidateStatus,
+  type SchedulerQuotaDecision,
+  type SchedulerDiversityDecision,
+} from "./scheduler-trace";
+export {
+  preferredPromptModesForSkill,
+  type LearningSessionPlan,
+} from "./session-plan";
+export {
+  DeterministicScheduler,
+  type LearningScheduler,
+  type SchedulerInput,
+} from "./deterministic-scheduler";

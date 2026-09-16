@@ -23,6 +23,12 @@ export default function Home() {
           Open Task Protocol Debug Lab
         </Link>
         <Link
+          href="/debug/scheduler"
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Open Scheduler Debug Lab
+        </Link>
+        <Link
           href="/debug/learning"
           className="text-sm font-medium underline underline-offset-4"
         >

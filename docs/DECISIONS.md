@@ -150,6 +150,48 @@ Renderers submit `taskId` + `StudentAction` plus authenticated/session context. 
 
 The factory rejects mismatched `taskId`, lexeme, or skill. It does not re-run TaskEvaluator logic.
 
+## ADR-026 — Learning Need Generator and Scheduler are separate responsibilities
+
+**Status:** accepted
+
+The generator answers “what learning needs exist for this student state?” The scheduler answers “which of those needs belong in this session?” Combining them hides blocked pedagogical needs and makes quotas/diversity untestable.
+
+## ADR-027 — Scheduler is deterministic and policy-driven
+
+**Status:** accepted
+
+All numeric behavior lives in `SchedulerPolicy`. Time, ids, and randomness are injected. Same student state, policy, `now`, recent activity, and seed produce the same `LearningSessionPlan`.
+
+## ADR-028 — Scheduler is read-only
+
+**Status:** accepted
+
+The scheduler must not change mastery, retention, weaknesses, or snapshots, and must not create `LearningEvidence`. Only Learning Core mutates learner state.
+
+## ADR-029 — Unsupported content needs remain visible as blocked candidates
+
+**Status:** accepted
+
+V1 content cannot reliably serve `LISTENING_RECOGNITION` or `CONTEXT_USE`. Those pedagogical needs are still generated, then marked `UNSUPPORTED_CONTENT_CAPABILITY` in `SchedulerTrace`. Silent omission would hide the content gap.
+
+## ADR-030 — Session planning uses quotas and diversity, not simple top-N sort
+
+**Status:** accepted
+
+`maxNewWords` and `minReviewNeeds` prevent unseen-word floods. Diversity caps consecutive skill/reason runs, then relaxes rather than returning an undersized plan.
+
+## ADR-031 — LearningNeed deduplicates by lexemeId + targetSkill
+
+**Status:** accepted
+
+Multiple reasons for the same lexeme and skill merge into one need. Primary reason follows explanation precedence; other reasons become `supportingReasons`. Downstream still receives one `LearningNeed`.
+
+## ADR-032 — Scheduler records explainable priority breakdown
+
+**Status:** accepted
+
+Every selected or scored candidate can show reason base, weakness/overdue/fading/skill-gap boosts, confidence, recency penalty, and final score. Unexplained priority numbers are not acceptable.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

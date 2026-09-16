@@ -25,6 +25,7 @@ export interface LearningNeed {
   targetSkill: VocabularySkill;
   priority: number;
   reason: LearningNeedReason;
+  supportingReasons?: LearningNeedReason[];
   weaknessFocus?: LearningNeedWeaknessFocus;
   preferredPromptModes: PromptMode[];
   avoidRecentTaskTypes: string[];

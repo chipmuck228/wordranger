@@ -83,6 +83,16 @@ export class InMemoryLearningRepository implements LearningRepository {
     }
   }
 
+  listStudentLexemeModels(userId: string): StudentLexemeModel[] {
+    return [...this.models.values()]
+      .filter((model) => model.userId === userId)
+      .map((model) => clone(model));
+  }
+
+  listEvidenceForUser(userId: string): LearningEvidence[] {
+    return clone(this.evidence.filter((item) => item.userId === userId));
+  }
+
   reset(): void {
     this.models.clear();
     this.evidence = [];

@@ -76,6 +76,20 @@ Honest limitation: V1 does **not** fake atomicity. A later `process_evidence` Po
 
 `npm run import:vocabulary -- --validate` and `--dry-run` never write. `--apply` upserts by `canonical_key` / deterministic UUID and requires Supabase env vars. Tests use `InMemoryVocabularyRepository` and local JSON only.
 
+## Phase 04 persistence
+
+Phase 04 adds **no required persistence tables**. `LearningSessionPlan` is generated on demand and is not stored.
+
+The scheduler reads:
+
+- vocabulary (`lexemes`)
+- student snapshots (`student_lexeme_models`)
+- skill states (`student_lexeme_skill_states`)
+- weaknesses (`student_lexeme_weaknesses`)
+- recent evidence (`learning_evidence` → `RecentLearningActivity`)
+
+`LearningStateQueryRepository` is the read port. It is not the Learning Core mutation port.
+
 ## RLS TODO
 
 There is no student auth context yet. Do not add `using (true)` write policies. When Supabase Auth lands:
