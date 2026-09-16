@@ -3,7 +3,10 @@ import { PromptMode } from "@/domain/learning/evidence.types";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import type { WeaknessType } from "@/domain/learning/weakness.types";
 import type { Lexeme } from "@/domain/vocabulary/lexeme";
-import type { LexemeRelation } from "@/domain/vocabulary/lexeme-relation";
+import {
+  LexemeRelationType,
+  type LexemeRelation,
+} from "@/domain/vocabulary/lexeme-relation";
 import type { VocabularySourceEntry } from "@/domain/vocabulary/source-entry";
 import type { VocabularyDataset } from "@/server/vocabulary/load-vocabulary-dataset";
 
@@ -94,4 +97,23 @@ export function tinyDataset(params: {
   };
 }
 
-export { PromptMode };
+export function makeApprovedRelation(params: {
+  id: string;
+  type: LexemeRelationType;
+  fromLexemeId: string;
+  toLexemeId: string;
+}): LexemeRelation {
+  return {
+    id: params.id,
+    canonicalKey: params.id,
+    type: params.type,
+    fromLexemeId: params.fromLexemeId,
+    toLexemeId: params.toLexemeId,
+    symmetric: true,
+    confidence: 1,
+    provenance: "source_structural",
+    note: null,
+  };
+}
+
+export { PromptMode, LexemeRelationType };

@@ -51,6 +51,12 @@ export class InMemoryLearningRepository implements LearningRepository {
     if (this.evidence.some((item) => item.id === evidence.id)) {
       throw new Error(`Evidence ${evidence.id} already exists`);
     }
+    if (
+      evidence.taskId &&
+      this.evidence.some((item) => item.taskId === evidence.taskId)
+    ) {
+      throw new Error(`Task ${evidence.taskId} already has terminal evidence`);
+    }
     this.evidence.push(clone(evidence));
   }
 

@@ -1,6 +1,9 @@
-import type { GeneratedLearningTask } from "@/domain/tasks/generated-learning-task";
+import type {
+  AssignedLearningTask,
+  SaveGeneratedTaskInput,
+} from "./task-assignment";
 
 export interface LearningTaskRepository {
-  saveGeneratedTask(task: GeneratedLearningTask): Promise<void>;
-  getTaskForEvaluation(taskId: string): Promise<GeneratedLearningTask | null>;
+  saveGeneratedTask(input: SaveGeneratedTaskInput): Promise<void>;
+  getTaskForEvaluation(taskId: string): Promise<AssignedLearningTask | null>;
 }

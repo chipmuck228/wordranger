@@ -126,6 +126,30 @@ IPA text and browser TTS are not listening curriculum. LLM sentences are not con
 
 Task-generated evidence sets `taskId`. Legacy Debug Lab / Phase 01–02 helpers may still use `taskId: null` so existing Learning Core tests stay valid.
 
+## ADR-022 — Relation-choice distractors exclude all other valid answers of the selected relation type
+
+**Status:** accepted
+
+After a `RELATION_CHOICE` relation is chosen, every other production-approved related lexeme of that same type is excluded from distractors. V1 still shows exactly one correct option. Different relation types are not excluded by this rule.
+
+## ADR-023 — Generated tasks are assigned to user + session before evaluation
+
+**Status:** accepted
+
+`LearningTaskRepository.saveGeneratedTask` stores `TaskAssignment` (`userId`, `sessionId`) separately from `PublicLearningTask`. Evaluation loads `AssignedLearningTask` and rejects user/session mismatch.
+
+## ADR-024 — submitTaskAction is the authoritative production submission path
+
+**Status:** accepted
+
+Renderers submit `taskId` + `StudentAction` plus authenticated/session context. The service loads the answer key server-side, grades via `TaskEvaluator`, builds evidence via the factory, and updates learning state via `processEvidence`. Callers cannot supply an answer key or set an outcome.
+
+## ADR-025 — EvidenceFactory validates task/evaluation/key consistency but does not grade
+
+**Status:** accepted
+
+The factory rejects mismatched `taskId`, lexeme, or skill. It does not re-run TaskEvaluator logic.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

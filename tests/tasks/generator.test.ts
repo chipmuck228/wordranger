@@ -11,7 +11,13 @@ import { InMemoryVocabularyRepository } from "@/server/vocabulary/in-memory-voca
 import { InMemoryVocabularyInspectionRepository } from "@/server/vocabulary/in-memory-vocabulary-inspection-repository";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { makeNeed, makeNeedWithConfusion, tinyDataset } from "./helpers";
+import {
+  LexemeRelationType,
+  makeApprovedRelation,
+  makeNeed,
+  makeNeedWithConfusion,
+  tinyDataset,
+} from "./helpers";
 
 const NOW = "2026-03-01T09:00:00.000Z";
 const dataset = loadVocabularyDataset();
@@ -388,6 +394,122 @@ describe("Task Generator", () => {
       status: "UNAVAILABLE",
       code: TaskUnavailableCode.INSUFFICIENT_DISTRACTORS,
     });
+  });
+
+  it("TEST H10: same-type valid related lexemes are not distractors", async () => {
+    const target = dataset.lexemes.find((lexeme) => lexeme.lemma === "act");
+    expect(target).toBeTruthy();
+    const approved = await vocabulary.getRelations(target!.id);
+    const byType = new Map<string, string[]>();
+    for (const relation of approved) {
+      const other =
+        relation.fromLexemeId === target!.id
+          ? relation.toLexemeId
+          : relation.fromLexemeId;
+      const list = byType.get(relation.type) ?? [];
+      list.push(other);
+      byType.set(relation.type, list);
+    }
+    const multi = [...byType.entries()].find(([, ids]) => ids.length >= 3);
+    expect(multi).toBeTruthy();
+    const result = await generate(
+      makeNeed({
+        lexemeId: target!.id,
+        targetSkill: VocabularySkill.SEMANTIC_CONNECTION,
+      }),
+      "h10",
+    );
+    expect(result.status).toBe("GENERATED");
+    if (result.status !== "GENERATED") {
+      return;
+    }
+    expect(result.value.answerKey.correctOptionIds).toHaveLength(1);
+    const correctId = result.value.answerKey.correctOptionIds[0];
+    const correctLexemeId = result.value.answerKey.optionLexemeIds[correctId];
+    expect(correctLexemeId).toBeTruthy();
+    const prompt = result.value.publicTask.prompt;
+    expect(prompt.kind).toBe("RELATION");
+    if (prompt.kind !== "RELATION") {
+      return;
+    }
+    const sameTypeIds = new Set(byType.get(prompt.relationType) ?? []);
+    const distractorIds = result.value.generationTrace.selectedDistractorLexemeIds;
+    for (const relatedId of sameTypeIds) {
+      if (relatedId === correctLexemeId) {
+        continue;
+      }
+      expect(distractorIds).not.toContain(relatedId);
+      expect(
+        Object.values(result.value.answerKey.optionLexemeIds),
+      ).not.toContain(relatedId);
+    }
+    const alsoValid = result.value.generationTrace.blockedCandidates.filter(
+      (item) => item.reason === "also_valid_for_selected_relation_type",
+    );
+    expect(alsoValid.length).toBeGreaterThan(0);
+  });
+
+  it("TEST H11: different relation types are not excluded by the same-type rule", async () => {
+    const local = new InMemoryVocabularyRepository(
+      tinyDataset({
+        lexemes: [
+          { id: "t", lemma: "target", meaningsZh: ["目标"] },
+          { id: "x", lemma: "synonymx", meaningsZh: ["近义"] },
+          { id: "y", lemma: "familyy", meaningsZh: ["词族"] },
+          { id: "d1", lemma: "delta", meaningsZh: ["一"] },
+          { id: "d2", lemma: "echo", meaningsZh: ["二"] },
+          { id: "d3", lemma: "foxtrot", meaningsZh: ["三"] },
+          { id: "d4", lemma: "golf", meaningsZh: ["四"] },
+        ],
+        relations: [
+          makeApprovedRelation({
+            id: "rel-syn",
+            type: LexemeRelationType.SYNONYM,
+            fromLexemeId: "t",
+            toLexemeId: "x",
+          }),
+          makeApprovedRelation({
+            id: "rel-fam",
+            type: LexemeRelationType.WORD_FAMILY,
+            fromLexemeId: "t",
+            toLexemeId: "y",
+          }),
+        ],
+      }),
+    );
+    const localGenerator = new DefaultTaskGenerator(local);
+    const result = await localGenerator.generate({
+      need: makeNeed({
+        lexemeId: "t",
+        targetSkill: VocabularySkill.SEMANTIC_CONNECTION,
+      }),
+      desiredDifficulty: 0.4,
+      recentTasks: [],
+      now: NOW,
+      createId: sequentialIdFactory("h11"),
+      random: new SeededRandomSource("h11"),
+    });
+    expect(result.status).toBe("GENERATED");
+    if (result.status !== "GENERATED") {
+      return;
+    }
+    const prompt = result.value.publicTask.prompt;
+    expect(prompt.kind).toBe("RELATION");
+    if (prompt.kind !== "RELATION") {
+      return;
+    }
+    const otherTypeId =
+      prompt.relationType === LexemeRelationType.SYNONYM ? "y" : "x";
+    expect(
+      result.value.generationTrace.blockedCandidates.some(
+        (item) =>
+          item.lexemeId === otherTypeId &&
+          item.reason === "also_valid_for_selected_relation_type",
+      ),
+    ).toBe(false);
+    expect(result.value.generationTrace.candidateLexemeIds).toContain(
+      otherTypeId,
+    );
   });
 
   it("TEST T20: Task Generator source does not import the inspection repository", () => {

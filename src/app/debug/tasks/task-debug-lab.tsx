@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,22 +11,22 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { processEvidence } from "@/domain/learning/engine/process-evidence";
-import type { LearningEvidence } from "@/domain/learning/evidence.types";
 import type { LearningNeedReason } from "@/domain/learning/learning-need";
 import type { StudentLexemeModel } from "@/domain/learning/student-lexeme-model";
 import { VOCABULARY_SKILLS, VocabularySkill } from "@/domain/learning/vocabulary-skill";
-import { DefaultTaskEvaluator } from "@/domain/tasks/default-task-evaluator";
-import { createLearningEvidenceFromTaskEvaluation } from "@/domain/tasks/evidence-factory";
 import type { GeneratedLearningTask } from "@/domain/tasks/generated-learning-task";
 import type { StudentAction } from "@/domain/tasks/student-action";
+import type { TaskAssignment } from "@/domain/tasks/task-assignment";
 import type { TaskEvaluation } from "@/domain/tasks/task-evaluation";
+import type { LearningEvidence } from "@/domain/learning/evidence.types";
 import type { TaskGenerationResult } from "@/domain/tasks/task-unavailable";
-import { InMemoryLearningRepository } from "@/server/learning/in-memory-learning-repository";
 import type { VocabularyDebugLexeme } from "@/server/vocabulary/debug-view";
-import { generateDebugTask } from "./actions";
-
-const evaluator = new DefaultTaskEvaluator();
+import {
+  generateDebugTask,
+  resetDebugTaskLab,
+  submitDebugTaskAction,
+} from "./actions";
+import { DEBUG_SESSION_ID, DEBUG_USER_ID } from "./debug-ids";
 
 export type TaskDebugLexeme = Pick<
   VocabularyDebugLexeme,
@@ -38,7 +38,6 @@ export function TaskDebugLab({
 }: {
   lexemes: TaskDebugLexeme[];
 }) {
-  const learningRef = useRef(new InMemoryLearningRepository());
   const quiet = lexemes.find((lexeme) => lexeme.lemma === "quiet");
   const [query, setQuery] = useState("quiet");
   const [selectedId, setSelectedId] = useState(quiet?.id ?? lexemes[0]?.id ?? "");
@@ -66,6 +65,7 @@ export function TaskDebugLab({
   const [choiceId, setChoiceId] = useState("");
   const [typed, setTyped] = useState("");
   const [hintCount, setHintCount] = useState("0");
+  const [assignment, setAssignment] = useState<TaskAssignment | null>(null);
   const [generation, setGeneration] = useState<TaskGenerationResult | null>(
     null,
   );
@@ -98,6 +98,7 @@ export function TaskDebugLab({
     setEvaluation(null);
     setEvidence(null);
     setModel(null);
+    setAssignment(null);
     try {
       const result = await generateDebugTask({
         lexemeId: selected.id,
@@ -107,12 +108,16 @@ export function TaskDebugLab({
         seed,
         difficulty: 0.45,
       });
-      setGeneration(result);
+      setGeneration(result.generation);
+      setAssignment(result.assignment);
       if (
-        result.status === "GENERATED" &&
-        result.value.publicTask.responseContract.kind === "CHOICE"
+        result.generation.status === "GENERATED" &&
+        result.generation.value.publicTask.responseContract.kind === "CHOICE"
       ) {
-        setChoiceId(result.value.publicTask.responseContract.options[0]?.id ?? "");
+        setChoiceId(
+          result.generation.value.publicTask.responseContract.options[0]?.id ??
+            "",
+        );
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Generate failed");
@@ -121,10 +126,11 @@ export function TaskDebugLab({
     }
   }
 
-  function onEvaluate() {
+  async function onSubmit() {
     if (!generated) {
       return;
     }
+    setBusy(true);
     setError(null);
     try {
       const action: StudentAction =
@@ -145,47 +151,24 @@ export function TaskDebugLab({
               responseTimeMs: 900,
               occurredAt: generated.publicTask.createdAt,
             };
-      setEvaluation(
-        evaluator.evaluate(generated.publicTask, generated.answerKey, action),
-      );
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Evaluate failed");
-    }
-  }
-
-  async function onProcess() {
-    if (!generated || !evaluation || !selected) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const nextEvidence = createLearningEvidenceFromTaskEvaluation({
-        task: generated.publicTask,
-        answerKey: generated.answerKey,
-        evaluation,
-        userId: "debug-user",
-        sessionId: "debug-session",
-        gameId: "debug-task-lab",
-        evidenceId: crypto.randomUUID(),
+      const result = await submitDebugTaskAction({
+        taskId: generated.publicTask.id,
+        action,
       });
-      const result = await processEvidence({
-        evidence: nextEvidence,
-        repository: learningRef.current,
-        now: evaluation.occurredAt,
-      });
-      setEvidence(nextEvidence);
-      setModel(result.model);
+      setEvaluation(result.evaluation);
+      setEvidence(result.evidence);
+      setModel(result.learningResult.model);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Process failed");
+      setError(caught instanceof Error ? caught.message : "Submit failed");
     } finally {
       setBusy(false);
     }
   }
 
-  function onReset() {
-    learningRef.current.reset();
+  async function onReset() {
+    await resetDebugTaskLab();
     setGeneration(null);
+    setAssignment(null);
     setEvaluation(null);
     setEvidence(null);
     setModel(null);
@@ -202,8 +185,8 @@ export function TaskDebugLab({
       <div>
         <h1 className="text-2xl font-semibold">Task Protocol Debug Lab</h1>
         <p className="text-muted-foreground text-sm">
-          Generate a LearningTask, submit a StudentAction, evaluate, then process
-          Evidence. This is not a student UI.
+          Generate a LearningTask, persist the assignment, then submit a
+          StudentAction through submitTaskAction. This is not a student UI.
         </p>
       </div>
 
@@ -231,7 +214,7 @@ export function TaskDebugLab({
                   variant={lexeme.id === selected.id ? "default" : "outline"}
                   onClick={() => {
                     setSelectedId(lexeme.id);
-                    onReset();
+                    void onReset();
                   }}
                 >
                   {lexeme.lemma}
@@ -303,12 +286,15 @@ export function TaskDebugLab({
             {relatedLexemeId ? (
               <div>confusion relatedLexemeId {relatedLexemeId}</div>
             ) : null}
+            <div>
+              assigned user {DEBUG_USER_ID} / session {DEBUG_SESSION_ID}
+            </div>
           </div>
           <div className="flex items-end gap-2">
             <Button onClick={() => void onGenerate()} disabled={busy}>
               Generate Task
             </Button>
-            <Button variant="outline" onClick={onReset} disabled={busy}>
+            <Button variant="outline" onClick={() => void onReset()} disabled={busy}>
               Reset
             </Button>
           </div>
@@ -347,6 +333,16 @@ export function TaskDebugLab({
                 {JSON.stringify(generated.answerKey, null, 2)}
               </pre>
             </CardContent>
+          </Card>
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>TaskAssignment</CardTitle>
+              <CardDescription>
+                {assignment
+                  ? `${assignment.userId} / ${assignment.sessionId}`
+                  : "unassigned"}
+              </CardDescription>
+            </CardHeader>
           </Card>
           <Card className="lg:col-span-2">
             <CardHeader>
@@ -401,9 +397,8 @@ export function TaskDebugLab({
               />
             </div>
             <div className="flex gap-2">
-              <Button onClick={onEvaluate}>Evaluate</Button>
-              <Button onClick={() => void onProcess()} disabled={!evaluation || busy}>
-                Process through Learning Core
+              <Button onClick={() => void onSubmit()} disabled={busy}>
+                Submit StudentAction
               </Button>
             </div>
           </CardContent>

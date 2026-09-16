@@ -10,10 +10,12 @@ flowchart TD
   need[LearningNeed]
   gen[Task Generator]
   generated[GeneratedLearningTask]
+  assignment[Task Assignment / Persistence]
   publicTask[PublicLearningTask]
-  answerKey[TaskAnswerKey]
   renderer[Game Renderer]
   action[StudentAction]
+  submit[Submission Service]
+  answerKey[server-side TaskAnswerKey]
   evaluator[TaskEvaluator]
   evidence[LearningEvidence]
   core[Learning Core]
@@ -22,12 +24,14 @@ flowchart TD
   vocab --> need
   need --> gen
   gen --> generated
-  generated --> publicTask
-  generated --> answerKey
+  generated --> assignment
+  assignment --> publicTask
   publicTask --> renderer
   renderer --> action
-  action --> evaluator
-  answerKey --> evaluator
+  action --> submit
+  assignment --> answerKey
+  answerKey --> submit
+  submit --> evaluator
   evaluator --> evidence
   evidence --> core
   core --> model
@@ -38,12 +42,14 @@ Responsibilities:
 - **Vocabulary Domain** — what a lexeme is, and which content is production-approved
 - **LearningNeed** — what the student should practice now
 - **Task Generator** — which task to emit
-- **Game Renderer** — how the public task is presented
+- **Task Assignment** — which user/session owns the generated task
+- **Game Renderer** — how the public task is presented; emits only `StudentAction`
+- **Submission Service** (`submitTaskAction`) — loads the server-side answer key, verifies ownership, then grades
 - **TaskEvaluator** — what the student action means
 - **LearningEvidence** — the immutable fact
 - **Learning Core** — how evidence changes the student model
 
-Games never write mastery. Games never grade.
+Games never write mastery. Games never grade. Games never receive `TaskAnswerKey` on the production path.
 
 ## Vocabulary Domain
 

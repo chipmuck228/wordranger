@@ -142,4 +142,88 @@ describe("Evidence factory", () => {
     expect(evidence.errorType).toBe(EvidenceErrorType.SPELLING_MAJOR);
     expect(evidence.taskType).toBe("SPELLING_RECALL_TYPING");
   });
+
+  it("TEST H6: task.id != evaluation.taskId is rejected", async () => {
+    const built = await buildCorrectMeaningEvidence();
+    expect(() =>
+      createLearningEvidenceFromTaskEvaluation({
+        ...built.input,
+        evaluation: { ...built.input.evaluation, taskId: "other-task" },
+      }),
+    ).toThrow(/Evaluation taskId/);
+  });
+
+  it("TEST H7: task.id != answerKey.taskId is rejected", async () => {
+    const built = await buildCorrectMeaningEvidence();
+    expect(() =>
+      createLearningEvidenceFromTaskEvaluation({
+        ...built.input,
+        answerKey: { ...built.input.answerKey, taskId: "other-task" },
+      }),
+    ).toThrow(/Answer key taskId/);
+  });
+
+  it("TEST H8: task.lexemeId != evaluation.lexemeId is rejected", async () => {
+    const built = await buildCorrectMeaningEvidence();
+    expect(() =>
+      createLearningEvidenceFromTaskEvaluation({
+        ...built.input,
+        evaluation: { ...built.input.evaluation, lexemeId: "other-lexeme" },
+      }),
+    ).toThrow(/Evaluation lexemeId/);
+  });
+
+  it("TEST H9: task.targetSkill != evaluation.skill is rejected", async () => {
+    const built = await buildCorrectMeaningEvidence();
+    expect(() =>
+      createLearningEvidenceFromTaskEvaluation({
+        ...built.input,
+        evaluation: {
+          ...built.input.evaluation,
+          skill: VocabularySkill.ACTIVE_RECALL,
+        },
+      }),
+    ).toThrow(/Evaluation skill/);
+  });
 });
+
+async function buildCorrectMeaningEvidence() {
+  const [quiet] = await vocabulary.findLexemeByLemma("quiet");
+  const generated = await generator.generate({
+    need: makeNeed({
+      lexemeId: quiet.id,
+      targetSkill: VocabularySkill.MEANING_RECOGNITION,
+    }),
+    desiredDifficulty: 0.4,
+    recentTasks: [],
+    now: NOW,
+    createId: sequentialIdFactory("h6"),
+    random: new SeededRandomSource("factory-h"),
+  });
+  if (generated.status !== "GENERATED") {
+    throw new Error(generated.reason);
+  }
+  const evaluation = evaluator.evaluate(
+    generated.value.publicTask,
+    generated.value.answerKey,
+    {
+      kind: "CHOICE",
+      taskId: generated.value.publicTask.id,
+      optionId: generated.value.answerKey.correctOptionIds[0],
+      hintCount: 0,
+      responseTimeMs: 500,
+      occurredAt: NOW,
+    },
+  );
+  return {
+    input: {
+      task: generated.value.publicTask,
+      answerKey: generated.value.answerKey,
+      evaluation,
+      userId: "user-1",
+      sessionId: "session-1",
+      gameId: "debug-task-lab",
+      evidenceId: "ev-h",
+    },
+  };
+}

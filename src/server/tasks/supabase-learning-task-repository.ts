@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GeneratedLearningTask } from "@/domain/tasks/generated-learning-task";
+import type {
+  AssignedLearningTask,
+  SaveGeneratedTaskInput,
+} from "@/domain/tasks/task-assignment";
+import { assertTaskAssignment } from "@/domain/tasks/task-assignment";
 import type { LearningTaskRepository } from "@/domain/tasks/learning-task-repository";
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
 import type { TaskAnswerKey } from "@/domain/tasks/task-answer-key";
@@ -11,9 +16,13 @@ import type { TaskGenerationTrace } from "@/domain/tasks/task-generation-result"
 export class SupabaseLearningTaskRepository implements LearningTaskRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async saveGeneratedTask(task: GeneratedLearningTask): Promise<void> {
+  async saveGeneratedTask(input: SaveGeneratedTaskInput): Promise<void> {
+    assertTaskAssignment(input.assignment);
+    const { task, assignment } = input;
     const { error } = await this.client.from("learning_tasks").insert({
       id: task.publicTask.id,
+      user_id: assignment.userId,
+      session_id: assignment.sessionId,
       learning_need_id: task.publicTask.learningNeedId,
       lexeme_id: task.publicTask.lexemeId,
       target_skill: task.publicTask.targetSkill,
@@ -35,10 +44,12 @@ export class SupabaseLearningTaskRepository implements LearningTaskRepository {
 
   async getTaskForEvaluation(
     taskId: string,
-  ): Promise<GeneratedLearningTask | null> {
+  ): Promise<AssignedLearningTask | null> {
     const { data, error } = await this.client
       .from("learning_tasks")
-      .select("public_payload, answer_key, generation_trace")
+      .select(
+        "user_id, session_id, public_payload, answer_key, generation_trace",
+      )
       .eq("id", taskId)
       .maybeSingle();
     if (error) {
@@ -47,10 +58,17 @@ export class SupabaseLearningTaskRepository implements LearningTaskRepository {
     if (!data) {
       return null;
     }
-    return {
+    const task: GeneratedLearningTask = {
       publicTask: data.public_payload as PublicLearningTask,
       answerKey: data.answer_key as TaskAnswerKey,
       generationTrace: data.generation_trace as TaskGenerationTrace,
+    };
+    return {
+      task,
+      assignment: {
+        userId: String(data.user_id ?? ""),
+        sessionId: String(data.session_id ?? ""),
+      },
     };
   }
 }

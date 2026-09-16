@@ -33,8 +33,9 @@ One row per lexeme. `game_tags` describe present data capabilities, not which ga
 
 `learning_tasks` stores one generated task:
 
+- `user_id` / `session_id` — **task assignment identity**. They bind the generated task to a student session. They are not part of `PublicLearningTask`. Application `saveGeneratedTask` requires both. Columns remain nullable in SQL because this phase has no auth and Debug/tests use string ids, not UUIDs.
 - `public_payload` — student-safe `PublicLearningTask`
-- `answer_key` — **server-only**. Never `select("*")` this table from a browser client. Evaluation must run on the server (or in Debug Lab in-process).
+- `answer_key` — **server-only**. Never `select("*")` this table from a browser client. Evaluation must run on the server via `submitTaskAction` (Debug Lab may display the key).
 - `generation_trace` — why this task was built (candidates, blocked relations, policy version)
 
 `learning_evidence.task_id` references `learning_tasks(id)` and is unique when not null (one task → one terminal evidence). Legacy Debug Lab evidence may still have `task_id` null.

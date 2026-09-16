@@ -246,6 +246,13 @@ export class DefaultTaskGenerator implements TaskGenerator {
       );
     }
     const relation = relations[Math.floor(request.random.next() * relations.length)];
+    const chosenRelationType = relation.type;
+    const sameTypeRelations = await this.vocabulary.getRelations(lexeme.id, {
+      types: [chosenRelationType],
+    });
+    const allValidRelatedLexemeIds = new Set(
+      sameTypeRelations.map((item) => otherId(item, lexeme.id)),
+    );
     const targetRelatedId = otherId(relation, lexeme.id);
     const related = await this.vocabulary.getLexeme(targetRelatedId);
     if (!related) {
@@ -256,8 +263,16 @@ export class DefaultTaskGenerator implements TaskGenerator {
     }
     const catalog = await this.vocabulary.listLexemes();
     const blocked: TaskGenerationTrace["blockedCandidates"] = [];
+    const usedOptionText = new Set([related.lemma]);
     const pool = catalog.filter((candidate) => {
       if (candidate.id === lexeme.id || candidate.id === related.id) {
+        return false;
+      }
+      if (allValidRelatedLexemeIds.has(candidate.id)) {
+        blocked.push({
+          lexemeId: candidate.id,
+          reason: "also_valid_for_selected_relation_type",
+        });
         return false;
       }
       if (candidate.sourceEntryId === lexeme.sourceEntryId) {
@@ -267,7 +282,15 @@ export class DefaultTaskGenerator implements TaskGenerator {
         });
         return false;
       }
-      return candidate.lemma.length > 0;
+      if (!candidate.lemma || usedOptionText.has(candidate.lemma)) {
+        blocked.push({
+          lexemeId: candidate.id,
+          reason: "duplicate_option_text",
+        });
+        return false;
+      }
+      usedOptionText.add(candidate.lemma);
+      return true;
     });
     const optionCount = this.policy.choice.optionCount;
     const needed = optionCount - 1;

@@ -84,6 +84,57 @@ Generation uses an injected `RandomSource` and `request.now`. Same need + seed +
 
 Student clients may receive `publicTask` only. `answer_key` stays on the server evaluation path. Debug Lab may display the key because it is a protocol tester, not a student surface.
 
+## Task Assignment
+
+A generated task is not evaluable until it is assigned:
+
+```text
+GeneratedLearningTask
+        ↓
+AssignedLearningTask  (userId + sessionId)
+```
+
+`userId` and `sessionId` are assignment identity. They are not copied into `PublicLearningTask`. `LearningTaskRepository.saveGeneratedTask({ task, assignment })` requires both. `getTaskForEvaluation` returns the assignment so the server can refuse a renderer that submits another user's task.
+
+Database columns `learning_tasks.user_id` / `session_id` stay nullable because this repo has no auth yet and in-memory tests use string ids. Application save still requires both fields.
+
+## Authoritative Submission Pipeline
+
+Production (and Debug Lab) must use `submitTaskAction()`:
+
+```text
+GeneratedLearningTask
+        ↓
+AssignedLearningTask
+        ↓
+Public renderer receives PublicLearningTask only
+        ↓
+StudentAction  (taskId + action; no answerKey)
+        ↓
+submitTaskAction
+        ↓
+load AssignedLearningTask
+verify user / session / action.taskId
+        ↓
+server-loaded TaskAnswerKey
+        ↓
+TaskEvaluator
+        ↓
+EvidenceFactory  (consistency only; does not grade)
+        ↓
+LearningEvidence
+        ↓
+processEvidence
+        ↓
+StudentLexemeModel
+```
+
+The caller cannot supply `answerKey`. The caller cannot set outcome, error type, or weakness. One task produces one terminal evidence.
+
+## Relation-choice distractors
+
+Once a `RELATION_CHOICE` picks a production-approved relation, every other production-approved related lexeme of **that same type** is excluded from distractors (`also_valid_for_selected_relation_type`). V1 still has exactly one `correctOptionId`. Different relation types are not excluded by this rule.
+
 ## Current content capability
 
 **Supported:** meaning, semantic connection (approved relations), active recall typing, spelling from meaning.

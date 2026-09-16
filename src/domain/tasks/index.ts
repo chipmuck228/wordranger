@@ -49,5 +49,10 @@ export {
 export { createLearningEvidenceFromTaskEvaluation } from "./evidence-factory";
 export type { CreateEvidenceFromEvaluationInput } from "./evidence-factory";
 export type { LearningTaskRepository } from "./learning-task-repository";
+export type {
+  TaskAssignment,
+  SaveGeneratedTaskInput,
+  AssignedLearningTask,
+} from "./task-assignment";
 export { canCapabilityRenderTask } from "./can-capability-render-task";
 export { normalizeStudentText, levenshteinDistance } from "./text-normalization";
