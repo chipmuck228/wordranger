@@ -1,6 +1,6 @@
 import type { MasteryStage } from "./mastery-stage";
 import type { RetentionState } from "./retention-state";
-import type { SkillState } from "./student-word-model";
+import type { SkillState } from "./student-lexeme-model";
 import type { VocabularySkill } from "./vocabulary-skill";
 import type { Weakness } from "./weakness.types";
 

@@ -1,7 +1,7 @@
 import type { LearningEvidence } from "../evidence.types";
 import { MasteryStage } from "../mastery-stage";
 import type { LearningPolicy } from "../policies/learning-policy";
-import type { StudentWordModel } from "../student-word-model";
+import type { StudentLexemeModel } from "../student-lexeme-model";
 import type { TransitionReason } from "../transition.types";
 import {
   contextVariantId,
@@ -17,7 +17,7 @@ import { daysBetween } from "./time";
 import { VocabularySkill } from "../vocabulary-skill";
 
 export interface EvaluateStageTransitionInput {
-  model: StudentWordModel;
+  model: StudentLexemeModel;
   history: readonly LearningEvidence[];
   evidence: LearningEvidence;
   policy: LearningPolicy;
@@ -93,7 +93,7 @@ function recognitionCheck(
 }
 
 function connectionCheck(
-  model: StudentWordModel,
+  model: StudentLexemeModel,
   history: readonly LearningEvidence[],
   policy: LearningPolicy,
 ): CheckResult {
@@ -124,7 +124,7 @@ function connectionCheck(
 }
 
 function recallCheck(
-  model: StudentWordModel,
+  model: StudentLexemeModel,
   history: readonly LearningEvidence[],
   policy: LearningPolicy,
 ): CheckResult {
@@ -165,7 +165,7 @@ function recallCheck(
 }
 
 function usageCheck(
-  model: StudentWordModel,
+  model: StudentLexemeModel,
   history: readonly LearningEvidence[],
   policy: LearningPolicy,
 ): CheckResult {
@@ -200,7 +200,7 @@ function usageCheck(
 }
 
 function masteryCheck(
-  model: StudentWordModel,
+  model: StudentLexemeModel,
   history: readonly LearningEvidence[],
   policy: LearningPolicy,
   now: string,

@@ -29,7 +29,7 @@ export interface Weakness {
    */
   severity: number;
   skill?: VocabularySkill;
-  relatedWordId?: string;
+  relatedLexemeId?: string;
   reason: WeaknessReason;
   detectedAt: string;
   lastTriggeredAt: string;

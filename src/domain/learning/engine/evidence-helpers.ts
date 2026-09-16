@@ -22,19 +22,15 @@ export function isFailure(evidence: LearningEvidence): boolean {
 
 export function isSuccess(evidence: LearningEvidence): boolean {
   return (
-    evidence.outcome === EvidenceOutcome.CORRECT ||
     evidence.outcome === EvidenceOutcome.INDEPENDENT_CORRECT ||
     evidence.outcome === EvidenceOutcome.ASSISTED_CORRECT
   );
 }
 
 export function isIndependentSuccess(evidence: LearningEvidence): boolean {
-  if (evidence.hintCount > 0) {
-    return false;
-  }
   return (
-    evidence.outcome === EvidenceOutcome.INDEPENDENT_CORRECT ||
-    evidence.outcome === EvidenceOutcome.CORRECT
+    evidence.hintCount === 0 &&
+    evidence.outcome === EvidenceOutcome.INDEPENDENT_CORRECT
   );
 }
 

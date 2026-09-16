@@ -1,0 +1,132 @@
+[
+  {
+    "sourceIndex": 39,
+    "sourceWord": "AI (=aftificial interlligence)",
+    "correction": {
+      "canonical_display": "AI (=artificial intelligence)",
+      "note": "Corrected obvious expansion typo in source."
+    }
+  },
+  {
+    "sourceIndex": 444,
+    "sourceWord": "empty",
+    "correction": {
+      "meaning_zh": "空的；空无一物的",
+      "note": "Corrected source meaning that duplicated 'enemy'."
+    }
+  },
+  {
+    "sourceIndex": 474,
+    "sourceWord": "exciting",
+    "correction": {
+      "meaning_zh": "令人兴奋的；使人激动的",
+      "note": "Normalized source meaning wording."
+    }
+  },
+  {
+    "sourceIndex": 515,
+    "sourceWord": "film",
+    "correction": {
+      "pos": [
+        "noun"
+      ],
+      "note": "Corrected source POS 'num.' for film."
+    }
+  },
+  {
+    "sourceIndex": 535,
+    "sourceWord": "fog",
+    "correction": {
+      "meaning_zh": "雾",
+      "note": "Corrected source meaning '青蛙'."
+    }
+  },
+  {
+    "sourceIndex": 683,
+    "sourceWord": "hurt(hurt,hut)",
+    "correction": {
+      "canonical_display": "hurt (hurt, hurt)",
+      "note": "Corrected irregular-form typo 'hurt,hut'."
+    }
+  },
+  {
+    "sourceIndex": 769,
+    "sourceWord": "lazy",
+    "correction": {
+      "meaning_zh": "懒惰的",
+      "note": "Corrected source meaning that duplicated 'lay'."
+    }
+  },
+  {
+    "sourceIndex": 844,
+    "sourceWord": "medal",
+    "correction": {
+      "meaning_zh": "奖章；勋章",
+      "note": "Corrected source meaning '金属'."
+    }
+  },
+  {
+    "sourceIndex": 962,
+    "sourceWord": "organize (AmE organize)",
+    "correction": {
+      "canonical_display": "organize (BrE organise)",
+      "note": "Normalized variant notation conservatively."
+    }
+  },
+  {
+    "sourceIndex": 996,
+    "sourceWord": "pay (paid, paid)",
+    "correction": {
+      "ipa": [
+        "/peɪ/"
+      ],
+      "note": "Corrected obvious source IPA mismatch."
+    }
+  },
+  {
+    "sourceIndex": 1225,
+    "sourceWord": "shark",
+    "correction": {
+      "meaning_zh": "鲨鱼",
+      "note": "Corrected source meaning '鲸鱼'."
+    }
+  },
+  {
+    "sourceIndex": 1275,
+    "sourceWord": "smooth",
+    "correction": {
+      "ipa": [
+        "/smuːð/"
+      ],
+      "note": "Corrected obvious source IPA mismatch."
+    }
+  },
+  {
+    "sourceIndex": 1280,
+    "sourceWord": "social",
+    "correction": {
+      "ipa": [
+        "/ˈsəʊʃ(ə)l/"
+      ],
+      "note": "Corrected obvious source IPA mismatch."
+    }
+  },
+  {
+    "sourceIndex": 1284,
+    "sourceWord": "sofa",
+    "correction": {
+      "pos": [
+        "noun"
+      ],
+      "note": "Corrected source POS for sofa."
+    }
+  },
+  {
+    "sourceIndex": 1569,
+    "sourceWord": "woman (pl. wonmen)",
+    "correction": {
+      "canonical_display": "woman (pl. women)",
+      "note": "Corrected plural-form typo."
+    }
+  }
+]

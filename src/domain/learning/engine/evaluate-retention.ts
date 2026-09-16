@@ -2,7 +2,7 @@ import type { LearningEvidence } from "../evidence.types";
 import { isAtLeastStage, type MasteryStage } from "../mastery-stage";
 import type { LearningPolicy } from "../policies/learning-policy";
 import { RetentionState } from "../retention-state";
-import type { SkillState } from "../student-word-model";
+import type { SkillState } from "../student-lexeme-model";
 import type { TransitionReason } from "../transition.types";
 import {
   isFailure,

@@ -2,9 +2,9 @@ import type { LearningEvidence } from "../evidence.types";
 import { DEFAULT_LEARNING_POLICY } from "../policies/default-learning-policy";
 import type { LearningPolicy } from "../policies/learning-policy";
 import {
-  createInitialStudentWordModel,
-  type StudentWordModel,
-} from "../student-word-model";
+  createInitialStudentLexemeModel,
+  type StudentLexemeModel,
+} from "../student-lexeme-model";
 import type { TransitionResult } from "../transition.types";
 import type { LearningRepository } from "../learning-repository";
 import { calculateMasteryScore } from "./calculate-mastery-score";
@@ -33,7 +33,7 @@ export interface ProcessEvidenceInput {
 }
 
 export interface ProcessEvidenceResult {
-  model: StudentWordModel;
+  model: StudentLexemeModel;
   evidence: LearningEvidence;
   transition: TransitionResult;
 }
@@ -56,22 +56,23 @@ export async function processEvidence(
   const now = input.now ?? evidence.occurredAt;
   const createId = input.createId ?? (() => crypto.randomUUID());
 
-  const existingModel = await input.repository.getStudentWordModel(
+  const existingModel = await input.repository.getStudentLexemeModel(
     evidence.userId,
-    evidence.wordId,
+    evidence.lexemeId,
   );
   const previous =
     existingModel ??
-    createInitialStudentWordModel({
+    createInitialStudentLexemeModel({
       id: createId(),
       userId: evidence.userId,
-      wordId: evidence.wordId,
+      lexemeId: evidence.lexemeId,
       now,
+      policyVersion: policy.version,
     });
 
-  const storedHistory = await input.repository.getEvidenceForWord(
+  const storedHistory = await input.repository.getEvidenceForLexeme(
     evidence.userId,
-    evidence.wordId,
+    evidence.lexemeId,
   );
   if (storedHistory.some((item) => item.id === evidence.id)) {
     throw new LearningDomainError(
@@ -98,7 +99,7 @@ export async function processEvidence(
     ? (previous.firstSeenAt ?? evidence.occurredAt)
     : previous.firstSeenAt;
 
-  const modelForStage: StudentWordModel = {
+  const modelForStage: StudentLexemeModel = {
     ...previous,
     skills,
     firstSeenAt,
@@ -163,8 +164,9 @@ export async function processEvidence(
     policy,
   });
 
-  const model: StudentWordModel = {
+  const model: StudentLexemeModel = {
     ...modelForStage,
+    policyVersion: policy.version,
     masteryStage: stageResult.nextStage,
     retentionState: retentionResult.nextRetentionState,
     masteryScore: scored.masteryScore,

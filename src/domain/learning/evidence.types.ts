@@ -1,7 +1,6 @@
 import type { VocabularySkill } from "./vocabulary-skill";
 
 export enum EvidenceOutcome {
-  CORRECT = "CORRECT",
   INDEPENDENT_CORRECT = "INDEPENDENT_CORRECT",
   ASSISTED_CORRECT = "ASSISTED_CORRECT",
   INCORRECT = "INCORRECT",
@@ -45,11 +44,14 @@ export enum EvidenceErrorType {
 /**
  * Immutable learning fact. Domain code must not expose APIs that mutate an
  * existing evidence result into a different outcome.
+ *
+ * INDEPENDENT_CORRECT = correct with no hint/scaffold.
+ * ASSISTED_CORRECT = correct only after hint/scaffold.
  */
 export interface LearningEvidence {
   id: string;
   userId: string;
-  wordId: string;
+  lexemeId: string;
   sessionId: string;
   gameId: string;
   taskType: string;
@@ -63,8 +65,8 @@ export interface LearningEvidence {
    */
   difficulty: number;
   answerMode: AnswerMode;
-  distractorWordIds: string[];
-  selectedWordId: string | null;
+  distractorLexemeIds: string[];
+  selectedLexemeId: string | null;
   typedAnswer: string | null;
   expectedAnswer: string | null;
   errorType: EvidenceErrorType | null;

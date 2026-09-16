@@ -8,8 +8,6 @@ import {
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 
 export const DEBUG_USER_ID = "00000000-0000-4000-8000-000000000001";
-export const DEBUG_WORD_ID = "00000000-0000-4000-8000-000000000010";
-export const DEBUG_CONFUSED_WORD_ID = "00000000-0000-4000-8000-000000000011";
 
 export type DebugPreset =
   | "reset"
@@ -30,6 +28,7 @@ function at(days: number): string {
 }
 
 function evidence(
+  lexemeId: string,
   sessionId: string,
   occurredAt: string,
   overrides: Partial<LearningEvidence>,
@@ -37,7 +36,7 @@ function evidence(
   return {
     id: crypto.randomUUID(),
     userId: DEBUG_USER_ID,
-    wordId: DEBUG_WORD_ID,
+    lexemeId,
     sessionId,
     gameId: "debug-lab",
     taskType: "debug-task",
@@ -48,8 +47,8 @@ function evidence(
     hintCount: 0,
     difficulty: 0.5,
     answerMode: AnswerMode.MULTIPLE_CHOICE,
-    distractorWordIds: [],
-    selectedWordId: DEBUG_WORD_ID,
+    distractorLexemeIds: [],
+    selectedLexemeId: lexemeId,
     typedAnswer: null,
     expectedAnswer: null,
     errorType: null,
@@ -58,15 +57,23 @@ function evidence(
   };
 }
 
-function meaning(sessionId: string, occurredAt: string): LearningEvidence {
-  return evidence(sessionId, occurredAt, {
+function meaning(
+  lexemeId: string,
+  sessionId: string,
+  occurredAt: string,
+): LearningEvidence {
+  return evidence(lexemeId, sessionId, occurredAt, {
     skill: VocabularySkill.MEANING_RECOGNITION,
     taskType: "meaning-choice",
   });
 }
 
-function semantic(sessionId: string, occurredAt: string): LearningEvidence {
-  return evidence(sessionId, occurredAt, {
+function semantic(
+  lexemeId: string,
+  sessionId: string,
+  occurredAt: string,
+): LearningEvidence {
+  return evidence(lexemeId, sessionId, occurredAt, {
     skill: VocabularySkill.SEMANTIC_CONNECTION,
     promptMode: PromptMode.WORD_TO_RELATION,
     answerMode: AnswerMode.MATCHING,
@@ -74,121 +81,141 @@ function semantic(sessionId: string, occurredAt: string): LearningEvidence {
   });
 }
 
-function recall(sessionId: string, occurredAt: string): LearningEvidence {
-  return evidence(sessionId, occurredAt, {
+function recall(
+  lexemeId: string,
+  lemma: string,
+  sessionId: string,
+  occurredAt: string,
+): LearningEvidence {
+  return evidence(lexemeId, sessionId, occurredAt, {
     skill: VocabularySkill.ACTIVE_RECALL,
     promptMode: PromptMode.MEANING_TO_WORD,
     answerMode: AnswerMode.TYPING,
     taskType: "recall-typing",
-    typedAnswer: "quiet",
-    expectedAnswer: "quiet",
+    typedAnswer: lemma,
+    expectedAnswer: lemma,
   });
 }
 
-function spellingOk(sessionId: string, occurredAt: string): LearningEvidence {
-  return evidence(sessionId, occurredAt, {
+function spellingOk(
+  lexemeId: string,
+  lemma: string,
+  sessionId: string,
+  occurredAt: string,
+): LearningEvidence {
+  return evidence(lexemeId, sessionId, occurredAt, {
     skill: VocabularySkill.SPELLING_RECALL,
     promptMode: PromptMode.AUDIO_TO_SPELLING,
     answerMode: AnswerMode.SPELLING,
     taskType: "spelling-dictation",
-    typedAnswer: "quiet",
-    expectedAnswer: "quiet",
+    typedAnswer: lemma,
+    expectedAnswer: lemma,
   });
 }
 
 function context(
+  lexemeId: string,
+  lemma: string,
   sessionId: string,
   occurredAt: string,
   variant: string,
 ): LearningEvidence {
-  return evidence(sessionId, occurredAt, {
+  return evidence(lexemeId, sessionId, occurredAt, {
     skill: VocabularySkill.CONTEXT_USE,
     promptMode: PromptMode.CONTEXT_TO_WORD,
     answerMode: AnswerMode.TYPING,
     taskType: "context-gap",
-    typedAnswer: "quiet",
-    expectedAnswer: "quiet",
+    typedAnswer: lemma,
+    expectedAnswer: lemma,
     metadata: { contextId: variant },
   });
 }
 
-function recognitionPath(): LearningEvidence[] {
-  return [meaning("session-a", at(0)), meaning("session-b", at(1))];
+function recognitionPath(lexemeId: string): LearningEvidence[] {
+  return [meaning(lexemeId, "session-a", at(0)), meaning(lexemeId, "session-b", at(1))];
 }
 
-function connectedPath(): LearningEvidence[] {
+function connectedPath(lexemeId: string): LearningEvidence[] {
   return [
-    ...recognitionPath(),
-    meaning("session-a", at(0.01)),
-    meaning("session-b", at(1.01)),
-    meaning("session-b", at(1.02)),
-    meaning("session-b", at(1.03)),
-    meaning("session-b", at(1.04)),
-    semantic("session-a", at(0.02)),
-    semantic("session-b", at(1.05)),
-    semantic("session-b", at(1.06)),
-    semantic("session-b", at(1.07)),
+    ...recognitionPath(lexemeId),
+    meaning(lexemeId, "session-a", at(0.01)),
+    meaning(lexemeId, "session-b", at(1.01)),
+    meaning(lexemeId, "session-b", at(1.02)),
+    meaning(lexemeId, "session-b", at(1.03)),
+    meaning(lexemeId, "session-b", at(1.04)),
+    semantic(lexemeId, "session-a", at(0.02)),
+    semantic(lexemeId, "session-b", at(1.05)),
+    semantic(lexemeId, "session-b", at(1.06)),
+    semantic(lexemeId, "session-b", at(1.07)),
   ];
 }
 
-function recalledPath(): LearningEvidence[] {
+function recalledPath(lexemeId: string, lemma: string): LearningEvidence[] {
   return [
-    ...connectedPath(),
-    recall("session-c", at(2)),
-    recall("session-d", at(3)),
-    recall("session-d", at(3.01)),
-    recall("session-d", at(3.02)),
-    recall("session-d", at(3.03)),
+    ...connectedPath(lexemeId),
+    recall(lexemeId, lemma, "session-c", at(2)),
+    recall(lexemeId, lemma, "session-d", at(3)),
+    recall(lexemeId, lemma, "session-d", at(3.01)),
+    recall(lexemeId, lemma, "session-d", at(3.02)),
+    recall(lexemeId, lemma, "session-d", at(3.03)),
   ];
 }
 
-function usablePath(): LearningEvidence[] {
+function usablePath(lexemeId: string, lemma: string): LearningEvidence[] {
   return [
-    ...recalledPath(),
-    context("session-e", at(4), "school"),
-    context("session-e", at(4.01), "home"),
-    context("session-f", at(4.02), "school"),
-    context("session-f", at(4.03), "home"),
-    context("session-f", at(4.04), "park"),
+    ...recalledPath(lexemeId, lemma),
+    context(lexemeId, lemma, "session-e", at(4), "school"),
+    context(lexemeId, lemma, "session-e", at(4.01), "home"),
+    context(lexemeId, lemma, "session-f", at(4.02), "school"),
+    context(lexemeId, lemma, "session-f", at(4.03), "home"),
+    context(lexemeId, lemma, "session-f", at(4.04), "park"),
   ];
 }
 
-function masteredPath(): LearningEvidence[] {
+function masteredPath(lexemeId: string, lemma: string): LearningEvidence[] {
   return [
-    ...usablePath(),
-    meaning("session-g", at(5)),
-    meaning("session-g", at(5.01)),
-    spellingOk("session-g", at(5.02)),
-    recall("session-h", at(7)),
-    context("session-h", at(7.01), "exam"),
+    ...usablePath(lexemeId, lemma),
+    meaning(lexemeId, "session-g", at(5)),
+    meaning(lexemeId, "session-g", at(5.01)),
+    spellingOk(lexemeId, lemma, "session-g", at(5.02)),
+    recall(lexemeId, lemma, "session-h", at(7)),
+    context(lexemeId, lemma, "session-h", at(7.01), "exam"),
   ];
 }
 
-function spellingFailure(): LearningEvidence {
-  return evidence("session-fail", at(8), {
+function spellingFailure(
+  lexemeId: string,
+  lemma: string,
+): LearningEvidence {
+  return evidence(lexemeId, "session-fail", at(8), {
     skill: VocabularySkill.SPELLING_RECALL,
     outcome: EvidenceOutcome.INCORRECT,
     promptMode: PromptMode.AUDIO_TO_SPELLING,
     answerMode: AnswerMode.SPELLING,
     taskType: "spelling-dictation",
     errorType: EvidenceErrorType.SPELLING_MAJOR,
-    typedAnswer: "quete",
-    expectedAnswer: "quiet",
+    typedAnswer: `${lemma}x`,
+    expectedAnswer: lemma,
   });
 }
 
-export function buildPresetEvidence(preset: DebugPreset): LearningEvidence[] {
+export function buildPresetEvidence(
+  preset: DebugPreset,
+  lexemeId: string,
+  lemma: string,
+  confusedLexemeId: string,
+): LearningEvidence[] {
   switch (preset) {
     case "reset":
       return [];
     case "recognition":
-      return recognitionPath();
+      return recognitionPath(lexemeId);
     case "active-recall":
-      return recalledPath();
+      return recalledPath(lexemeId, lemma);
     case "spelling-failure":
       return [
-        spellingOk("session-spell-1", at(0)),
-        evidence("session-spell-1", at(0.01), {
+        spellingOk(lexemeId, lemma, "session-spell-1", at(0)),
+        evidence(lexemeId, "session-spell-1", at(0.01), {
           skill: VocabularySkill.SPELLING_RECALL,
           outcome: EvidenceOutcome.INCORRECT,
           answerMode: AnswerMode.SPELLING,
@@ -196,7 +223,7 @@ export function buildPresetEvidence(preset: DebugPreset): LearningEvidence[] {
           taskType: "spelling-dictation",
           errorType: EvidenceErrorType.SPELLING_MAJOR,
         }),
-        evidence("session-spell-2", at(1), {
+        evidence(lexemeId, "session-spell-2", at(1), {
           skill: VocabularySkill.SPELLING_RECALL,
           outcome: EvidenceOutcome.INCORRECT,
           answerMode: AnswerMode.SPELLING,
@@ -207,31 +234,31 @@ export function buildPresetEvidence(preset: DebugPreset): LearningEvidence[] {
       ];
     case "confusion":
       return [
-        evidence("session-a", at(0), {
+        evidence(lexemeId, "session-a", at(0), {
           outcome: EvidenceOutcome.INCORRECT,
-          selectedWordId: DEBUG_CONFUSED_WORD_ID,
+          selectedLexemeId: confusedLexemeId,
           errorType: EvidenceErrorType.CONFUSED_WITH_WORD,
-          distractorWordIds: [DEBUG_CONFUSED_WORD_ID],
+          distractorLexemeIds: [confusedLexemeId],
           taskType: "meaning-choice",
         }),
-        evidence("session-b", at(1), {
+        evidence(lexemeId, "session-b", at(1), {
           outcome: EvidenceOutcome.INCORRECT,
-          selectedWordId: DEBUG_CONFUSED_WORD_ID,
+          selectedLexemeId: confusedLexemeId,
           errorType: EvidenceErrorType.CONFUSED_WITH_WORD,
-          distractorWordIds: [DEBUG_CONFUSED_WORD_ID],
+          distractorLexemeIds: [confusedLexemeId],
           taskType: "meaning-choice",
         }),
       ];
     case "mastery-journey":
-      return masteredPath();
+      return masteredPath(lexemeId, lemma);
     case "simulate-fading":
-      return [...masteredPath(), spellingFailure()];
+      return [...masteredPath(lexemeId, lemma), spellingFailure(lexemeId, lemma)];
     case "simulate-recovery":
       return [
-        ...masteredPath(),
-        spellingFailure(),
-        spellingOk("session-fail", at(8.01)),
-        spellingOk("session-recover", at(9)),
+        ...masteredPath(lexemeId, lemma),
+        spellingFailure(lexemeId, lemma),
+        spellingOk(lexemeId, lemma, "session-fail", at(8.01)),
+        spellingOk(lexemeId, lemma, "session-recover", at(9)),
       ];
   }
 }

@@ -12,7 +12,7 @@ import { VocabularySkill } from "../vocabulary-skill";
 const evidenceSchema = z.object({
   id: z.string().min(1),
   userId: z.string().min(1),
-  wordId: z.string().min(1),
+  lexemeId: z.string().min(1),
   sessionId: z.string().min(1),
   gameId: z.string().min(1),
   taskType: z.string().min(1),
@@ -23,8 +23,8 @@ const evidenceSchema = z.object({
   hintCount: z.number().int().nonnegative(),
   difficulty: z.number().min(0).max(1),
   answerMode: z.enum(AnswerMode),
-  distractorWordIds: z.array(z.string()),
-  selectedWordId: z.string().min(1).nullable(),
+  distractorLexemeIds: z.array(z.string()),
+  selectedLexemeId: z.string().min(1).nullable(),
   typedAnswer: z.string().nullable(),
   expectedAnswer: z.string().nullable(),
   errorType: z.enum(EvidenceErrorType).nullable(),
@@ -50,6 +50,26 @@ export function validateLearningEvidence(
     throw new LearningDomainError(
       "INVALID_EVIDENCE",
       "occurredAt must be a valid ISO datetime",
+    );
+  }
+
+  if (
+    parsed.data.outcome === EvidenceOutcome.INDEPENDENT_CORRECT &&
+    parsed.data.hintCount > 0
+  ) {
+    throw new LearningDomainError(
+      "INVALID_EVIDENCE",
+      "INDEPENDENT_CORRECT cannot be recorded with hintCount > 0",
+    );
+  }
+
+  if (
+    parsed.data.outcome === EvidenceOutcome.ASSISTED_CORRECT &&
+    parsed.data.hintCount === 0
+  ) {
+    throw new LearningDomainError(
+      "INVALID_EVIDENCE",
+      "ASSISTED_CORRECT requires hintCount > 0",
     );
   }
 

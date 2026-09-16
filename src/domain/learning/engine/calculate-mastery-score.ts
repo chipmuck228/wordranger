@@ -1,13 +1,13 @@
 import type { LearningEvidence } from "../evidence.types";
 import type { LearningPolicy } from "../policies/learning-policy";
-import type { StudentWordModel } from "../student-word-model";
+import type { StudentLexemeModel } from "../student-lexeme-model";
 import { clamp01 } from "./math";
 import { isIndependentSuccess, isSkipped } from "./evidence-helpers";
 import { calendarDay, distinctCount } from "./time";
 import { VocabularySkill } from "../vocabulary-skill";
 
 export interface CalculateMasteryScoreInput {
-  model: StudentWordModel;
+  model: StudentLexemeModel;
   history: readonly LearningEvidence[];
   policy: LearningPolicy;
 }

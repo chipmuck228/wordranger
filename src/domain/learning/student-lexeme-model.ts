@@ -27,10 +27,11 @@ export interface SkillState {
   recentPerformance: RecentPerformanceItem[];
 }
 
-export interface StudentWordModel {
+export interface StudentLexemeModel {
   id: string;
   userId: string;
-  wordId: string;
+  lexemeId: string;
+  policyVersion: string;
   masteryStage: MasteryStage;
   retentionState: RetentionState;
   /**
@@ -56,11 +57,12 @@ export interface StudentWordModel {
   updatedAt: string;
 }
 
-export interface CreateInitialStudentWordModelInput {
+export interface CreateInitialStudentLexemeModelInput {
   id: string;
   userId: string;
-  wordId: string;
+  lexemeId: string;
   now: string;
+  policyVersion: string;
 }
 
 export function createInitialSkillState(skill: VocabularySkill): SkillState {
@@ -79,9 +81,9 @@ export function createInitialSkillState(skill: VocabularySkill): SkillState {
   };
 }
 
-export function createInitialStudentWordModel(
-  input: CreateInitialStudentWordModelInput,
-): StudentWordModel {
+export function createInitialStudentLexemeModel(
+  input: CreateInitialStudentLexemeModelInput,
+): StudentLexemeModel {
   const skills = Object.fromEntries(
     VOCABULARY_SKILLS.map((skill) => [skill, createInitialSkillState(skill)]),
   ) as Record<VocabularySkill, SkillState>;
@@ -89,7 +91,8 @@ export function createInitialStudentWordModel(
   return {
     id: input.id,
     userId: input.userId,
-    wordId: input.wordId,
+    lexemeId: input.lexemeId,
+    policyVersion: input.policyVersion,
     masteryStage: MasteryStage.UNSEEN,
     retentionState: RetentionState.NEW,
     masteryScore: 0,

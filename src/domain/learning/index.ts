@@ -11,11 +11,11 @@ export {
   type RecentPerformanceItem,
 } from "./evidence.types";
 export {
-  createInitialStudentWordModel,
+  createInitialStudentLexemeModel,
   createInitialSkillState,
-  type StudentWordModel,
+  type StudentLexemeModel,
   type SkillState,
-} from "./student-word-model";
+} from "./student-lexeme-model";
 export type { GameCapability } from "./game-capability";
 export type { LearningNeed, LearningNeedReason } from "./learning-need";
 export type { TransitionReason, TransitionResult } from "./transition.types";

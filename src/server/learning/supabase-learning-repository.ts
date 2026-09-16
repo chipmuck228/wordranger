@@ -12,18 +12,19 @@ import { RetentionState } from "@/domain/learning/retention-state";
 import {
   createInitialSkillState,
   type SkillState,
-  type StudentWordModel,
-} from "@/domain/learning/student-word-model";
+  type StudentLexemeModel,
+} from "@/domain/learning/student-lexeme-model";
 import { VOCABULARY_SKILLS, VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import type { Weakness, WeaknessReason } from "@/domain/learning/weakness.types";
 import { WeaknessType } from "@/domain/learning/weakness.types";
 import type { RecentPerformanceItem } from "@/domain/learning/evidence.types";
 import { LearningDomainError } from "@/domain/learning/engine/math";
 
-interface StudentWordModelRow {
+interface StudentLexemeModelRow {
   id: string;
   user_id: string;
-  word_id: string;
+  lexeme_id: string;
+  policy_version: string;
   mastery_stage: string;
   retention_state: string;
   mastery_score: number;
@@ -43,7 +44,7 @@ interface StudentWordModelRow {
 
 interface SkillStateRow {
   id: string;
-  student_word_model_id: string;
+  student_lexeme_model_id: string;
   skill: string;
   score: number;
   confidence: number;
@@ -60,11 +61,11 @@ interface SkillStateRow {
 
 interface WeaknessRow {
   id: string;
-  student_word_model_id: string;
+  student_lexeme_model_id: string;
   type: string;
   skill: string | null;
   severity: number;
-  related_word_id: string | null;
+  related_lexeme_id: string | null;
   reason: WeaknessReason;
   detected_at: string;
   last_triggered_at: string;
@@ -74,7 +75,7 @@ interface WeaknessRow {
 interface EvidenceRow {
   id: string;
   user_id: string;
-  word_id: string;
+  lexeme_id: string;
   session_id: string | null;
   game_id: string | null;
   task_type: string | null;
@@ -85,17 +86,13 @@ interface EvidenceRow {
   response_time_ms: number | null;
   hint_count: number;
   difficulty: number;
-  distractor_word_ids: string[] | null;
-  selected_word_id: string | null;
+  distractor_lexeme_ids: string[] | null;
+  selected_lexeme_id: string | null;
   typed_answer: string | null;
   expected_answer: string | null;
   error_type: string | null;
   occurred_at: string;
   metadata: Record<string, unknown> | null;
-}
-
-function toIso(value: string | null): string | null {
-  return value;
 }
 
 function parseSkill(value: string): VocabularySkill {
@@ -109,7 +106,7 @@ function mapEvidence(row: EvidenceRow): LearningEvidence {
   return {
     id: row.id,
     userId: row.user_id,
-    wordId: row.word_id,
+    lexemeId: row.lexeme_id,
     sessionId: row.session_id ?? "",
     gameId: row.game_id ?? "unknown",
     taskType: row.task_type ?? "unknown",
@@ -120,8 +117,8 @@ function mapEvidence(row: EvidenceRow): LearningEvidence {
     responseTimeMs: row.response_time_ms,
     hintCount: row.hint_count,
     difficulty: Number(row.difficulty),
-    distractorWordIds: row.distractor_word_ids ?? [],
-    selectedWordId: row.selected_word_id,
+    distractorLexemeIds: row.distractor_lexeme_ids ?? [],
+    selectedLexemeId: row.selected_lexeme_id,
     typedAnswer: row.typed_answer,
     expectedAnswer: row.expected_answer,
     errorType: row.error_type as EvidenceErrorType | null,
@@ -152,7 +149,7 @@ function mapWeakness(row: WeaknessRow): Weakness {
     type: row.type as WeaknessType,
     severity: Number(row.severity),
     skill: row.skill ? parseSkill(row.skill) : undefined,
-    relatedWordId: row.related_word_id ?? undefined,
+    relatedLexemeId: row.related_lexeme_id ?? undefined,
     reason: row.reason,
     detectedAt: row.detected_at,
     lastTriggeredAt: row.last_triggered_at,
@@ -161,13 +158,13 @@ function mapWeakness(row: WeaknessRow): Weakness {
 }
 
 function mapModel(
-  row: StudentWordModelRow,
+  row: StudentLexemeModelRow,
   skills: SkillStateRow[],
   weaknesses: WeaknessRow[],
-): StudentWordModel {
+): StudentLexemeModel {
   const skillRecord = Object.fromEntries(
     VOCABULARY_SKILLS.map((skill) => [skill, createInitialSkillState(skill)]),
-  ) as StudentWordModel["skills"];
+  ) as StudentLexemeModel["skills"];
   for (const skillRow of skills) {
     const mapped = mapSkill(skillRow);
     skillRecord[mapped.skill] = mapped;
@@ -176,18 +173,19 @@ function mapModel(
   return {
     id: row.id,
     userId: row.user_id,
-    wordId: row.word_id,
+    lexemeId: row.lexeme_id,
+    policyVersion: row.policy_version,
     masteryStage: row.mastery_stage as MasteryStage,
     retentionState: row.retention_state as RetentionState,
     masteryScore: Number(row.mastery_score),
     masteryConfidence: Number(row.mastery_confidence),
     skills: skillRecord,
     weaknesses: weaknesses.map(mapWeakness),
-    firstSeenAt: toIso(row.first_seen_at),
-    lastSeenAt: toIso(row.last_seen_at),
-    lastSuccessAt: toIso(row.last_success_at),
-    lastFailureAt: toIso(row.last_failure_at),
-    nextReviewAt: toIso(row.next_review_at),
+    firstSeenAt: row.first_seen_at,
+    lastSeenAt: row.last_seen_at,
+    lastSuccessAt: row.last_success_at,
+    lastFailureAt: row.last_failure_at,
+    nextReviewAt: row.next_review_at,
     reviewIntervalDays: Number(row.review_interval_days),
     evidenceCount: row.evidence_count,
     distinctPracticeDays: row.distinct_practice_days,
@@ -200,15 +198,15 @@ function mapModel(
 export class SupabaseLearningRepository implements LearningRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async getStudentWordModel(
+  async getStudentLexemeModel(
     userId: string,
-    wordId: string,
-  ): Promise<StudentWordModel | null> {
+    lexemeId: string,
+  ): Promise<StudentLexemeModel | null> {
     const { data, error } = await this.client
-      .from("student_word_models")
+      .from("student_lexeme_models")
       .select("*")
       .eq("user_id", userId)
-      .eq("word_id", wordId)
+      .eq("lexeme_id", lexemeId)
       .maybeSingle();
     if (error) {
       throw error;
@@ -216,16 +214,16 @@ export class SupabaseLearningRepository implements LearningRepository {
     if (!data) {
       return null;
     }
-    const row = data as StudentWordModelRow;
+    const row = data as StudentLexemeModelRow;
     const [skills, weaknesses] = await Promise.all([
       this.client
-        .from("student_word_skill_states")
+        .from("student_lexeme_skill_states")
         .select("*")
-        .eq("student_word_model_id", row.id),
+        .eq("student_lexeme_model_id", row.id),
       this.client
-        .from("student_word_weaknesses")
+        .from("student_lexeme_weaknesses")
         .select("*")
-        .eq("student_word_model_id", row.id),
+        .eq("student_lexeme_model_id", row.id),
     ]);
     if (skills.error) {
       throw skills.error;
@@ -240,15 +238,15 @@ export class SupabaseLearningRepository implements LearningRepository {
     );
   }
 
-  async getEvidenceForWord(
+  async getEvidenceForLexeme(
     userId: string,
-    wordId: string,
+    lexemeId: string,
   ): Promise<LearningEvidence[]> {
     const { data, error } = await this.client
       .from("learning_evidence")
       .select("*")
       .eq("user_id", userId)
-      .eq("word_id", wordId)
+      .eq("lexeme_id", lexemeId)
       .order("occurred_at", { ascending: true });
     if (error) {
       throw error;
@@ -258,14 +256,14 @@ export class SupabaseLearningRepository implements LearningRepository {
 
   async getRecentEvidence(
     userId: string,
-    wordId: string,
+    lexemeId: string,
     limit = 20,
   ): Promise<LearningEvidence[]> {
     const { data, error } = await this.client
       .from("learning_evidence")
       .select("*")
       .eq("user_id", userId)
-      .eq("word_id", wordId)
+      .eq("lexeme_id", lexemeId)
       .order("occurred_at", { ascending: false })
       .limit(limit);
     if (error) {
@@ -278,7 +276,7 @@ export class SupabaseLearningRepository implements LearningRepository {
     const { error } = await this.client.from("learning_evidence").insert({
       id: evidence.id,
       user_id: evidence.userId,
-      word_id: evidence.wordId,
+      lexeme_id: evidence.lexemeId,
       session_id: evidence.sessionId,
       game_id: evidence.gameId,
       task_type: evidence.taskType,
@@ -289,8 +287,8 @@ export class SupabaseLearningRepository implements LearningRepository {
       response_time_ms: evidence.responseTimeMs,
       hint_count: evidence.hintCount,
       difficulty: evidence.difficulty,
-      distractor_word_ids: evidence.distractorWordIds,
-      selected_word_id: evidence.selectedWordId,
+      distractor_lexeme_ids: evidence.distractorLexemeIds,
+      selected_lexeme_id: evidence.selectedLexemeId,
       typed_answer: evidence.typedAnswer,
       expected_answer: evidence.expectedAnswer,
       error_type: evidence.errorType,
@@ -302,13 +300,14 @@ export class SupabaseLearningRepository implements LearningRepository {
     }
   }
 
-  async saveStudentWordModel(model: StudentWordModel): Promise<void> {
+  async saveStudentLexemeModel(model: StudentLexemeModel): Promise<void> {
     const { error: modelError } = await this.client
-      .from("student_word_models")
+      .from("student_lexeme_models")
       .upsert({
         id: model.id,
         user_id: model.userId,
-        word_id: model.wordId,
+        lexeme_id: model.lexemeId,
+        policy_version: model.policyVersion,
         mastery_stage: model.masteryStage,
         retention_state: model.retentionState,
         mastery_score: model.masteryScore,
@@ -332,7 +331,7 @@ export class SupabaseLearningRepository implements LearningRepository {
     const skillRows = VOCABULARY_SKILLS.map((skill) => {
       const state = model.skills[skill];
       return {
-        student_word_model_id: model.id,
+        student_lexeme_model_id: model.id,
         skill,
         score: state.score,
         confidence: state.confidence,
@@ -349,22 +348,22 @@ export class SupabaseLearningRepository implements LearningRepository {
     });
 
     const { error: skillError } = await this.client
-      .from("student_word_skill_states")
-      .upsert(skillRows, { onConflict: "student_word_model_id,skill" });
+      .from("student_lexeme_skill_states")
+      .upsert(skillRows, { onConflict: "student_lexeme_model_id,skill" });
     if (skillError) {
       throw skillError;
     }
 
     for (const weakness of model.weaknesses) {
       const { error: weaknessError } = await this.client
-        .from("student_word_weaknesses")
+        .from("student_lexeme_weaknesses")
         .upsert({
           id: weakness.id,
-          student_word_model_id: model.id,
+          student_lexeme_model_id: model.id,
           type: weakness.type,
           skill: weakness.skill ?? null,
           severity: weakness.severity,
-          related_word_id: weakness.relatedWordId ?? null,
+          related_lexeme_id: weakness.relatedLexemeId ?? null,
           reason: weakness.reason,
           detected_at: weakness.detectedAt,
           last_triggered_at: weakness.lastTriggeredAt,
@@ -378,21 +377,21 @@ export class SupabaseLearningRepository implements LearningRepository {
 
   /**
    * Sequential write: evidence first, then snapshot. If the snapshot write
-   * fails, evidence remains and can rebuild StudentWordModel. A future
+   * fails, evidence remains and can rebuild StudentLexemeModel. A future
    * Postgres RPC should wrap both writes.
    */
   async commitEvidenceAndSnapshot(
     evidence: LearningEvidence,
-    model: StudentWordModel,
+    model: StudentLexemeModel,
   ): Promise<void> {
     await this.appendEvidence(evidence);
     try {
-      await this.saveStudentWordModel(model);
+      await this.saveStudentLexemeModel(model);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "unknown error";
       throw new LearningDomainError(
         "SNAPSHOT_WRITE_FAILED",
-        `Evidence ${evidence.id} was appended but the snapshot write failed (${detail}). Rebuild the StudentWordModel from the evidence log.`,
+        `Evidence ${evidence.id} was appended but the snapshot write failed (${detail}). Rebuild the StudentLexemeModel from the evidence log.`,
       );
     }
   }

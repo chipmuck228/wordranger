@@ -10,13 +10,13 @@ Games may only produce `LearningEvidence`. Mastery, retention, weaknesses, and r
 
 **Status:** accepted
 
-`learning_evidence` is an append-only log of immutable facts. `StudentWordModel` is a snapshot. Policy v2 should replay evidence rather than migrate guessed state.
+`learning_evidence` is an append-only log of immutable facts. `StudentLexemeModel` is a snapshot. Policy v2 should replay evidence rather than migrate guessed state.
 
 ## ADR-003 — Mastery / Retention / Weakness are separate dimensions
 
 **Status:** accepted
 
-A mastered word can still fade and still have a spelling hole. Collapsing those into one enum would force false demotions (one typo dropping `MASTERED` to `RECALLED`) or hide actionable weaknesses.
+A mastered lexeme can still fade and still have a spelling hole. Collapsing those into one enum would force false demotions (one typo dropping `MASTERED` to `RECALLED`) or hide actionable weaknesses.
 
 ## ADR-004 — Learning algorithm is policy-driven
 
@@ -40,12 +40,49 @@ Evidence is always stored. The snapshot is stored for cheap reads. In-memory com
 
 **Status:** accepted
 
-Junior-high vocabulary practice needs explanations a teacher can inspect: why a word upgraded, why it is fading, why spelling is tagged. V1 therefore uses EWMA scores, explicit stage gates, and rule-based weakness detection. No LLM judge and no Bayesian tracker in this phase.
+Junior-high vocabulary practice needs explanations a teacher can inspect: why a lexeme upgraded, why it is fading, why spelling is tagged. V1 therefore uses EWMA scores, explicit stage gates, and rule-based weakness detection. No LLM judge and no Bayesian tracker in this phase.
+
+## ADR-008 — Student learning state attaches to Lexeme, not SourceEntry
+
+**Status:** accepted
+
+A PDF numbered line such as `19 actor / actress` is one `VocabularySourceEntry` and two independently trainable `Lexeme`s. `StudentLexemeModel`, `LearningEvidence`, `Weakness`, and `LearningNeed` bind to `lexemeId`. Binding to source entries would make split lemmas share one mastery score.
+
+## ADR-009 — Vocabulary source / canonical / enrichment are separate layers
+
+**Status:** accepted
+
+Source JSON preserves PDF facts, including errors. Canonical lexemes may correct meaning or split entries. Enrichment (relations, tags) is optional and confidence-scored. Import must not write canonical corrections back into source rows.
+
+## ADR-010 — Relation confidence / provenance controls production usability
+
+**Status:** accepted
+
+`source_structural` is a structural fact. `curated_model` is conservative enrichment. `rule_inferred` is a candidate, not a learning fact. Production `VocabularyRepository.getRelations()` applies `VocabularyContentPolicy` (`source_structural >= 0.95`, `curated_model >= 0.80`, `rule_inferred` disabled). The numeric floors live only in that policy object.
+
+## ADR-011 — wordId renamed to lexemeId
+
+**Status:** accepted
+
+Phase 01 used `wordId` against a placeholder `words` table. Phase 02 performs a clean rename across domain types, repositories, Debug Lab, and SQL (`lexeme_id`, `student_lexeme_models`). Dual fields are not kept.
+
+## ADR-012 — Evidence CORRECT removed to eliminate ambiguous success semantics
+
+**Status:** accepted
+
+`CORRECT` plus `hintCount === 0` was also treated as independent success, overlapping `INDEPENDENT_CORRECT`. V1 outcomes are `INDEPENDENT_CORRECT`, `ASSISTED_CORRECT`, `INCORRECT`, `SKIPPED`, `TIMEOUT`. Independent success with hints, or assisted success with zero hints, is rejected at the evidence boundary.
+
+## ADR-013 — Student snapshot records policyVersion
+
+**Status:** accepted
+
+Each `StudentLexemeModel` stores `policyVersion` from the `LearningPolicy` used by `processEvidence`. This makes it obvious which rule set produced the snapshot when a future policy v2 replays evidence.
 
 ## Additional notes
 
-- The `LearningRepository` *interface* lives in `src/domain/learning` so the engine does not import Supabase. `src/server/learning/learning-repository.ts` re-exports it. Server files implement the port.
+- The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.
 - `LearningPolicy` includes a `confidence` section so confidence math is also policy-driven.
 - Vitest 3 is used instead of Vitest 5 because Vitest 5 pulled a broken rolldown native binding in this environment.
 - Extra engine helpers (`math.ts`, `time.ts`, `evidence-helpers.ts`, `validate-evidence.ts`) keep the named engine files focused and pure.
 - The Debug Lab form uses native `<select>` for dense enum fields, plus shadcn Button/Card/Input/Label/Badge.
+- Import IDs are deterministic UUID v5-style values derived from canonical keys, so re-import matches existing rows.

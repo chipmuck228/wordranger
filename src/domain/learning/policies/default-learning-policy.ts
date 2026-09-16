@@ -11,7 +11,6 @@ export const DEFAULT_LEARNING_POLICY: LearningPolicy = {
     recentPerformanceLimit: 10,
     outcomeTargetScores: {
       [EvidenceOutcome.INDEPENDENT_CORRECT]: 1.0,
-      [EvidenceOutcome.CORRECT]: 0.85,
       [EvidenceOutcome.ASSISTED_CORRECT]: 0.55,
       [EvidenceOutcome.INCORRECT]: 0.0,
       [EvidenceOutcome.TIMEOUT]: 0.0,

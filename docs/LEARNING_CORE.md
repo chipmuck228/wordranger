@@ -4,7 +4,7 @@ Policy version: **v1**. All numeric thresholds live in `DEFAULT_LEARNING_POLICY`
 
 ## MasteryStage
 
-How deeply the student has learned the word. Forgetting is **not** a stage.
+How deeply the student has learned the lexeme. Forgetting is **not** a stage.
 
 | Stage | Meaning |
 | --- | --- |
@@ -44,7 +44,7 @@ V1 has exactly six skills:
 
 A weakness is a specific hole, not a stage. Identity for an open weakness:
 
-- `CONFUSION` + `relatedWordId`
+- `CONFUSION` + `relatedLexemeId`
 - otherwise `type` + `skill`
 
 Retriggers update `severity`, `lastTriggeredAt`, and `reason.evidenceIds`. Historical rows are never deleted; recovery sets `resolvedAt`.
@@ -56,13 +56,12 @@ Retriggers update `severity`, `lastTriggeredAt`, and `reason.evidenceIds`. Histo
 | Outcome | Target score |
 | --- | --- |
 | `INDEPENDENT_CORRECT` | 1.00 |
-| `CORRECT` | 0.85 |
 | `ASSISTED_CORRECT` | 0.55 |
 | `INCORRECT` | 0.00 |
 | `TIMEOUT` | 0.00 |
 | `SKIPPED` | 0.50, with a smaller EWMA alpha |
 
-`ASSISTED_CORRECT` and `INDEPENDENT_CORRECT` never share a weight. Skip is not treated as a full error and does not expose an `UNSEEN` word.
+`INDEPENDENT_CORRECT` means no hint/scaffold. `ASSISTED_CORRECT` means the student finished correctly after hint/scaffold. `hintCount > 0` cannot be recorded as independent success; `hintCount === 0` cannot be recorded as assisted success. Skip is not treated as a full error and does not expose an `UNSEEN` lexeme.
 
 ## Stage transitions
 
@@ -123,7 +122,7 @@ Mastery confidence also includes distinct task types and total evidence count.
 
 - Repeated error: last 3 of a skill, ≥2 incorrect/timeout
 - Hint dependency: last 5, ≥3 `ASSISTED_CORRECT`
-- Confusion: same wrong `selectedWordId` reaches threshold
+- Confusion: same wrong `selectedLexemeId` reaches threshold
 - Spelling: current `SPELLING_MINOR` / `SPELLING_MAJOR`, or repeated spelling errors
 - Slow response: slower than personal median × 1.8, or fallback 8000ms if the baseline is too small
 - Long-term instability: ≥4 success/failure alternations in the last 6 countable outcomes

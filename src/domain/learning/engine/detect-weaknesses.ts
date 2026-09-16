@@ -36,7 +36,7 @@ export interface DetectWeaknessesResult {
 interface WeaknessDraft {
   type: WeaknessType;
   skill?: Weakness["skill"];
-  relatedWordId?: string;
+  relatedLexemeId?: string;
   reasonCode: string;
   message: string;
   metadata?: Record<string, unknown>;
@@ -45,10 +45,10 @@ interface WeaknessDraft {
 function identityKey(input: {
   type: WeaknessType;
   skill?: Weakness["skill"];
-  relatedWordId?: string;
+  relatedLexemeId?: string;
 }): string {
   if (input.type === WeaknessType.CONFUSION) {
-    return `${input.type}:${input.relatedWordId ?? ""}`;
+    return `${input.type}:${input.relatedLexemeId ?? ""}`;
   }
   return `${input.type}:${input.skill ?? ""}`;
 }
@@ -93,7 +93,7 @@ function upsertWeakness(
     type: draft.type,
     severity: clamp01(policy.weakness.initialSeverity),
     skill: draft.skill,
-    relatedWordId: draft.relatedWordId,
+    relatedLexemeId: draft.relatedLexemeId,
     reason: {
       code: draft.reasonCode,
       evidenceIds: [evidence.id],
@@ -204,26 +204,26 @@ function collectDrafts(
   }
 
   if (
-    evidence.selectedWordId &&
-    evidence.selectedWordId !== evidence.wordId &&
+    evidence.selectedLexemeId &&
+    evidence.selectedLexemeId !== evidence.lexemeId &&
     (evidence.outcome === EvidenceOutcome.INCORRECT ||
       evidence.errorType === "CONFUSED_WITH_WORD")
   ) {
     const confusedCount = history.filter(
       (item) =>
-        item.selectedWordId === evidence.selectedWordId &&
-        item.selectedWordId !== item.wordId &&
+        item.selectedLexemeId === evidence.selectedLexemeId &&
+        item.selectedLexemeId !== item.lexemeId &&
         (isFailure(item) || item.errorType === "CONFUSED_WITH_WORD"),
     ).length;
     if (confusedCount >= policy.weakness.confusionMinCount) {
       drafts.push({
         type: WeaknessType.CONFUSION,
         skill: evidence.skill,
-        relatedWordId: evidence.selectedWordId,
+        relatedLexemeId: evidence.selectedLexemeId,
         reasonCode: "CONFUSION",
         message: `Repeatedly confused with another word`,
         metadata: {
-          relatedWordId: evidence.selectedWordId,
+          relatedLexemeId: evidence.selectedLexemeId,
           count: confusedCount,
         },
       });
@@ -343,7 +343,7 @@ export function detectWeaknesses(
         metadata: {
           weaknessId: result.added.id,
           type: result.added.type,
-          relatedWordId: result.added.relatedWordId,
+          relatedLexemeId: result.added.relatedLexemeId,
         },
       });
     } else if (result.updated) {
@@ -353,7 +353,7 @@ export function detectWeaknesses(
         evidenceIds: [input.evidence.id],
         metadata: {
           type: draft.type,
-          relatedWordId: draft.relatedWordId,
+          relatedLexemeId: draft.relatedLexemeId,
         },
       });
     }

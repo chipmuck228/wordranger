@@ -9,7 +9,7 @@ import {
   updateSkillState,
 } from "@/domain/learning/engine/update-skill-state";
 import { DEFAULT_LEARNING_POLICY } from "@/domain/learning/policies/default-learning-policy";
-import { createInitialSkillState } from "@/domain/learning/student-word-model";
+import { createInitialSkillState } from "@/domain/learning/student-lexeme-model";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import { makeEvidence } from "./helpers";
 

@@ -13,7 +13,7 @@ export type LearningNeedReason =
  * Protocol for the future Scheduler. V1 only defines the shape.
  */
 export interface LearningNeed {
-  wordId: string;
+  lexemeId: string;
   targetSkill: VocabularySkill;
   priority: number;
   reason: LearningNeedReason;

@@ -12,7 +12,7 @@ import { WeaknessType } from "@/domain/learning/weakness.types";
 import { processEvidence } from "@/domain/learning/engine/process-evidence";
 import { InMemoryLearningRepository } from "@/server/learning/in-memory-learning-repository";
 import {
-  CONFUSED_WORD_ID,
+  CONFUSED_LEXEME_ID,
   daysAfter,
   feed,
   feedAll,
@@ -363,9 +363,9 @@ describe("processEvidence", () => {
     const confused = (id: string, sessionId: string, occurredAt: string) =>
       makeEvidence(id, sessionId, occurredAt, {
         outcome: EvidenceOutcome.INCORRECT,
-        selectedWordId: CONFUSED_WORD_ID,
+        selectedLexemeId: CONFUSED_LEXEME_ID,
         errorType: EvidenceErrorType.CONFUSED_WITH_WORD,
-        distractorWordIds: [CONFUSED_WORD_ID],
+        distractorLexemeIds: [CONFUSED_LEXEME_ID],
       });
     const { model } = await feedAll(
       repository,
@@ -375,7 +375,7 @@ describe("processEvidence", () => {
     const confusion = model.weaknesses.find(
       (weakness) => weakness.type === WeaknessType.CONFUSION,
     );
-    expect(confusion?.relatedWordId).toBe(CONFUSED_WORD_ID);
+    expect(confusion?.relatedLexemeId).toBe(CONFUSED_LEXEME_ID);
   });
 
   it("TEST 15: ASSISTED_CORRECT increases score less than INDEPENDENT_CORRECT", async () => {
@@ -387,7 +387,7 @@ describe("processEvidence", () => {
         skill: VocabularySkill.ACTIVE_RECALL,
         outcome: EvidenceOutcome.INDEPENDENT_CORRECT,
         answerMode: AnswerMode.TYPING,
-        wordId: "word-a",
+        lexemeId: "word-a",
       }),
     );
     const assisted = await feed(
@@ -397,7 +397,7 @@ describe("processEvidence", () => {
         outcome: EvidenceOutcome.ASSISTED_CORRECT,
         answerMode: AnswerMode.TYPING,
         hintCount: 2,
-        wordId: "word-b",
+        lexemeId: "word-b",
       }),
     );
     const independentScore =

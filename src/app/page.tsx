@@ -9,12 +9,20 @@ export default function Home() {
           Game-based vocabulary learning engine
         </p>
       </div>
-      <Link
-        href="/debug/learning"
-        className="text-sm font-medium underline underline-offset-4"
-      >
-        Open Learning Core Debug Lab
-      </Link>
+      <div className="flex flex-col gap-3">
+        <Link
+          href="/debug/vocabulary"
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Open Vocabulary Debug Lab
+        </Link>
+        <Link
+          href="/debug/learning"
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Open Learning Core Debug Lab
+        </Link>
+      </div>
     </main>
   );
 }

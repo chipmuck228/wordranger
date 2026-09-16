@@ -1,6 +1,6 @@
 # WordRanger
 
-Game-based vocabulary learning engine for junior-high English. This repository currently contains the shared **Learning Core** only: domain model, policy v1, engine, persistence ports, and a Debug Lab.
+Game-based vocabulary learning engine for junior-high English. This repository currently contains the **Vocabulary Domain** plus the shared **Learning Core**: source/lexeme/graph types, policy v1, engine, persistence ports, import tooling, and Debug Labs.
 
 ## Scripts
 
@@ -9,11 +9,12 @@ npm install
 npm run dev
 npm test
 npm run lint
+npm run import:vocabulary -- --dry-run
 ```
 
-Open [http://localhost:3000](http://localhost:3000), then **Open Learning Core Debug Lab**.
+Open [http://localhost:3000](http://localhost:3000), then **Open Vocabulary Debug Lab** or **Open Learning Core Debug Lab**.
 
-The Debug Lab uses an in-memory repository. Supabase env vars are optional.
+Debug Labs use in-memory repositories loaded from `data/vocabulary`. Supabase env vars are optional.
 
 ## Docs
 

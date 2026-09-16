@@ -21,15 +21,16 @@ import {
   type LearningEvidence,
 } from "@/domain/learning/evidence.types";
 import { processEvidence } from "@/domain/learning/engine/process-evidence";
+import { DEFAULT_LEARNING_POLICY } from "@/domain/learning/policies/default-learning-policy";
 import {
-  createInitialStudentWordModel,
-  type StudentWordModel,
-} from "@/domain/learning/student-word-model";
+  createInitialStudentLexemeModel,
+  type StudentLexemeModel,
+} from "@/domain/learning/student-lexeme-model";
 import type { TransitionResult } from "@/domain/learning/transition.types";
 import { VOCABULARY_SKILLS, VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import { InMemoryLearningRepository } from "@/server/learning/in-memory-learning-repository";
+import type { VocabularyDebugLexeme } from "@/server/vocabulary/debug-view";
 import {
-  DEBUG_WORD_ID,
   DEBUG_USER_ID,
   buildPresetEvidence,
   type DebugPreset,
@@ -46,7 +47,7 @@ interface EvidenceFormState {
   sessionId: string;
   occurredAt: string;
   errorType: string;
-  selectedWordId: string;
+  selectedLexemeId: string;
   taskType: string;
 }
 
@@ -61,16 +62,17 @@ const INITIAL_FORM: EvidenceFormState = {
   sessionId: "debug-session-1",
   occurredAt: "2026-03-01T09:00:00.000Z",
   errorType: "",
-  selectedWordId: DEBUG_WORD_ID,
+  selectedLexemeId: "",
   taskType: "debug-task",
 };
 
-function emptyModel(): StudentWordModel {
-  return createInitialStudentWordModel({
+function emptyModel(lexemeId: string): StudentLexemeModel {
+  return createInitialStudentLexemeModel({
     id: "debug-model",
     userId: DEBUG_USER_ID,
-    wordId: DEBUG_WORD_ID,
+    lexemeId,
     now: INITIAL_FORM.occurredAt,
+    policyVersion: DEFAULT_LEARNING_POLICY.version,
   });
 }
 
@@ -78,9 +80,21 @@ function formatNumber(value: number): string {
   return value.toFixed(2);
 }
 
-export function LearningDebugLab() {
+export function LearningDebugLab({
+  lexemes,
+  confusedLexemeId,
+}: {
+  lexemes: VocabularyDebugLexeme[];
+  confusedLexemeId: string;
+}) {
+  const defaultLexeme = lexemes[0];
   const repositoryRef = useRef(new InMemoryLearningRepository());
-  const [model, setModel] = useState<StudentWordModel>(emptyModel);
+  const [selectedId, setSelectedId] = useState(defaultLexeme?.id ?? "");
+  const selected =
+    lexemes.find((lexeme) => lexeme.id === selectedId) ?? defaultLexeme;
+  const [model, setModel] = useState<StudentLexemeModel>(() =>
+    emptyModel(defaultLexeme?.id ?? "missing"),
+  );
   const [history, setHistory] = useState<LearningEvidence[]>([]);
   const [lastTransition, setLastTransition] = useState<TransitionResult | null>(
     null,
@@ -88,7 +102,10 @@ export function LearningDebugLab() {
   const [allReasons, setAllReasons] = useState<TransitionResult["reasons"]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState<EvidenceFormState>(INITIAL_FORM);
+  const [form, setForm] = useState<EvidenceFormState>({
+    ...INITIAL_FORM,
+    selectedLexemeId: defaultLexeme?.id ?? "",
+  });
 
   const unresolvedWeaknesses = useMemo(
     () => model.weaknesses.filter((item) => item.resolvedAt === null),
@@ -101,9 +118,9 @@ export function LearningDebugLab() {
       repository: repositoryRef.current,
       now: evidence.occurredAt,
     });
-    const nextHistory = await repositoryRef.current.getEvidenceForWord(
+    const nextHistory = await repositoryRef.current.getEvidenceForLexeme(
       DEBUG_USER_ID,
-      DEBUG_WORD_ID,
+      evidence.lexemeId,
     );
     setModel(result.model);
     setHistory(nextHistory);
@@ -111,14 +128,30 @@ export function LearningDebugLab() {
     setAllReasons((current) => [...current, ...result.transition.reasons]);
   }
 
+  function resetState(nextLexemeId: string) {
+    repositoryRef.current.reset();
+    setModel(emptyModel(nextLexemeId));
+    setHistory([]);
+    setLastTransition(null);
+    setAllReasons([]);
+    setError(null);
+    setForm({
+      ...INITIAL_FORM,
+      selectedLexemeId: nextLexemeId,
+    });
+  }
+
   async function onProcessEvidence() {
+    if (!selected) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const evidence: LearningEvidence = {
         id: crypto.randomUUID(),
         userId: DEBUG_USER_ID,
-        wordId: DEBUG_WORD_ID,
+        lexemeId: selected.id,
         sessionId: form.sessionId,
         gameId: "debug-lab",
         taskType: form.taskType,
@@ -132,10 +165,10 @@ export function LearningDebugLab() {
         hintCount: Number(form.hintCount),
         difficulty: Number(form.difficulty),
         answerMode: form.answerMode,
-        distractorWordIds: form.selectedWordId
-          ? [form.selectedWordId]
+        distractorLexemeIds: form.selectedLexemeId
+          ? [form.selectedLexemeId]
           : [],
-        selectedWordId: form.selectedWordId || null,
+        selectedLexemeId: form.selectedLexemeId || null,
         typedAnswer: null,
         expectedAnswer: null,
         errorType: form.errorType
@@ -152,24 +185,29 @@ export function LearningDebugLab() {
   }
 
   async function onReset() {
-    repositoryRef.current.reset();
-    setModel(emptyModel());
-    setHistory([]);
-    setLastTransition(null);
-    setAllReasons([]);
-    setError(null);
-    setForm(INITIAL_FORM);
+    if (!selected) {
+      return;
+    }
+    resetState(selected.id);
   }
 
   async function onPreset(preset: DebugPreset) {
+    if (!selected) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await onReset();
+      resetState(selected.id);
       if (preset === "reset") {
         return;
       }
-      const items = buildPresetEvidence(preset);
+      const items = buildPresetEvidence(
+        preset,
+        selected.id,
+        selected.lemma,
+        confusedLexemeId,
+      );
       for (const evidence of items) {
         await applyEvidence(evidence);
       }
@@ -180,18 +218,49 @@ export function LearningDebugLab() {
     }
   }
 
+  if (!selected) {
+    return (
+      <div className="px-4 py-6">
+        Vocabulary data is not loaded. Add JSON under data/vocabulary.
+      </div>
+    );
+  }
+
+  const productionGraph = selected.relations.filter(
+    (relation) => relation.productionUsable,
+  );
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6">
       <div>
         <h1 className="text-2xl font-semibold">Learning Core Debug Lab</h1>
         <p className="text-muted-foreground text-sm">
-          Submit LearningEvidence through processEvidence. Games never write
-          mastery state directly.
+          Submit LearningEvidence through processEvidence against a real
+          lexeme. Games never write mastery state directly.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => onPreset("reset")} disabled={busy}>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="lexeme">Lexeme</Label>
+          <select
+            id="lexeme"
+            value={selected.id}
+            onChange={(event) => {
+              const nextId = event.target.value;
+              setSelectedId(nextId);
+              resetState(nextId);
+            }}
+            className="border-input h-8 min-w-48 rounded-lg border bg-transparent px-2.5 text-sm"
+          >
+            {lexemes.map((lexeme) => (
+              <option key={lexeme.id} value={lexeme.id}>
+                {lexeme.lemma}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => void onReset()} disabled={busy}>
           Reset
         </Button>
         <Button variant="outline" size="sm" onClick={() => onPreset("recognition")} disabled={busy}>
@@ -221,12 +290,54 @@ export function LearningDebugLab() {
         <p className="text-destructive text-sm">{error}</p>
       ) : null}
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Integration</CardTitle>
+          <CardDescription>
+            Vocabulary Domain and Learning Core share lexemeId only.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 text-sm md:grid-cols-2">
+          <div className="space-y-1">
+            <div className="font-medium">Lexeme {selected.lemma}</div>
+            <div>canonical {selected.canonicalKey}</div>
+            <div>IPA {selected.ipa.join(" / ") || "—"}</div>
+            <div>meaning {selected.meaningsZh.join("；") || "—"}</div>
+            <div>source #{selected.sourceIndex} {selected.sourceWordRaw}</div>
+          </div>
+          <div className="space-y-1">
+            <div className="font-medium">
+              StudentLexemeModel {model.masteryStage}
+            </div>
+            <div>retention {model.retentionState}</div>
+            <div>policy {model.policyVersion}</div>
+            <div>
+              weakness{" "}
+              {unresolvedWeaknesses
+                .map(
+                  (weakness) =>
+                    `${weakness.type}${weakness.relatedLexemeId ? ` → ${weakness.relatedLexemeId}` : ""}`,
+                )
+                .join(", ") || "none"}
+            </div>
+            <div>
+              word graph{" "}
+              {productionGraph
+                .map((relation) => `${selected.lemma} ↔ ${relation.otherLemma} (${relation.type})`)
+                .join(", ") || "none in production policy"}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>StudentWordModel</CardTitle>
-              <CardDescription>Word {model.wordId}</CardDescription>
+              <CardTitle>StudentLexemeModel</CardTitle>
+              <CardDescription>
+                {selected.lemma} · {model.lexemeId}
+              </CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3 text-sm">
               <Field label="MasteryStage" value={model.masteryStage} />
@@ -236,15 +347,12 @@ export function LearningDebugLab() {
                 label="MasteryConfidence"
                 value={formatNumber(model.masteryConfidence)}
               />
+              <Field label="PolicyVersion" value={model.policyVersion} />
               <Field label="NextReviewAt" value={model.nextReviewAt ?? "—"} />
               <Field label="EvidenceCount" value={String(model.evidenceCount)} />
               <Field
                 label="DistinctPracticeDays"
                 value={String(model.distinctPracticeDays)}
-              />
-              <Field
-                label="DistinctTaskTypes"
-                value={String(model.distinctTaskTypes)}
               />
             </CardContent>
           </Card>
@@ -291,17 +399,12 @@ export function LearningDebugLab() {
                     </div>
                     <div>severity {formatNumber(weakness.severity)}</div>
                     <div>{weakness.reason.code}</div>
-                    {weakness.relatedWordId ? (
-                      <div>related {weakness.relatedWordId}</div>
+                    {weakness.relatedLexemeId ? (
+                      <div>related {weakness.relatedLexemeId}</div>
                     ) : null}
                   </div>
                 ))
               )}
-              {unresolvedWeaknesses.length === 0 && model.weaknesses.length > 0 ? (
-                <p className="text-muted-foreground text-xs">
-                  All recorded weaknesses are resolved. History is kept.
-                </p>
-              ) : null}
             </CardContent>
           </Card>
         </div>
@@ -402,10 +505,10 @@ export function LearningDebugLab() {
               }
             />
             <TextField
-              label="selectedWord"
-              value={form.selectedWordId}
+              label="selectedLexemeId"
+              value={form.selectedLexemeId}
               onChange={(value) =>
-                setForm((current) => ({ ...current, selectedWordId: value }))
+                setForm((current) => ({ ...current, selectedLexemeId: value }))
               }
             />
             <TextField
@@ -427,43 +530,21 @@ export function LearningDebugLab() {
       <Card>
         <CardHeader>
           <CardTitle>Transition Reasons</CardTitle>
-          <CardDescription>
-            Why the word upgraded, did not upgrade, faded, or gained a weakness.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {(lastTransition?.reasons.length ? lastTransition.reasons : allReasons.slice(-8))
-            .length === 0 ? (
+          {(lastTransition?.reasons.length
+            ? lastTransition.reasons
+            : allReasons.slice(-8)
+          ).length === 0 ? (
             <p className="text-muted-foreground text-sm">No transitions yet.</p>
           ) : (
             (lastTransition?.reasons ?? []).map((reason, index) => (
               <div key={`${reason.code}-${index}`} className="rounded-lg border p-3 text-sm">
                 <div className="font-medium">{reason.code}</div>
                 <div>{reason.message}</div>
-                {reason.metadata ? (
-                  <pre className="text-muted-foreground mt-2 overflow-x-auto text-xs">
-                    {JSON.stringify(reason.metadata, null, 2)}
-                  </pre>
-                ) : null}
               </div>
             ))
           )}
-          {allReasons.length > 0 ? (
-            <details className="pt-2">
-              <summary className="cursor-pointer text-sm font-medium">
-                Full reason history ({allReasons.length})
-              </summary>
-              <div className="mt-2 space-y-2">
-                {allReasons.map((reason, index) => (
-                  <div key={`all-${reason.code}-${index}`} className="text-sm">
-                    <span className="font-medium">{reason.code}</span>
-                    {": "}
-                    {reason.message}
-                  </div>
-                ))}
-              </div>
-            </details>
-          ) : null}
         </CardContent>
       </Card>
 

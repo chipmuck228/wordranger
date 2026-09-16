@@ -1,5 +1,5 @@
 import type { LearningEvidence } from "./evidence.types";
-import type { StudentWordModel } from "./student-word-model";
+import type { StudentLexemeModel } from "./student-lexeme-model";
 
 /**
  * Persistence port used by processEvidence.
@@ -7,25 +7,25 @@ import type { StudentWordModel } from "./student-word-model";
  * a Supabase client.
  */
 export interface LearningRepository {
-  getStudentWordModel(
+  getStudentLexemeModel(
     userId: string,
-    wordId: string,
-  ): Promise<StudentWordModel | null>;
+    lexemeId: string,
+  ): Promise<StudentLexemeModel | null>;
 
   getRecentEvidence(
     userId: string,
-    wordId: string,
+    lexemeId: string,
     limit?: number,
   ): Promise<LearningEvidence[]>;
 
-  getEvidenceForWord(
+  getEvidenceForLexeme(
     userId: string,
-    wordId: string,
+    lexemeId: string,
   ): Promise<LearningEvidence[]>;
 
   appendEvidence(evidence: LearningEvidence): Promise<void>;
 
-  saveStudentWordModel(model: StudentWordModel): Promise<void>;
+  saveStudentLexemeModel(model: StudentLexemeModel): Promise<void>;
 
   /**
    * Transactional boundary for "append evidence then write snapshot".
@@ -35,6 +35,6 @@ export interface LearningRepository {
    */
   commitEvidenceAndSnapshot(
     evidence: LearningEvidence,
-    model: StudentWordModel,
+    model: StudentLexemeModel,
   ): Promise<void>;
 }

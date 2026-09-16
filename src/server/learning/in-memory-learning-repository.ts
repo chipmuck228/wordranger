@@ -1,9 +1,9 @@
 import type { LearningEvidence } from "@/domain/learning/evidence.types";
 import type { LearningRepository } from "@/domain/learning/learning-repository";
-import type { StudentWordModel } from "@/domain/learning/student-word-model";
+import type { StudentLexemeModel } from "@/domain/learning/student-lexeme-model";
 
-function key(userId: string, wordId: string): string {
-  return `${userId}::${wordId}`;
+function key(userId: string, lexemeId: string): string {
+  return `${userId}::${lexemeId}`;
 }
 
 function clone<T>(value: T): T {
@@ -11,34 +11,34 @@ function clone<T>(value: T): T {
 }
 
 export class InMemoryLearningRepository implements LearningRepository {
-  private readonly models = new Map<string, StudentWordModel>();
+  private readonly models = new Map<string, StudentLexemeModel>();
   private evidence: LearningEvidence[] = [];
 
-  async getStudentWordModel(
+  async getStudentLexemeModel(
     userId: string,
-    wordId: string,
-  ): Promise<StudentWordModel | null> {
-    const model = this.models.get(key(userId, wordId));
+    lexemeId: string,
+  ): Promise<StudentLexemeModel | null> {
+    const model = this.models.get(key(userId, lexemeId));
     return model ? clone(model) : null;
   }
 
-  async getEvidenceForWord(
+  async getEvidenceForLexeme(
     userId: string,
-    wordId: string,
+    lexemeId: string,
   ): Promise<LearningEvidence[]> {
     return clone(
       this.evidence.filter(
-        (item) => item.userId === userId && item.wordId === wordId,
+        (item) => item.userId === userId && item.lexemeId === lexemeId,
       ),
     );
   }
 
   async getRecentEvidence(
     userId: string,
-    wordId: string,
+    lexemeId: string,
     limit = 20,
   ): Promise<LearningEvidence[]> {
-    const items = await this.getEvidenceForWord(userId, wordId);
+    const items = await this.getEvidenceForLexeme(userId, lexemeId);
     return items
       .sort(
         (left, right) =>
@@ -54,19 +54,19 @@ export class InMemoryLearningRepository implements LearningRepository {
     this.evidence.push(clone(evidence));
   }
 
-  async saveStudentWordModel(model: StudentWordModel): Promise<void> {
-    this.models.set(key(model.userId, model.wordId), clone(model));
+  async saveStudentLexemeModel(model: StudentLexemeModel): Promise<void> {
+    this.models.set(key(model.userId, model.lexemeId), clone(model));
   }
 
   async commitEvidenceAndSnapshot(
     evidence: LearningEvidence,
-    model: StudentWordModel,
+    model: StudentLexemeModel,
   ): Promise<void> {
     const evidenceSnapshot = clone(this.evidence);
     const modelSnapshot = new Map(this.models);
     try {
       await this.appendEvidence(evidence);
-      await this.saveStudentWordModel(model);
+      await this.saveStudentLexemeModel(model);
     } catch (error) {
       this.evidence = evidenceSnapshot;
       this.models.clear();

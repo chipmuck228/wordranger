@@ -1,6 +1,6 @@
 import type { LearningEvidence } from "../evidence.types";
 import type { LearningPolicy } from "../policies/learning-policy";
-import type { SkillState } from "../student-word-model";
+import type { SkillState } from "../student-lexeme-model";
 import { clamp01 } from "./math";
 import {
   isAssistedCorrect,
