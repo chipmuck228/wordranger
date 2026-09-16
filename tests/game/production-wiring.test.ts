@@ -14,6 +14,21 @@ const selector = readFileSync(
   path.join(process.cwd(), "src/server/runtime/create-ranger-trial-runtime.ts"),
   "utf8",
 );
+const bubbleActions = readFileSync(
+  path.join(process.cwd(), "src/app/play/word-bubble/actions.ts"),
+  "utf8",
+);
+const bubbleProduction = readFileSync(
+  path.join(
+    process.cwd(),
+    "src/server/runtime/create-supabase-word-bubble-runtime.ts",
+  ),
+  "utf8",
+);
+const bubbleSelector = readFileSync(
+  path.join(process.cwd(), "src/server/runtime/create-word-bubble-runtime.ts"),
+  "utf8",
+);
 
 describe("Ranger Trial production wiring", () => {
   it("student-facing actions do not instantiate in-memory learning/task/session stores", () => {
@@ -38,5 +53,26 @@ describe("Ranger Trial production wiring", () => {
     expect(selector).toContain('RANGER_TRIAL_RUNTIME === "memory"');
     expect(selector).toContain("createSupabaseRangerTrialRuntime");
     expect(productionRuntime).toContain("requires Supabase configuration");
+  });
+});
+
+describe("Word Bubble production wiring", () => {
+  it("student-facing actions use the generic runtime selector", () => {
+    expect(bubbleActions).toContain("createWordBubbleRuntime");
+    expect(bubbleActions).not.toContain("InMemoryLearningRepository");
+    expect(bubbleActions).not.toContain("InMemoryLearningTaskRepository");
+    expect(bubbleActions).not.toContain("InMemoryGameSessionStore");
+    expect(bubbleActions).not.toContain("new SeededRandomSource");
+  });
+
+  it("Supabase factory reuses durable learning/task adapters and a typed session store", () => {
+    expect(bubbleProduction).toContain("SupabaseLearningRepository");
+    expect(bubbleProduction).toContain("SupabaseLearningTaskRepository");
+    expect(bubbleProduction).toContain("SupabaseLearningStateQueryRepository");
+    expect(bubbleProduction).toContain("SupabaseGameSessionStore");
+    expect(bubbleProduction).toContain("WORD_BUBBLE");
+    expect(bubbleProduction).not.toContain("InMemoryLearningRepository");
+    expect(bubbleSelector).toContain('RANGER_TRIAL_RUNTIME === "memory"');
+    expect(bubbleSelector).toContain("createSupabaseWordBubbleRuntime");
   });
 });

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TaskPromptView } from "./TaskPromptView";
+import { TaskPromptView } from "@/components/game/shared/TaskPromptView";
 import type { LearningTaskRendererProps } from "./types";
 
 export function TextInputTaskRenderer({

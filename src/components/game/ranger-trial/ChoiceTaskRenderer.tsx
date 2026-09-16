@@ -1,4 +1,4 @@
-import { TaskPromptView } from "./TaskPromptView";
+import { TaskPromptView } from "@/components/game/shared/TaskPromptView";
 import type { LearningTaskRendererProps } from "./types";
 
 export function ChoiceTaskRenderer({

@@ -17,7 +17,11 @@ function walk(dir: string): string[] {
 
 describe("G5 renderer architecture boundary", () => {
   it("does not import Core mutation, evaluation, or AnswerKey modules", () => {
-    const dir = join(process.cwd(), "src/components/game/ranger-trial");
+    const dirs = [
+      join(process.cwd(), "src/components/game/ranger-trial"),
+      join(process.cwd(), "src/components/game/word-bubble"),
+      join(process.cwd(), "src/components/game/shared"),
+    ];
     const forbidden = [
       "LearningRepository",
       "createLearningEvidenceFromTaskEvaluation",
@@ -33,10 +37,12 @@ describe("G5 renderer architecture boundary", () => {
       "correctOptionIds",
       "processEvidence",
     ];
-    for (const file of walk(dir)) {
-      const text = readFileSync(file, "utf8");
-      for (const token of forbidden) {
-        expect(text, `${file} ${token}`).not.toMatch(new RegExp(token));
+    for (const dir of dirs) {
+      for (const file of walk(dir)) {
+        const text = readFileSync(file, "utf8");
+        for (const token of forbidden) {
+          expect(text, `${file} ${token}`).not.toMatch(new RegExp(token));
+        }
       }
     }
   });

@@ -2,15 +2,12 @@ import { z } from "zod";
 import { PromptMode } from "@/domain/learning/evidence.types";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import { WeaknessType } from "@/domain/learning/weakness.types";
-import {
-  RANGER_TRIAL_GAME_TYPE,
-  RANGER_TRIAL_STATE_VERSION,
-} from "@/server/auth/v1-user";
+import { GAME_SESSION_STATE_VERSION, RANGER_TRIAL_GAME_TYPE } from "@/server/auth/v1-user";
 import { GameSessionError } from "./ranger-trial-errors";
 import type {
-  RangerTrialSessionPhase,
-  RangerTrialSessionRecord,
-} from "./ranger-trial-session.types";
+  GameSessionPhase,
+  GameSessionRecord,
+} from "./learning-game-session.types";
 
 const needReasonSchema = z.enum([
   "NEW_WORD",
@@ -29,7 +26,7 @@ const phaseSchema = z.enum([
 ]);
 
 const persistedStateSchema = z.object({
-  stateVersion: z.literal(RANGER_TRIAL_STATE_VERSION),
+  stateVersion: z.literal(GAME_SESSION_STATE_VERSION),
   planId: z.string().min(1),
   createdAt: z.string().min(1),
   needs: z.array(
@@ -93,10 +90,11 @@ const persistedStateSchema = z.object({
   ),
 });
 
-export type PersistedRangerTrialState = z.infer<typeof persistedStateSchema>;
+export type PersistedGameSessionState = z.infer<typeof persistedStateSchema>;
+export type PersistedRangerTrialState = PersistedGameSessionState;
 
 export function sessionStatusFromPhase(
-  phase: RangerTrialSessionPhase,
+  phase: GameSessionPhase,
 ): "active" | "completed" | "failed" {
   if (phase === "completed") {
     return "completed";
@@ -107,11 +105,11 @@ export function sessionStatusFromPhase(
   return "active";
 }
 
-export function serializeRangerTrialState(
-  record: RangerTrialSessionRecord,
-): PersistedRangerTrialState {
+export function serializeGameSessionState(
+  record: GameSessionRecord,
+): PersistedGameSessionState {
   return {
-    stateVersion: RANGER_TRIAL_STATE_VERSION,
+    stateVersion: GAME_SESSION_STATE_VERSION,
     planId: record.planId,
     createdAt: record.createdAt,
     needs: record.needs,
@@ -127,18 +125,21 @@ export function serializeRangerTrialState(
   };
 }
 
-export function parseRangerTrialSessionRecord(input: {
+export const serializeRangerTrialState = serializeGameSessionState;
+
+export function parseGameSessionRecord(input: {
   sessionId: string;
   userId: string;
   gameType: string;
+  expectedGameType: string;
   expectedUserId?: string;
   state: unknown;
   revision: number;
-}): RangerTrialSessionRecord {
-  if (input.gameType !== RANGER_TRIAL_GAME_TYPE) {
+}): GameSessionRecord {
+  if (input.gameType !== input.expectedGameType) {
     throw new GameSessionError(
       "SESSION_NOT_FOUND",
-      "Session game type does not match Ranger Trial",
+      "Session game type does not match this game",
     );
   }
   if (input.expectedUserId && input.userId !== input.expectedUserId) {
@@ -151,7 +152,7 @@ export function parseRangerTrialSessionRecord(input: {
   if (!parsed.success) {
     throw new GameSessionError(
       "SESSION_NOT_FOUND",
-      "Session state is not a valid Ranger Trial v1 record",
+      "Session state is not a valid game session v1 record",
     );
   }
   const state = parsed.data;
@@ -187,6 +188,20 @@ export function parseRangerTrialSessionRecord(input: {
     recentTasks: state.recentTasks,
     revision: input.revision,
   };
+}
+
+export function parseRangerTrialSessionRecord(input: {
+  sessionId: string;
+  userId: string;
+  gameType: string;
+  expectedUserId?: string;
+  state: unknown;
+  revision: number;
+}): GameSessionRecord {
+  return parseGameSessionRecord({
+    ...input,
+    expectedGameType: RANGER_TRIAL_GAME_TYPE,
+  });
 }
 
 export function assertNoAnswerKeyFields(value: unknown): void {

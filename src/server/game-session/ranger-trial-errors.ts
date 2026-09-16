@@ -1,6 +1,7 @@
 export type GameSessionErrorCode =
   | "SESSION_START_FAILED"
   | "NO_LEARNING_NEEDS"
+  | "NO_PLAYABLE_NEEDS"
   | "TASK_GENERATION_FAILED"
   | "GAME_CANNOT_RENDER_TASK"
   | "TASK_ALREADY_COMPLETED"
@@ -30,6 +31,7 @@ export const GAME_SESSION_USER_MESSAGES: Record<GameSessionErrorCode, string> =
   {
     SESSION_START_FAILED: "闯关没能开始，请稍后再试。",
     NO_LEARNING_NEEDS: "暂时没有需要练习的单词。",
+    NO_PLAYABLE_NEEDS: "这一轮暂时没有适合这个练习的题目。",
     TASK_GENERATION_FAILED: "这一轮题目没能准备好，请稍后再试。",
     GAME_CANNOT_RENDER_TASK: "这道题暂时无法在单词闯关中显示。",
     TASK_ALREADY_COMPLETED: "这道题已经提交过了。",

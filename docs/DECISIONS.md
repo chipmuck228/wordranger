@@ -262,7 +262,7 @@ Phase 05 must not invent learning architecture. If a renderer cannot consume a f
 
 **Status:** accepted
 
-Scheduler seed is `scheduler:${sessionId}`. Task generation seed is `task:${sessionId}:${needId}`. Recreate `SeededRandomSource` per call. Do not persist the RandomSource object and do not reuse one global seed for every session.
+Scheduler seed is `scheduler:${gameType}:${sessionId}`. Task generation seed is `task:${gameType}:${sessionId}:${needId}`. Recreate `SeededRandomSource` per call. Do not persist the RandomSource object and do not reuse one global seed for every session.
 
 ## ADR-045 — Game submission/session transition must be idempotent across retries and cold starts
 
@@ -287,6 +287,36 @@ The first persist of a continue (index increment, `currentTaskId` null, `awaitin
 **Status:** accepted
 
 Controllers reload at most once (or twice for an `awaiting_continue` retry). If the latest durable session already has the current task, feedback, or completion, return that. If another request is still generating, return `SESSION_CONFLICT` to the client. Do not spin the server.
+
+## ADR-049 — Second renderer validates PublicLearningTask portability
+
+**Status:** accepted
+
+Word Bubble consumes the same `PublicLearningTask` / `StudentAction` / `submitTaskAction` / `TaskEvaluator` path as Ranger Trial. Presentation may differ; grading, mastery, and weakness semantics must not. A distinct `gameId` (`WORD_BUBBLE`) is evidence metadata only.
+
+## ADR-050 — Game compatibility filtering occurs after Scheduler, not inside Scheduler
+
+**Status:** accepted
+
+`DeterministicScheduler` remains game-agnostic. After it returns an ordered `LearningNeed` list, application orchestration may drop needs the current renderer cannot serve. Retained needs keep relative priority order. Exclusions are developer traces (`GAME_CAPABILITY_UNSUPPORTED`), not student-facing Scheduler policy.
+
+## ADR-051 — Shared game-session orchestration is extracted only after two real renderers
+
+**Status:** accepted
+
+Phase 06 extracts proven common behavior into `LearningGameSessionController`: plan, filter, generate, assign, persist, resume, submit, CAS, stats, feedback. Ranger Trial becomes a definition + renderer. Do not keep a second orchestration pipeline. Do not invent a speculative multi-game framework beyond what both renderers use.
+
+## ADR-052 — Renderer animation/layout state is ephemeral and not persisted
+
+**Status:** accepted
+
+`game_sessions.state` stores orchestration only. Bubble positions, velocity, animation frames, and CSS are rebuilt on render from a deterministic `bubble-layout:${taskId}` hash. Refresh restores the current task, not the previous pixels.
+
+## ADR-053 — Word Bubble V1 supports CHOICE only
+
+**Status:** accepted
+
+`WORD_BUBBLE_CAPABILITY` plus `responseContract.kind === "CHOICE"` is the renderer contract. V1 tasks are `MEANING_CHOICE`, `RELATION_CHOICE`, and `CONFUSABLE_CHOICE`. TEXT_INPUT is `GAME_CANNOT_RENDER_TASK`. No bubble-specific task types.
 
 ## Additional notes
 

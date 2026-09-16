@@ -79,13 +79,13 @@ Honest limitation: V1 does **not** fake atomicity. A later `process_evidence` Po
 
 ## Game sessions
 
-`game_sessions` stores **orchestration state only** so Ranger Trial can survive serverless cold starts. It does **not** replace `learning_tasks`, `learning_evidence`, or `student_lexeme_models`.
+`game_sessions` stores **orchestration state only** so student games can survive serverless cold starts. It does **not** replace `learning_tasks`, `learning_evidence`, or `student_lexeme_models`.
 
 | Column | Role |
 | --- | --- |
 | `id` | Session id (uuid) |
 | `user_id` | Owner (uuid). V1 is the placeholder user, not real auth. |
-| `game_type` | `RANGER_TRIAL` today; reusable for later games |
+| `game_type` | `RANGER_TRIAL` or `WORD_BUBBLE`; a store must not resume another game's session |
 | `plan_id` | Scheduler plan id |
 | `status` | `active` / `completed` / `failed` |
 | `state` | JSON orchestration (`stateVersion: "v1"`, planned needs, `currentNeedIndex`, `currentTaskId`, phase, presentation stats, last safe feedback, `lastCompletedTaskId`) |
@@ -102,7 +102,7 @@ Cleanup/TTL is future work. A failed session save after `learning_tasks` insert 
 
 ## Phase 04 persistence
 
-Phase 04 adds **no required persistence tables**. The scheduler still generates `LearningSessionPlan` on demand. Ranger Trial (Phase 05.1) persists a copy of that plan's needs inside `game_sessions.state` so refresh does not re-run the Scheduler.
+Phase 04 adds **no required persistence tables**. The scheduler still generates `LearningSessionPlan` on demand. Phase 05.1+ persist a copy of that plan's playable needs inside `game_sessions.state` so refresh does not re-run the Scheduler. Phase 06 adds no new tables; Word Bubble reuses `game_sessions` with `game_type = WORD_BUBBLE`. Renderer layout is not stored.
 
 The scheduler reads:
 

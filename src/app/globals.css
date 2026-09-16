@@ -128,3 +128,67 @@
     @apply font-sans;
   }
 }
+
+@keyframes word-bubble-float {
+  0%,
+  100% {
+    transform: translate3d(-50%, -50%, 0);
+  }
+  50% {
+    transform: translate3d(
+      calc(-50% + var(--bubble-dx, 0px)),
+      calc(-50% + var(--bubble-dy, 0px)),
+      0
+    );
+  }
+}
+
+@keyframes word-bubble-pop {
+  0% {
+    transform: translate3d(-50%, -50%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-50%, -50%, 0) scale(1.08);
+  }
+  100% {
+    transform: translate3d(-50%, -50%, 0) scale(1);
+  }
+}
+
+@keyframes word-bubble-shake {
+  0%,
+  100% {
+    transform: translate3d(-50%, -50%, 0);
+    opacity: 1;
+  }
+  25% {
+    transform: translate3d(calc(-50% - 6px), -50%, 0);
+    opacity: 0.88;
+  }
+  75% {
+    transform: translate3d(calc(-50% + 6px), -50%, 0);
+    opacity: 0.88;
+  }
+}
+
+.word-bubble-float {
+  animation-name: word-bubble-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.word-bubble-pop {
+  animation: word-bubble-pop 420ms ease-out;
+}
+
+.word-bubble-shake {
+  animation: word-bubble-shake 420ms ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .word-bubble-float,
+  .word-bubble-pop,
+  .word-bubble-shake {
+    animation: none !important;
+  }
+}

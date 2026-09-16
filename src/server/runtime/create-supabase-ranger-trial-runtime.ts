@@ -8,16 +8,8 @@ import { SupabaseLearningRepository } from "@/server/learning/supabase-learning-
 import { SupabaseLearningStateQueryRepository } from "@/server/scheduler/supabase-learning-state-query-repository";
 import { SupabaseLearningTaskRepository } from "@/server/tasks/supabase-learning-task-repository";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { loadVocabularyDataset } from "@/server/vocabulary/load-vocabulary-dataset";
-import { InMemoryVocabularyRepository } from "@/server/vocabulary/in-memory-vocabulary-repository";
+import { bundledVocabularyRepository } from "./bundled-vocabulary";
 import type { RangerTrialRuntime } from "./ranger-trial-runtime";
-
-let bundledVocabulary: InMemoryVocabularyRepository | null = null;
-
-function vocabularyFromBundle(): InMemoryVocabularyRepository {
-  bundledVocabulary ??= new InMemoryVocabularyRepository(loadVocabularyDataset());
-  return bundledVocabulary;
-}
 
 /**
  * Production Ranger Trial composition root.
@@ -38,7 +30,7 @@ export function createSupabaseRangerTrialRuntime(input?: {
     );
   }
   const userId = input?.userId ?? V1_PLACEHOLDER_USER_ID;
-  const vocabulary = vocabularyFromBundle();
+  const vocabulary = bundledVocabularyRepository();
   const learning = new SupabaseLearningRepository(client);
   const learningStateQuery = new SupabaseLearningStateQueryRepository(client);
   const tasks = new SupabaseLearningTaskRepository(client);

@@ -17,6 +17,12 @@ export default function Home() {
           单词闯关
         </Link>
         <Link
+          href="/play/word-bubble"
+          className="text-base font-medium underline underline-offset-4"
+        >
+          单词泡泡
+        </Link>
+        <Link
           href="/debug/vocabulary"
           className="text-sm font-medium underline underline-offset-4"
         >

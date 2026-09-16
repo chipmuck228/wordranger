@@ -9,3 +9,8 @@ export const V1_PLACEHOLDER_USER_ID =
 export const RANGER_TRIAL_GAME_ID = "RANGER_TRIAL";
 export const RANGER_TRIAL_GAME_TYPE = "RANGER_TRIAL";
 export const RANGER_TRIAL_STATE_VERSION = "v1";
+
+export const WORD_BUBBLE_GAME_ID = "WORD_BUBBLE";
+export const WORD_BUBBLE_GAME_TYPE = "WORD_BUBBLE";
+
+export const GAME_SESSION_STATE_VERSION = "v1";

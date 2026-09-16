@@ -8,6 +8,7 @@ import {
 } from "@/domain/tasks/task-type";
 import { createInMemoryRangerTrialRuntime } from "@/server/runtime/create-in-memory-ranger-trial-runtime";
 import type { InMemoryRangerTrialRuntime } from "@/server/runtime/create-in-memory-ranger-trial-runtime";
+import { createInMemoryWordBubbleRuntime } from "@/server/runtime/create-in-memory-word-bubble-runtime";
 import { sequentialIdFactory } from "../learning/helpers";
 
 export const RANGER_NOW = "2026-09-16T12:00:00.000Z";
@@ -38,6 +39,28 @@ export function createRangerTrialWorld(userId = RANGER_USER) {
 
 export type RangerTrialWorld = ReturnType<typeof createRangerTrialWorld>;
 export type SharedRangerTrialRuntime = InMemoryRangerTrialRuntime;
+
+export function createWordBubbleWorld(userId = "bubble-test-user") {
+  const runtime = createInMemoryWordBubbleRuntime({
+    userId,
+    now: () => RANGER_NOW,
+    createSessionId: sequentialIdFactory("bsess"),
+    createId: sequentialIdFactory("bid"),
+    createEvidenceId: sequentialIdFactory("bev"),
+    requestedNeedCount: 8,
+  });
+  return {
+    vocabulary: runtime.vocabulary,
+    learning: runtime.learning,
+    query: runtime.learningStateQuery,
+    tasks: runtime.tasks,
+    sessions: runtime.sessions,
+    controller: runtime.createController(),
+    userId,
+    createController: () => runtime.createController(),
+    runtime,
+  };
+}
 
 export function collectKeys(value: unknown, keys = new Set<string>()): Set<string> {
   if (Array.isArray(value)) {

@@ -4,12 +4,13 @@ import { MasteryStage } from "@/domain/learning/mastery-stage";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import { WeaknessType } from "@/domain/learning/weakness.types";
 
-/**
- * What Ranger Trial can display. Not what the student should practice,
- * and not whether an answer is correct.
- */
+import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
+import { RANGER_TRIAL_GAME_ID, RANGER_TRIAL_GAME_TYPE } from "@/server/auth/v1-user";
+import { canGameRenderTask } from "./can-game-render-task";
+import type { LearningGameDefinition } from "./game-definition";
+
 export const RANGER_TRIAL_CAPABILITY: GameCapability = {
-  gameType: "RANGER_TRIAL",
+  gameType: RANGER_TRIAL_GAME_TYPE,
   supportedSkills: [
     VocabularySkill.MEANING_RECOGNITION,
     VocabularySkill.SEMANTIC_CONNECTION,
@@ -40,4 +41,13 @@ export const RANGER_TRIAL_CAPABILITY: GameCapability = {
     min: 0,
     max: 1,
   },
+};
+
+export const RANGER_TRIAL_GAME_DEFINITION: LearningGameDefinition = {
+  gameType: RANGER_TRIAL_GAME_TYPE,
+  gameId: RANGER_TRIAL_GAME_ID,
+  capability: RANGER_TRIAL_CAPABILITY,
+  canRenderTask: (task: PublicLearningTask) =>
+    canGameRenderTask(RANGER_TRIAL_CAPABILITY, task),
+  requestedNeedCount: 8,
 };

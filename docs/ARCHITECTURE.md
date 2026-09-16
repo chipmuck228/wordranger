@@ -1,6 +1,6 @@
 # WordRanger Architecture
 
-WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 05 adds **Ranger Trial** (单词闯关), the first Game Renderer that consumes Core V1. There is still no student login.
+WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 06 adds **Word Bubble** (单词泡泡) as the second Game Renderer. Ranger Trial (单词闯关) remains the CHOICE + TEXT_INPUT reference. There is still no student login.
 
 ## Formal layers
 
@@ -17,9 +17,10 @@ flowchart TD
   generated[GeneratedLearningTask]
   assignment[Task Assignment / Persistence]
   publicTask[PublicLearningTask]
-  renderer[Game Renderer]
+  ranger[Ranger Trial]
+  bubble[Word Bubble]
   action[StudentAction]
-  sessionCtl[Game Session Controller]
+  sessionCtl[Generic Game Session Controller]
   submit[submitTaskAction]
   answerKey[server-side TaskAnswerKey]
   evaluator[TaskEvaluator]
@@ -36,8 +37,10 @@ flowchart TD
   gen --> generated
   generated --> assignment
   assignment --> publicTask
-  publicTask --> renderer
-  renderer --> action
+  publicTask --> ranger
+  publicTask --> bubble
+  ranger --> action
+  bubble --> action
   action --> sessionCtl
   sessionCtl --> submit
   assignment --> answerKey
@@ -63,11 +66,13 @@ Task Assignment
         ↓
 PublicLearningTask
         ↓
-Game Renderer
+   ┌────┴────┐
+Ranger Trial  Word Bubble
+   └────┬────┘
         ↓
 StudentAction
         ↓
-Game Session Controller
+Generic Game Session Controller
         ↓
 submitTaskAction
         ↓
@@ -89,8 +94,8 @@ Responsibilities:
 - **LearningNeed** — stable contract passed downstream; not a task
 - **Task Generator** — which task should represent the need
 - **Task Assignment** — which user/session owns the generated task
-- **Game Renderer** — how the public task is presented; emits only student action intent
-- **Game Session Controller** — plans once, generates one assigned task at a time, calls `submitTaskAction`, returns a safe feedback DTO
+- **Game Renderer** — how the public task is presented; emits only student action intent. Ranger Trial: CHOICE + TEXT_INPUT. Word Bubble: CHOICE only.
+- **Game Session Controller** — generic `LearningGameSessionController` plans once, filters playable needs after scheduling, generates one assigned task at a time, calls `submitTaskAction`, returns a safe feedback DTO
 - **Submission Service** (`submitTaskAction`) — loads the server-side answer key, verifies ownership, then grades
 - **TaskEvaluator** — what the student action means
 - **LearningEvidence** — the immutable fact
@@ -147,7 +152,7 @@ These three dimensions stay separate. A lexeme may be `MASTERED`, `FADING`, and 
 
 ## GameCapability
 
-Games describe what they can train (`supportedSkills`, prompt/answer modes, weakness types, difficulty range). The engine does not hard-code `SnakeGame` or `MatchingGame`. Capabilities do not list lexemes. Ranger Trial publishes `RANGER_TRIAL_CAPABILITY` for display feasibility only.
+Games describe what they can train (`supportedSkills`, prompt/answer modes, weakness types, difficulty range). The engine does not hard-code `SnakeGame` or `MatchingGame`. Capabilities do not list lexemes. Ranger Trial publishes `RANGER_TRIAL_CAPABILITY` and Word Bubble publishes `WORD_BUBBLE_CAPABILITY` for display feasibility only. Application orchestration may filter Scheduler needs against those skills after planning. That filter is not Scheduler policy.
 
 ## Scheduler
 
@@ -172,7 +177,7 @@ VocabularyRepository
 
 Session planning loads lexemes once and production-approved relations once, then builds the lexeme capability map locally. There is no per-lexeme `getRelations()` during planning.
 
-The scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY` v1). Scheduler output is still generated on demand; Ranger Trial persists a copy of the planned `LearningNeed`s as **game orchestration** so a cold start does not re-plan. That copy is not learning truth. See `docs/LEARNING_SCHEDULER.md`.
+The scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY` v1). Scheduler output is still generated on demand; the generic game session persists a copy of the planned playable `LearningNeed`s as **game orchestration** so a cold start does not re-plan. That copy is not learning truth. See `docs/LEARNING_SCHEDULER.md`.
 
 `LearningNeed.lexemeId` remains the protocol later game selection will match against `GameCapability`. Phase 04 does not select games.
 
@@ -198,9 +203,9 @@ UI, API routes, and repositories contain no stage-transition rules. Those live i
 
 ```text
 browser
-  → Ranger Trial Server Action
-  → RangerTrialSessionController
-  → durable Game Session (`game_sessions`, revision CAS)
+  → Ranger Trial or Word Bubble Server Action
+  → LearningGameSessionController
+  → durable Game Session (`game_sessions.game_type`, revision CAS)
   → one authoritative session transition
   → durable LearningTask assignment (`learning_tasks`)
   → durable learner state (`student_lexeme_models` + `learning_evidence`)
@@ -210,11 +215,13 @@ browser
   → Learning Core
 ```
 
-Student-facing `/play/ranger-trial` production wiring uses `createSupabaseRangerTrialRuntime()`: `SupabaseLearningRepository`, `SupabaseLearningStateQueryRepository`, `SupabaseLearningTaskRepository`, and `SupabaseRangerTrialSessionStore` share one server Supabase client. Session writes are `INSERT` on create and revision CAS on update. There is no production in-memory Map for learning state, assigned tasks, or session orchestration.
+Student-facing `/play/ranger-trial` and `/play/word-bubble` production wiring share `SupabaseLearningRepository`, `SupabaseLearningStateQueryRepository`, `SupabaseLearningTaskRepository`, bundled vocabulary, and `game_sessions`. Each game uses a session store configured with `expectedUserId` + `expectedGameType`. Session writes are `INSERT` on create and revision CAS on update. There is no production in-memory Map for learning state, assigned tasks, or session orchestration.
 
 Vocabulary on the student path is the bundled JSON dataset (`InMemoryVocabularyRepository` over git-versioned files). That is immutable reference data, not learner state.
 
-Debug Labs and unit tests may still use in-memory repositories. Explicit `RANGER_TRIAL_RUNTIME=memory` is a local/e2e fixture only. Missing Supabase config in production fails closed.
+Debug Labs and unit tests may still use in-memory repositories. Explicit `RANGER_TRIAL_RUNTIME=memory` is a local/e2e fixture only (both student games honor it). Missing Supabase config in production fails closed.
 
-There is no auth; Ranger Trial uses `V1_PLACEHOLDER_USER_ID` (a UUID placeholder). Auth/RLS is future work. Server actions must not accept `userId` from the browser.
+There is no auth; student pages use `V1_PLACEHOLDER_USER_ID` (a UUID placeholder). Auth/RLS is future work. Server actions must not accept `userId` from the browser.
+
+There is no global game selector in Phase 06. Home exposes 单词闯关 and 单词泡泡 as explicit launch options.
 

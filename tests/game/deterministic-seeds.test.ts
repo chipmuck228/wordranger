@@ -36,12 +36,12 @@ describe("Ranger Trial deterministic seeds", () => {
     const first = await generator.generate({
       ...request,
       createId: () => "task-a",
-      random: createTaskRandom("sess-rand", need.id),
+      random: createTaskRandom("RANGER_TRIAL", "sess-rand", need.id),
     });
     const second = await generator.generate({
       ...request,
       createId: () => "task-b",
-      random: createTaskRandom("sess-rand", need.id),
+      random: createTaskRandom("RANGER_TRIAL", "sess-rand", need.id),
     });
     expect(first.status).toBe("GENERATED");
     expect(second.status).toBe("GENERATED");
@@ -54,15 +54,23 @@ describe("Ranger Trial deterministic seeds", () => {
   });
 
   it("RAND2: different needId uses a different seed stream", () => {
-    expect(taskRandomSeed("sess-1", "need-a")).not.toBe(
-      taskRandomSeed("sess-1", "need-b"),
+    expect(taskRandomSeed("RANGER_TRIAL", "sess-1", "need-a")).not.toBe(
+      taskRandomSeed("RANGER_TRIAL", "sess-1", "need-b"),
     );
-    const first = createTaskRandom("sess-1", "need-a");
-    const second = createTaskRandom("sess-1", "need-b");
+    const first = createTaskRandom("RANGER_TRIAL", "sess-1", "need-a");
+    const second = createTaskRandom("RANGER_TRIAL", "sess-1", "need-b");
     expect(first.next()).not.toBe(second.next());
-    expect(schedulerRandomSeed("sess-1")).not.toBe(schedulerRandomSeed("sess-2"));
-    expect(createSchedulerRandom("sess-1").next()).not.toBe(
-      createSchedulerRandom("sess-2").next(),
+    expect(schedulerRandomSeed("RANGER_TRIAL", "sess-1")).not.toBe(
+      schedulerRandomSeed("RANGER_TRIAL", "sess-2"),
+    );
+    expect(createSchedulerRandom("RANGER_TRIAL", "sess-1").next()).not.toBe(
+      createSchedulerRandom("RANGER_TRIAL", "sess-2").next(),
+    );
+    expect(schedulerRandomSeed("RANGER_TRIAL", "sess-1")).toBe(
+      "scheduler:RANGER_TRIAL:sess-1",
+    );
+    expect(taskRandomSeed("WORD_BUBBLE", "sess-1", "need-a")).toBe(
+      "task:WORD_BUBBLE:sess-1:need-a",
     );
   });
 
@@ -78,7 +86,7 @@ describe("Ranger Trial deterministic seeds", () => {
       recentTasks: [],
       now: "2026-09-16T12:00:00.000Z",
       createId: () => "regen-task",
-      random: createTaskRandom(started.session.sessionId, record!.needs[0].id),
+      random: createTaskRandom("RANGER_TRIAL", started.session.sessionId, record!.needs[0].id),
     });
     expect(regenerated.status).toBe("GENERATED");
     if (regenerated.status !== "GENERATED") {
