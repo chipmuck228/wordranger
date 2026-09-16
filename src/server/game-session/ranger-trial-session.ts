@@ -33,6 +33,8 @@ import type {
   SubmitRangerTrialResult,
 } from "./ranger-trial-session.types";
 
+const MAX_SESSION_CONFLICT_RETRIES = 1;
+
 export interface RangerTrialSessionDeps {
   userId: string;
   vocabulary: VocabularyRepository;
@@ -175,12 +177,19 @@ export class RangerTrialSessionController {
         lastCompletedTaskId: null,
         generationFailures: [],
         recentTasks: [],
+        revision: 0,
       };
       const task = await this.generateFromCurrentNeed(record, now);
-      await this.persist(record);
+      await this.persistCreate(record);
       return { session: publicProgress(record), task };
     } catch (error) {
       if (error instanceof GameSessionError) {
+        if (error.code === "SESSION_CONFLICT") {
+          throw new GameSessionError(
+            "SESSION_START_FAILED",
+            "Session start failed",
+          );
+        }
         throw error;
       }
       throw new GameSessionError(
@@ -203,7 +212,13 @@ export class RangerTrialSessionController {
     if (record.lastCompletedTaskId === input.taskId) {
       if (record.phase !== "awaiting_continue") {
         record.phase = "awaiting_continue";
-        await this.persist(record);
+        try {
+          await this.persist(record);
+        } catch (error) {
+          if (!this.isConflict(error)) {
+            throw error;
+          }
+        }
       }
       throw new GameSessionError(
         "TASK_ALREADY_COMPLETED",
@@ -240,11 +255,21 @@ export class RangerTrialSessionController {
       });
       const feedback = toGameSubmissionFeedback(submitted.evaluation);
       applySubmitOnce(record, input.taskId, feedback);
-      await this.persist(record);
+      try {
+        await this.persist(record);
+      } catch (error) {
+        if (this.isConflict(error)) {
+          return this.recoverSubmitAfterConflict(input.sessionId, input.taskId);
+        }
+        throw error;
+      }
       return submitResult(record, feedback);
     } catch (error) {
       if (this.isAlreadyCompleted(error)) {
         return this.recoverCompletedSubmit(record, input.taskId);
+      }
+      if (this.isConflict(error)) {
+        return this.recoverSubmitAfterConflict(input.sessionId, input.taskId);
       }
       if (error instanceof TaskProtocolError && error.code === "TASK_NOT_FOUND") {
         throw new GameSessionError("TASK_NOT_FOUND", error.message, {
@@ -256,6 +281,95 @@ export class RangerTrialSessionController {
   }
 
   async continue(sessionId: string): Promise<ContinueRangerTrialResult> {
+    return this.continueWithRetry(sessionId, MAX_SESSION_CONFLICT_RETRIES);
+  }
+
+  async resume(sessionId: string): Promise<ResumeRangerTrialResult> {
+    const record = await this.requireSession(sessionId);
+    if (record.phase === "completed") {
+      return {
+        completed: true,
+        progress: publicProgress(record),
+        stats: { ...record.stats },
+      };
+    }
+    if (record.phase === "awaiting_continue") {
+      return {
+        completed: false,
+        progress: publicProgress(record),
+        stats: { ...record.stats },
+        feedback: record.lastFeedback ?? undefined,
+      };
+    }
+    if (record.currentTaskId) {
+      return this.resumeCurrentTask(record);
+    }
+    try {
+      await this.persist(record);
+      const task = await this.generateFromCurrentNeed(record, this.now());
+      await this.persist(record);
+      return {
+        completed: false,
+        progress: publicProgress(record),
+        stats: { ...record.stats },
+        task,
+      };
+    } catch (error) {
+      if (!this.isConflict(error)) {
+        throw error;
+      }
+      const latest = await this.requireSession(sessionId);
+      return this.resumeFromLatest(latest);
+    }
+  }
+
+  private async persistCreate(record: RangerTrialSessionRecord): Promise<void> {
+    try {
+      const saved = await this.deps.sessions.create(record);
+      record.revision = saved.revision;
+    } catch (error) {
+      persistFailure(error);
+    }
+  }
+
+  private async persist(record: RangerTrialSessionRecord): Promise<void> {
+    try {
+      const saved = await this.deps.sessions.save(record);
+      record.revision = saved.revision;
+    } catch (error) {
+      persistFailure(error);
+    }
+  }
+
+  private isConflict(error: unknown): boolean {
+    return error instanceof GameSessionError && error.code === "SESSION_CONFLICT";
+  }
+
+  private async continueWithRetry(
+    sessionId: string,
+    retriesLeft: number,
+  ): Promise<ContinueRangerTrialResult> {
+    try {
+      return await this.continueOnce(sessionId);
+    } catch (error) {
+      if (!this.isConflict(error)) {
+        throw error;
+      }
+      const latest = await this.requireSession(sessionId);
+      const resolved = await this.resolveContinueFromLatest(latest);
+      if (resolved) {
+        return resolved;
+      }
+      if (latest.phase === "awaiting_continue" && retriesLeft > 0) {
+        return this.continueWithRetry(sessionId, retriesLeft - 1);
+      }
+      throw error;
+    }
+  }
+
+  private async continueOnce(
+    sessionId: string,
+  ): Promise<ContinueRangerTrialResult> {
     const record = await this.requireSession(sessionId);
     if (record.phase === "completed") {
       return {
@@ -266,19 +380,9 @@ export class RangerTrialSessionController {
     }
     if (record.phase === "awaiting_action") {
       if (record.currentTaskId) {
-        const assigned = await this.deps.tasks.getTaskForEvaluation(
-          record.currentTaskId,
-        );
-        if (!assigned) {
-          throw new GameSessionError("TASK_NOT_FOUND", "Current task missing");
-        }
-        return {
-          completed: false,
-          progress: publicProgress(record),
-          stats: { ...record.stats },
-          task: assigned.task.publicTask,
-        };
+        return this.continueCurrentTask(record);
       }
+      await this.persist(record);
       const recovered = await this.generateFromCurrentNeed(record, this.now());
       await this.persist(record);
       return {
@@ -308,8 +412,7 @@ export class RangerTrialSessionController {
     }
     record.phase = "awaiting_action";
     await this.persist(record);
-    const now = this.now();
-    const task = await this.generateFromCurrentNeed(record, now);
+    const task = await this.generateFromCurrentNeed(record, this.now());
     await this.persist(record);
     return {
       completed: false,
@@ -319,32 +422,58 @@ export class RangerTrialSessionController {
     };
   }
 
-  async resume(sessionId: string): Promise<ResumeRangerTrialResult> {
-    const record = await this.requireSession(sessionId);
-    if (record.phase === "completed") {
+  private async resolveContinueFromLatest(
+    latest: RangerTrialSessionRecord,
+  ): Promise<ContinueRangerTrialResult | null> {
+    if (latest.phase === "completed") {
       return {
         completed: true,
-        progress: publicProgress(record),
-        stats: { ...record.stats },
+        progress: publicProgress(latest),
+        stats: { ...latest.stats },
       };
     }
-    if (record.phase === "awaiting_continue") {
-      return {
-        completed: false,
-        progress: publicProgress(record),
-        stats: { ...record.stats },
-        feedback: record.lastFeedback ?? undefined,
-      };
+    if (latest.phase === "awaiting_action" && latest.currentTaskId) {
+      return this.continueCurrentTask(latest);
     }
+    return null;
+  }
+
+  private async continueCurrentTask(
+    record: RangerTrialSessionRecord,
+  ): Promise<ContinueRangerTrialResult> {
     if (!record.currentTaskId) {
-      const task = await this.generateFromCurrentNeed(record, this.now());
-      await this.persist(record);
-      return {
-        completed: false,
-        progress: publicProgress(record),
-        stats: { ...record.stats },
-        task,
-      };
+      throw new GameSessionError("TASK_NOT_FOUND", "Current task missing");
+    }
+    const assigned = await this.deps.tasks.getTaskForEvaluation(
+      record.currentTaskId,
+    );
+    if (!assigned) {
+      throw new GameSessionError("TASK_NOT_FOUND", "Current task missing");
+    }
+    return {
+      completed: false,
+      progress: publicProgress(record),
+      stats: { ...record.stats },
+      task: assigned.task.publicTask,
+    };
+  }
+
+  private async recoverSubmitAfterConflict(
+    sessionId: string,
+    taskId: string,
+  ): Promise<SubmitRangerTrialResult> {
+    const latest = await this.requireSession(sessionId);
+    if (latest.lastCompletedTaskId === taskId && latest.lastFeedback) {
+      return submitResult(latest, latest.lastFeedback);
+    }
+    return this.recoverCompletedSubmit(latest, taskId);
+  }
+
+  private async resumeCurrentTask(
+    record: RangerTrialSessionRecord,
+  ): Promise<ResumeRangerTrialResult> {
+    if (!record.currentTaskId) {
+      throw new GameSessionError("TASK_NOT_FOUND", "Active task was not found");
     }
     const assigned = await this.deps.tasks.getTaskForEvaluation(
       record.currentTaskId,
@@ -360,12 +489,31 @@ export class RangerTrialSessionController {
     };
   }
 
-  private async persist(record: RangerTrialSessionRecord): Promise<void> {
-    try {
-      await this.deps.sessions.save(record);
-    } catch (error) {
-      persistFailure(error);
+  private async resumeFromLatest(
+    latest: RangerTrialSessionRecord,
+  ): Promise<ResumeRangerTrialResult> {
+    if (latest.phase === "completed") {
+      return {
+        completed: true,
+        progress: publicProgress(latest),
+        stats: { ...latest.stats },
+      };
     }
+    if (latest.phase === "awaiting_continue") {
+      return {
+        completed: false,
+        progress: publicProgress(latest),
+        stats: { ...latest.stats },
+        feedback: latest.lastFeedback ?? undefined,
+      };
+    }
+    if (latest.currentTaskId) {
+      return this.resumeCurrentTask(latest);
+    }
+    throw new GameSessionError(
+      "SESSION_CONFLICT",
+      "Session was updated by another request",
+    );
   }
 
   private isAlreadyCompleted(error: unknown): boolean {
@@ -383,7 +531,13 @@ export class RangerTrialSessionController {
   ): Promise<SubmitRangerTrialResult> {
     if (record.lastCompletedTaskId === taskId && record.lastFeedback) {
       record.phase = "awaiting_continue";
-      await this.persist(record);
+      try {
+        await this.persist(record);
+      } catch (error) {
+        if (!this.isConflict(error)) {
+          throw error;
+        }
+      }
       throw new GameSessionError(
         "TASK_ALREADY_COMPLETED",
         "Task already has terminal evidence",
@@ -411,7 +565,25 @@ export class RangerTrialSessionController {
       evidence.expectedAnswer,
     );
     const applied = applySubmitOnce(record, taskId, feedback);
-    await this.persist(record);
+    try {
+      await this.persist(record);
+    } catch (error) {
+      if (!this.isConflict(error)) {
+        throw error;
+      }
+      const latest = await this.requireSession(record.sessionId);
+      if (latest.lastCompletedTaskId === taskId && latest.lastFeedback) {
+        if (!applied) {
+          throw new GameSessionError(
+            "TASK_ALREADY_COMPLETED",
+            "Task already has terminal evidence",
+            { taskId },
+          );
+        }
+        return submitResult(latest, latest.lastFeedback);
+      }
+      throw error;
+    }
     if (!applied) {
       throw new GameSessionError(
         "TASK_ALREADY_COMPLETED",

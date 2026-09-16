@@ -26,4 +26,8 @@ export class InMemoryLearningTaskRepository implements LearningTaskRepository {
   reset(): void {
     this.tasks.clear();
   }
+
+  listTaskIds(): string[] {
+    return [...this.tasks.keys()];
+  }
 }

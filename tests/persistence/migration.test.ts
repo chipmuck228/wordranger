@@ -6,6 +6,7 @@ const sql = [
   "supabase/migrations/202609160001_vocabulary_domain.sql",
   "supabase/migrations/202609160002_learning_tasks.sql",
   "supabase/migrations/202609170001_game_sessions.sql",
+  "supabase/migrations/202609170002_game_sessions_revision.sql",
 ]
   .map((file) => readFileSync(path.join(process.cwd(), file), "utf8"))
   .join("\n");
@@ -53,5 +54,11 @@ describe("Schema", () => {
     expect(sql).not.toContain("ranger_trial_answers");
     expect(sql).not.toContain("ranger_trial_weak_words");
     expect(sql).not.toContain("ranger_trial_mastery");
+  });
+
+  it("adds game_sessions.revision as an optimistic concurrency token", () => {
+    expect(sql).toContain("add column if not exists revision bigint not null default 0");
+    expect(sql).toContain("game_sessions_revision_nonnegative");
+    expect(sql).toContain("check (revision >= 0)");
   });
 });

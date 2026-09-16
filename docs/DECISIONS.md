@@ -270,6 +270,24 @@ Scheduler seed is `scheduler:${sessionId}`. Task generation seed is `task:${sess
 
 Evidence uniqueness remains the concurrency guard (`learning_evidence.task_id` unique; duplicate maps to `TASK_ALREADY_COMPLETED`). If Evidence succeeds and session save fails, retry recovers `awaiting_continue` once using `lastCompletedTaskId` so presentation stats are not double-counted. Continue while `awaiting_action` returns the current task and does not skip a need.
 
+## ADR-046 — game_sessions uses optimistic concurrency revision instead of last-write-wins
+
+**Status:** accepted
+
+`game_sessions.revision` starts at 0 on insert. Updates succeed only when the stored revision matches the loaded record, then increment by 1. Zero-row CAS is `SESSION_CONFLICT`. Do not upsert existing rows. The token is persistence metadata, not `stateVersion` or scheduler policy version.
+
+## ADR-047 — continue/resume claim orchestration state before task generation
+
+**Status:** accepted
+
+The first persist of a continue (index increment, `currentTaskId` null, `awaiting_action`) is the concurrency gate. Only the winning revision may generate the next task. Resume generation of a missing current task also CAS-claims first. Losers reload; they must not publish a second competing `PublicLearningTask`.
+
+## ADR-048 — SESSION_CONFLICT is recoverable through bounded reload, not hidden by unconditional retry
+
+**Status:** accepted
+
+Controllers reload at most once (or twice for an `awaiting_continue` retry). If the latest durable session already has the current task, feedback, or completion, return that. If another request is still generating, return `SESSION_CONFLICT` to the client. Do not spin the server.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

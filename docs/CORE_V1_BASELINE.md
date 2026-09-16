@@ -46,4 +46,4 @@ If a renderer cannot consume a contract, document `CORE_INTEGRATION_BLOCKER` ins
 
 Phase 05 (Ranger Trial) found no Core integration blocker.
 
-Runtime persistence adapters (`SupabaseLearningRepository`, `SupabaseLearningTaskRepository`, `SupabaseRangerTrialSessionStore`, `game_sessions`) are outside frozen Core domain semantics. They must not change mastery, retention, weakness, evidence, need, scheduler, evaluator, or vocabulary-policy behavior.
+Runtime persistence adapters (`SupabaseLearningRepository`, `SupabaseLearningTaskRepository`, `SupabaseRangerTrialSessionStore`, `game_sessions`) are outside frozen Core domain semantics. They must not change mastery, retention, weakness, evidence, need, scheduler, evaluator, or vocabulary-policy behavior. `game_sessions.revision` is an orchestration CAS token, not a Core version.

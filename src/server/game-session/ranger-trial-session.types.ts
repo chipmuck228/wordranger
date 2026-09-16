@@ -61,6 +61,11 @@ export interface RangerTrialSessionRecord {
   lastCompletedTaskId: string | null;
   generationFailures: RangerTrialGenerationFailure[];
   recentTasks: RecentTaskSummary[];
+  /**
+   * Persistence CAS token. Not learning state and not stateVersion.
+   * New sessions start at 0; each successful update increments by 1.
+   */
+  revision: number;
 }
 
 export interface RangerTrialPublicSession {
@@ -103,6 +108,7 @@ export interface ResumeRangerTrialResult {
 }
 
 export interface RangerTrialSessionStore {
-  save(record: RangerTrialSessionRecord): Promise<void>;
+  create(record: RangerTrialSessionRecord): Promise<RangerTrialSessionRecord>;
   get(sessionId: string): Promise<RangerTrialSessionRecord | null>;
+  save(record: RangerTrialSessionRecord): Promise<RangerTrialSessionRecord>;
 }

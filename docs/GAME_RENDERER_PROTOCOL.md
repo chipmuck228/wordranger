@@ -143,6 +143,16 @@ Production uses Supabase adapters for learner/task/session state. Bundled vocabu
 
 If session persistence fails after `learning_tasks` insert, that assigned task may be orphaned. Do not delete it. Recovery starts a new session or regenerates from the persisted need; it does not treat `game_sessions` as learning truth.
 
+## Optimistic concurrency (Phase 05.2)
+
+`game_sessions.revision` is a monotonically increasing CAS token. New sessions insert at revision `0`. Updates use `WHERE id = ? AND revision = N` and write `N+1`. A stale write is `SESSION_CONFLICT` — never last-write-wins.
+
+Continue and resume **claim** orchestration state (CAS persist) before generating the next task. Two concurrent continue/resume requests must not create competing `currentTaskId`s. The loser reloads at most once; if the winner already published a current task, that same task is returned. If the winner is still generating (`awaiting_action` and `currentTaskId` is null), the loser returns a retryable `SESSION_CONFLICT`.
+
+If continue wins the CAS claim (`phase → awaiting_action`, `currentTaskId = null`) and then generation fails before the second save, resume may generate from that claimed state. That is acceptable.
+
+`revision` is not exposed on `RangerTrialPublicSession`.
+
 ## Feedback DTO
 
 After evaluation, the browser receives:

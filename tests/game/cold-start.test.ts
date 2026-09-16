@@ -16,7 +16,11 @@ class FailNthSaveStore implements RangerTrialSessionStore {
     private readonly failAt: number,
   ) {}
 
-  async save(record: RangerTrialSessionRecord): Promise<void> {
+  create(record: RangerTrialSessionRecord): Promise<RangerTrialSessionRecord> {
+    return this.inner.create(record);
+  }
+
+  async save(record: RangerTrialSessionRecord): Promise<RangerTrialSessionRecord> {
     this.saves += 1;
     if (this.saves === this.failAt) {
       throw new GameSessionError(
@@ -24,7 +28,7 @@ class FailNthSaveStore implements RangerTrialSessionStore {
         "simulated session save failure",
       );
     }
-    await this.inner.save(record);
+    return this.inner.save(record);
   }
 
   get(sessionId: string): Promise<RangerTrialSessionRecord | null> {

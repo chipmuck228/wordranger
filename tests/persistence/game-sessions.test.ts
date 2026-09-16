@@ -42,12 +42,46 @@ function sampleRecord(
     lastCompletedTaskId: null,
     generationFailures: [],
     recentTasks: [{ taskId: "task-1", taskType: "MEANING_CHOICE", lexemeId: "lex-1" }],
+    revision: 0,
     ...overrides,
   };
 }
 
 function createFakeClient(seed?: Map<string, Record<string, unknown>>) {
   const rows = seed ?? new Map<string, Record<string, unknown>>();
+
+  function matches(row: Record<string, unknown>, filters: Record<string, unknown>) {
+    return Object.entries(filters).every(([column, value]) => row[column] === value);
+  }
+
+  function query(kind: "select" | "update", payload?: Record<string, unknown>) {
+    const filters: Record<string, unknown> = {};
+    const builder = {
+      eq(column: string, value: unknown) {
+        filters[column] = value;
+        return builder;
+      },
+      select() {
+        return builder;
+      },
+      async maybeSingle() {
+        if (kind === "select") {
+          const id = String(filters.id ?? "");
+          return { data: rows.get(id) ?? null, error: null };
+        }
+        const id = String(filters.id ?? payload?.id ?? "");
+        const existing = rows.get(id);
+        if (!existing || !matches(existing, filters)) {
+          return { data: null, error: null };
+        }
+        const updated = { ...existing, ...payload };
+        rows.set(id, updated);
+        return { data: { revision: updated.revision }, error: null };
+      },
+    };
+    return builder;
+  }
+
   return {
     rows,
     from(table: string) {
@@ -55,37 +89,31 @@ function createFakeClient(seed?: Map<string, Record<string, unknown>>) {
         throw new Error(`unexpected table ${table}`);
       }
       return {
-        upsert: async (payload: Record<string, unknown>) => {
-          const existing = rows.get(String(payload.id));
-          rows.set(String(payload.id), {
-            ...existing,
-            ...payload,
-            created_at: existing?.created_at ?? payload.created_at,
-          });
-          return { error: null };
+        insert: async (payload: Record<string, unknown>) => {
+          const id = String(payload.id);
+          if (rows.has(id)) {
+            return { data: null, error: { code: "23505" } };
+          }
+          rows.set(id, { ...payload });
+          return { data: payload, error: null };
         },
-        select: () => ({
-          eq: (_column: string, id: string) => ({
-            maybeSingle: async () => ({
-              data: rows.get(id) ?? null,
-              error: null,
-            }),
-          }),
-        }),
+        update: (payload: Record<string, unknown>) => query("update", payload),
+        select: () => query("select"),
       };
     },
   };
 }
 
 describe("game_sessions Ranger Trial store", () => {
-  it("P1: save session then load the same session", async () => {
+  it("P1: create session then load the same session", async () => {
     const client = createFakeClient();
     const store = new SupabaseRangerTrialSessionStore(
       client as never,
       V1_PLACEHOLDER_USER_ID,
     );
     const record = sampleRecord();
-    await store.save(record);
+    const created = await store.create(record);
+    expect(created.revision).toBe(0);
     const loaded = await store.get(record.sessionId);
     expect(loaded).toEqual(record);
   });
@@ -96,7 +124,7 @@ describe("game_sessions Ranger Trial store", () => {
       client as never,
       V1_PLACEHOLDER_USER_ID,
     );
-    await store.save(sampleRecord());
+    await store.create(sampleRecord());
     await store.save(
       sampleRecord({
         phase: "awaiting_continue",
@@ -108,11 +136,13 @@ describe("game_sessions Ranger Trial store", () => {
         lastCompletedTaskId: "task-1",
         completed: 1,
         stats: { attempted: 1, correct: 1, incorrect: 0 },
+        revision: 0,
       }),
     );
     const loaded = await store.get(SESSION_ID);
     expect(loaded?.phase).toBe("awaiting_continue");
     expect(loaded?.lastFeedback?.status).toBe("CORRECT");
+    expect(loaded?.revision).toBe(1);
   });
 
   it("P3: completed session survives reload", async () => {
@@ -121,7 +151,7 @@ describe("game_sessions Ranger Trial store", () => {
       client as never,
       V1_PLACEHOLDER_USER_ID,
     );
-    await store.save(
+    await store.create(
       sampleRecord({
         phase: "completed",
         currentNeedIndex: 1,
@@ -131,6 +161,7 @@ describe("game_sessions Ranger Trial store", () => {
     );
     const loaded = await store.get(SESSION_ID);
     expect(loaded?.phase).toBe("completed");
+    expect(loaded?.revision).toBe(0);
   });
 
   it("P4: persisted state contains no AnswerKey fields", async () => {
@@ -148,6 +179,7 @@ describe("game_sessions Ranger Trial store", () => {
     for (const field of ANSWER_KEY_FIELDS) {
       expect(keys.has(field), field).toBe(false);
     }
+    expect(keys.has("revision")).toBe(false);
   });
 
   it("P5: wrong game type is rejected", async () => {
@@ -160,6 +192,7 @@ describe("game_sessions Ranger Trial store", () => {
       status: "active",
       state: serializeRangerTrialState(sampleRecord()),
       created_at: "2026-09-16T12:00:00.000Z",
+      revision: 0,
     });
     const store = new SupabaseRangerTrialSessionStore(
       createFakeClient(rows) as never,
@@ -176,7 +209,7 @@ describe("game_sessions Ranger Trial store", () => {
       client as never,
       V1_PLACEHOLDER_USER_ID,
     );
-    await ownerStore.save(sampleRecord());
+    await ownerStore.create(sampleRecord());
     const otherStore = new SupabaseRangerTrialSessionStore(
       client as never,
       "00000000-0000-4000-8000-000000000099",
@@ -189,16 +222,17 @@ describe("game_sessions Ranger Trial store", () => {
     });
   });
 
-  it("preserves game type, ownership, and state version on save", async () => {
+  it("preserves game type, ownership, state version, and revision 0 on create", async () => {
     const client = createFakeClient();
     const store = new SupabaseRangerTrialSessionStore(
       client as never,
       V1_PLACEHOLDER_USER_ID,
     );
-    await store.save(sampleRecord());
+    await store.create(sampleRecord());
     const row = client.rows.get(SESSION_ID);
     expect(row?.game_type).toBe("RANGER_TRIAL");
     expect(row?.user_id).toBe(V1_PLACEHOLDER_USER_ID);
+    expect(row?.revision).toBe(0);
     expect((row?.state as { stateVersion: string }).stateVersion).toBe("v1");
   });
 
@@ -209,7 +243,41 @@ describe("game_sessions Ranger Trial store", () => {
         userId: V1_PLACEHOLDER_USER_ID,
         gameType: "RANGER_TRIAL",
         state: { stateVersion: "v0" },
+        revision: 0,
       }),
     ).toThrow(GameSessionError);
+  });
+
+  it("stale update is SESSION_CONFLICT and keeps the winner", async () => {
+    const client = createFakeClient();
+    const store = new SupabaseRangerTrialSessionStore(
+      client as never,
+      V1_PLACEHOLDER_USER_ID,
+    );
+    await store.create(sampleRecord());
+    const first = await store.save(
+      sampleRecord({ currentTaskId: "task-a", revision: 0 }),
+    );
+    expect(first.revision).toBe(1);
+    await expect(
+      store.save(sampleRecord({ currentTaskId: "task-b", revision: 0 })),
+    ).rejects.toMatchObject({ code: "SESSION_CONFLICT" });
+    const loaded = await store.get(SESSION_ID);
+    expect(loaded?.currentTaskId).toBe("task-a");
+    expect(loaded?.revision).toBe(1);
+  });
+
+  it("duplicate create does not overwrite", async () => {
+    const client = createFakeClient();
+    const store = new SupabaseRangerTrialSessionStore(
+      client as never,
+      V1_PLACEHOLDER_USER_ID,
+    );
+    await store.create(sampleRecord({ currentTaskId: "task-a" }));
+    await expect(
+      store.create(sampleRecord({ currentTaskId: "task-b" })),
+    ).rejects.toMatchObject({ code: "SESSION_CONFLICT" });
+    const loaded = await store.get(SESSION_ID);
+    expect(loaded?.currentTaskId).toBe("task-a");
   });
 });

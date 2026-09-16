@@ -89,7 +89,10 @@ Honest limitation: V1 does **not** fake atomicity. A later `process_evidence` Po
 | `plan_id` | Scheduler plan id |
 | `status` | `active` / `completed` / `failed` |
 | `state` | JSON orchestration (`stateVersion: "v1"`, planned needs, `currentNeedIndex`, `currentTaskId`, phase, presentation stats, last safe feedback, `lastCompletedTaskId`) |
-| `created_at` / `updated_at` | `updated_at` is written on every save |
+| `created_at` / `updated_at` | `updated_at` is written only on a successful create/CAS write |
+| `revision` | Optimistic concurrency token. New rows start at `0`. Each successful update is `WHERE revision = N` then writes `N+1`. Failed CAS does not change `updated_at`. |
+
+`revision` is **not** `stateVersion` (JSON schema), **not** scheduler `policyVersion`, and **not** learning-domain versioning. The CAS column is the source of truth; it is not stored inside `state` JSON and is not sent to the browser.
 
 `state` must not contain AnswerKey, Evidence copies, or `StudentLexemeModel`. `currentTaskId` points at `learning_tasks`. Session stats are UI counters.
 

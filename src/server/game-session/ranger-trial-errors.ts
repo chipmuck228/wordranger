@@ -7,6 +7,7 @@ export type GameSessionErrorCode =
   | "TASK_NOT_FOUND"
   | "SESSION_NOT_FOUND"
   | "SESSION_COMPLETED"
+  | "SESSION_CONFLICT"
   | "NETWORK_ERROR";
 
 export class GameSessionError extends Error {
@@ -35,5 +36,6 @@ export const GAME_SESSION_USER_MESSAGES: Record<GameSessionErrorCode, string> =
     TASK_NOT_FOUND: "找不到这道题，请重新开始闯关。",
     SESSION_NOT_FOUND: "找不到这一轮闯关，请重新开始。",
     SESSION_COMPLETED: "这一轮已经完成。",
+    SESSION_CONFLICT: "刚才的进度已经在另一个请求中更新，请重试。",
     NETWORK_ERROR: "网络好像出了点问题，请再试一次。",
   };

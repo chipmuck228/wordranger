@@ -200,7 +200,8 @@ UI, API routes, and repositories contain no stage-transition rules. Those live i
 browser
   → Ranger Trial Server Action
   → RangerTrialSessionController
-  → durable Game Session (`game_sessions`)
+  → durable Game Session (`game_sessions`, revision CAS)
+  → one authoritative session transition
   → durable LearningTask assignment (`learning_tasks`)
   → durable learner state (`student_lexeme_models` + `learning_evidence`)
   → submitTaskAction
@@ -209,7 +210,7 @@ browser
   → Learning Core
 ```
 
-Student-facing `/play/ranger-trial` production wiring uses `createSupabaseRangerTrialRuntime()`: `SupabaseLearningRepository`, `SupabaseLearningStateQueryRepository`, `SupabaseLearningTaskRepository`, and `SupabaseRangerTrialSessionStore` share one server Supabase client. There is no production in-memory Map for learning state, assigned tasks, or session orchestration.
+Student-facing `/play/ranger-trial` production wiring uses `createSupabaseRangerTrialRuntime()`: `SupabaseLearningRepository`, `SupabaseLearningStateQueryRepository`, `SupabaseLearningTaskRepository`, and `SupabaseRangerTrialSessionStore` share one server Supabase client. Session writes are `INSERT` on create and revision CAS on update. There is no production in-memory Map for learning state, assigned tasks, or session orchestration.
 
 Vocabulary on the student path is the bundled JSON dataset (`InMemoryVocabularyRepository` over git-versioned files). That is immutable reference data, not learner state.
 

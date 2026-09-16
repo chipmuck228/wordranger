@@ -133,6 +133,7 @@ export function parseRangerTrialSessionRecord(input: {
   gameType: string;
   expectedUserId?: string;
   state: unknown;
+  revision: number;
 }): RangerTrialSessionRecord {
   if (input.gameType !== RANGER_TRIAL_GAME_TYPE) {
     throw new GameSessionError(
@@ -160,6 +161,15 @@ export function parseRangerTrialSessionRecord(input: {
       "Session need index is out of range",
     );
   }
+  if (
+    !Number.isInteger(input.revision) ||
+    input.revision < 0
+  ) {
+    throw new GameSessionError(
+      "SESSION_NOT_FOUND",
+      "Session revision is not a valid concurrency token",
+    );
+  }
   return {
     sessionId: input.sessionId,
     userId: input.userId,
@@ -175,6 +185,7 @@ export function parseRangerTrialSessionRecord(input: {
     lastCompletedTaskId: state.lastCompletedTaskId,
     generationFailures: state.generationFailures,
     recentTasks: state.recentTasks,
+    revision: input.revision,
   };
 }
 
