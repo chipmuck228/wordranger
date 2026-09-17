@@ -3,7 +3,13 @@ import { EvidenceOutcome } from "@/domain/learning/evidence.types";
 import { toGameSubmissionFeedback } from "@/server/game-session/game-submission-feedback";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import type { TaskEvaluation } from "@/domain/tasks/task-evaluation";
-import { ANSWER_KEY_FIELDS, collectKeys, createRangerTrialWorld } from "./helpers";
+import {
+  ANSWER_KEY_FIELDS,
+  collectKeys,
+  createMatchingWorld,
+  createRangerTrialWorld,
+  createWordBubbleWorld,
+} from "./helpers";
 
 function evaluation(
   overrides: Partial<TaskEvaluation>,
@@ -63,6 +69,33 @@ describe("G4 client payload contains no AnswerKey", () => {
     }
     expect(submitted.feedback.status).toBeTruthy();
     expect(submitted.feedback.message.length).toBeGreaterThan(0);
+  });
+
+  it("Word Bubble and Matching start/submit payloads stay AnswerKey-free", async () => {
+    for (const world of [createWordBubbleWorld(), createMatchingWorld()]) {
+      const started = await world.controller.start();
+      const startKeys = collectKeys(JSON.parse(JSON.stringify(started)));
+      for (const field of ANSWER_KEY_FIELDS) {
+        expect(startKeys.has(field), field).toBe(false);
+      }
+      expect(started.task.responseContract.kind).toBe("CHOICE");
+      if (started.task.responseContract.kind !== "CHOICE") {
+        throw new Error("expected CHOICE");
+      }
+      const submitted = await world.controller.submit({
+        sessionId: started.session.sessionId,
+        taskId: started.task.id,
+        intent: {
+          kind: "CHOICE",
+          optionId: started.task.responseContract.options[0].id,
+        },
+        responseTimeMs: 500,
+      });
+      const submitKeys = collectKeys(JSON.parse(JSON.stringify(submitted)));
+      for (const field of ANSWER_KEY_FIELDS) {
+        expect(submitKeys.has(field), field).toBe(false);
+      }
+    }
   });
 });
 

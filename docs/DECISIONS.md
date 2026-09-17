@@ -318,6 +318,36 @@ Phase 06 extracts proven common behavior into `LearningGameSessionController`: p
 
 `WORD_BUBBLE_CAPABILITY` plus `responseContract.kind === "CHOICE"` is the renderer contract. V1 tasks are `MEANING_CHOICE`, `RELATION_CHOICE`, and `CONFUSABLE_CHOICE`. TEXT_INPUT is `GAME_CANNOT_RENDER_TASK`. No bubble-specific task types.
 
+## ADR-054 — Composite renderer interaction may produce one semantic StudentAction
+
+**Status:** accepted
+
+Matching V1 requires two UI gestures (left target, then right candidate) before emitting `{ kind: "CHOICE", optionId }`. The first gesture is renderer-local. The learning system still receives one completed semantic answer. Gesture count is not Evidence count.
+
+## ADR-055 — Partial renderer interaction state is ephemeral and never learning truth
+
+**Status:** accepted
+
+`selectedTarget`, a pre-submit `selectedOptionId`, hover, connector stroke, and card animation stay in the Matching renderer. They are not written to `game_sessions`. Refresh may reset a partial pair. The current `PublicLearningTask` and session progress remain.
+
+## ADR-056 — Matching V1 preserves one-task-one-terminal-evidence
+
+**Status:** accepted
+
+Matching does not treat an 8-pair board as one learning task. One `GeneratedLearningTask` still yields one terminal `StudentAction`, one `TaskEvaluation`, and one `LearningEvidence`. Left click, right-before-left, and failed partial selection create no Evidence.
+
+## ADR-057 — Matching reuses CHOICE semantics instead of introducing pair-specific grading
+
+**Status:** accepted
+
+The left target is presentation of the existing public prompt. The selected right card is the existing CHOICE `optionId`. No `PAIR` StudentAction, no `MATCHING_TASK`, and no Matching-specific TaskEvaluator path. `gameId = MATCHING` is provenance metadata only.
+
+## ADR-058 — Renderer interaction count and learning action count are independent
+
+**Status:** accepted
+
+A renderer may use 0, 1, 2, or many visual gestures. Semantic submission remains one `StudentAction` unless the underlying task protocol explicitly defines otherwise. Word Bubble is one tap → one action. Matching is two taps → one action. Core V1 does not count clicks.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

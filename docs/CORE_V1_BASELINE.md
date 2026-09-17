@@ -44,6 +44,6 @@ Renderers may not:
 
 If a renderer cannot consume a contract, document `CORE_INTEGRATION_BLOCKER` instead of silently changing Core.
 
-Phase 05 (Ranger Trial) found no Core integration blocker. Phase 06 (Word Bubble) consumes the same frozen baseline; two renderers, one learning truth.
+Phase 05 (Ranger Trial) found no Core integration blocker. Phase 06 (Word Bubble) and Phase 07 (Matching) consume the same frozen baseline; three renderers, one learning truth. Matching did not add a StudentAction kind, TaskEvaluator rule, or Evidence field.
 
 Runtime persistence adapters (`SupabaseLearningRepository`, `SupabaseLearningTaskRepository`, `SupabaseGameSessionStore` / `SupabaseRangerTrialSessionStore`, `game_sessions`) are outside frozen Core domain semantics. They must not change mastery, retention, weakness, evidence, need, scheduler, evaluator, or vocabulary-policy behavior. `game_sessions.revision` is an orchestration CAS token, not a Core version.

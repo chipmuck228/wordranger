@@ -9,6 +9,9 @@ import {
 import { createInMemoryRangerTrialRuntime } from "@/server/runtime/create-in-memory-ranger-trial-runtime";
 import type { InMemoryRangerTrialRuntime } from "@/server/runtime/create-in-memory-ranger-trial-runtime";
 import { createInMemoryWordBubbleRuntime } from "@/server/runtime/create-in-memory-word-bubble-runtime";
+import { createInMemoryMatchingRuntime } from "@/server/runtime/create-in-memory-matching-runtime";
+import type { InMemoryGameSessionStore } from "@/server/game-session/in-memory-game-session-store";
+import { LexemeRelationType } from "@/domain/vocabulary/lexeme-relation";
 import { sequentialIdFactory } from "../learning/helpers";
 
 export const RANGER_NOW = "2026-09-16T12:00:00.000Z";
@@ -39,6 +42,32 @@ export function createRangerTrialWorld(userId = RANGER_USER) {
 
 export type RangerTrialWorld = ReturnType<typeof createRangerTrialWorld>;
 export type SharedRangerTrialRuntime = InMemoryRangerTrialRuntime;
+
+export function createMatchingWorld(
+  userId = "matching-test-user",
+  options?: { sessions?: InMemoryGameSessionStore },
+) {
+  const runtime = createInMemoryMatchingRuntime({
+    userId,
+    now: () => RANGER_NOW,
+    createSessionId: sequentialIdFactory("msess"),
+    createId: sequentialIdFactory("mid"),
+    createEvidenceId: sequentialIdFactory("mev"),
+    requestedNeedCount: 8,
+    sessions: options?.sessions,
+  });
+  return {
+    vocabulary: runtime.vocabulary,
+    learning: runtime.learning,
+    query: runtime.learningStateQuery,
+    tasks: runtime.tasks,
+    sessions: runtime.sessions,
+    controller: runtime.createController(),
+    userId,
+    createController: () => runtime.createController(),
+    runtime,
+  };
+}
 
 export function createWordBubbleWorld(userId = "bubble-test-user") {
   const runtime = createInMemoryWordBubbleRuntime({
@@ -126,6 +155,48 @@ export function meaningChoiceTask(): PublicLearningTask {
         { id: "opt-a", content: { kind: "TEXT", text: "安静" } },
         { id: "opt-b", content: { kind: "TEXT", text: "完全" } },
         { id: "opt-c", content: { kind: "TEXT", text: "迅速" } },
+      ],
+    },
+  });
+}
+
+export function relationChoiceTask(): PublicLearningTask {
+  return makePublicTask({
+    id: "public-task-relation",
+    taskType: LearningTaskType.RELATION_CHOICE,
+    targetSkill: VocabularySkill.SEMANTIC_CONNECTION,
+    promptMode: PromptMode.WORD_TO_RELATION,
+    answerMode: AnswerMode.MULTIPLE_CHOICE,
+    prompt: {
+      kind: "RELATION",
+      sourceText: "quiet",
+      relationType: LexemeRelationType.ANTONYM,
+    },
+    responseContract: {
+      kind: "CHOICE",
+      options: [
+        { id: "opt-a", content: { kind: "TEXT", text: "loud" } },
+        { id: "opt-b", content: { kind: "TEXT", text: "quite" } },
+        { id: "opt-c", content: { kind: "TEXT", text: "silent" } },
+      ],
+    },
+  });
+}
+
+export function confusableChoiceTask(): PublicLearningTask {
+  return makePublicTask({
+    id: "public-task-confusable",
+    taskType: LearningTaskType.CONFUSABLE_CHOICE,
+    targetSkill: VocabularySkill.MEANING_RECOGNITION,
+    promptMode: PromptMode.WORD_TO_MEANING,
+    answerMode: AnswerMode.MULTIPLE_CHOICE,
+    prompt: { kind: "LEXEME_TEXT", text: "quiet" },
+    responseContract: {
+      kind: "CHOICE",
+      options: [
+        { id: "opt-a", content: { kind: "TEXT", text: "quite" } },
+        { id: "opt-b", content: { kind: "TEXT", text: "quiet" } },
+        { id: "opt-c", content: { kind: "TEXT", text: "quit" } },
       ],
     },
   });

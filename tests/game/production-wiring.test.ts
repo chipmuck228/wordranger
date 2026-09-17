@@ -29,6 +29,21 @@ const bubbleSelector = readFileSync(
   path.join(process.cwd(), "src/server/runtime/create-word-bubble-runtime.ts"),
   "utf8",
 );
+const matchingActions = readFileSync(
+  path.join(process.cwd(), "src/app/play/matching/actions.ts"),
+  "utf8",
+);
+const matchingProduction = readFileSync(
+  path.join(
+    process.cwd(),
+    "src/server/runtime/create-supabase-matching-runtime.ts",
+  ),
+  "utf8",
+);
+const matchingSelector = readFileSync(
+  path.join(process.cwd(), "src/server/runtime/create-matching-runtime.ts"),
+  "utf8",
+);
 
 describe("Ranger Trial production wiring", () => {
   it("student-facing actions do not instantiate in-memory learning/task/session stores", () => {
@@ -74,5 +89,26 @@ describe("Word Bubble production wiring", () => {
     expect(bubbleProduction).not.toContain("InMemoryLearningRepository");
     expect(bubbleSelector).toContain('RANGER_TRIAL_RUNTIME === "memory"');
     expect(bubbleSelector).toContain("createSupabaseWordBubbleRuntime");
+  });
+});
+
+describe("Matching production wiring", () => {
+  it("student-facing actions use the generic runtime selector", () => {
+    expect(matchingActions).toContain("createMatchingRuntime");
+    expect(matchingActions).not.toContain("InMemoryLearningRepository");
+    expect(matchingActions).not.toContain("InMemoryLearningTaskRepository");
+    expect(matchingActions).not.toContain("InMemoryGameSessionStore");
+    expect(matchingActions).not.toContain("new SeededRandomSource");
+  });
+
+  it("Supabase factory reuses durable learning/task adapters and a typed session store", () => {
+    expect(matchingProduction).toContain("SupabaseLearningRepository");
+    expect(matchingProduction).toContain("SupabaseLearningTaskRepository");
+    expect(matchingProduction).toContain("SupabaseLearningStateQueryRepository");
+    expect(matchingProduction).toContain("SupabaseGameSessionStore");
+    expect(matchingProduction).toContain("MATCHING");
+    expect(matchingProduction).not.toContain("InMemoryLearningRepository");
+    expect(matchingSelector).toContain('RANGER_TRIAL_RUNTIME === "memory"');
+    expect(matchingSelector).toContain("createSupabaseMatchingRuntime");
   });
 });

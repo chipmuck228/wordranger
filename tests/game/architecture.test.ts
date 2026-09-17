@@ -20,6 +20,7 @@ describe("G5 renderer architecture boundary", () => {
     const dirs = [
       join(process.cwd(), "src/components/game/ranger-trial"),
       join(process.cwd(), "src/components/game/word-bubble"),
+      join(process.cwd(), "src/components/game/matching"),
       join(process.cwd(), "src/components/game/shared"),
     ];
     const forbidden = [

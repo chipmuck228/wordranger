@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { RANGER_TRIAL_GAME_ID, WORD_BUBBLE_GAME_ID } from "@/server/auth/v1-user";
+import {
+  MATCHING_GAME_ID,
+  RANGER_TRIAL_GAME_ID,
+  WORD_BUBBLE_GAME_ID,
+} from "@/server/auth/v1-user";
 import { DefaultTaskGenerator } from "@/domain/tasks/default-task-generator";
 import { SeededRandomSource } from "@/domain/tasks/random-source";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
@@ -28,7 +32,7 @@ function cloneTask(
 }
 
 describe("cross-renderer equivalence", () => {
-  it("same CHOICE option yields the same TaskEvaluator result for both games", async () => {
+  it("same CHOICE option yields the same TaskEvaluator result for Ranger Trial, Word Bubble, and Matching", async () => {
     const vocabulary = new InMemoryVocabularyRepository(loadVocabularyDataset());
     const generator = new DefaultTaskGenerator(vocabulary);
     const [quiet] = await vocabulary.findLexemeByLemma("quiet");
@@ -50,6 +54,7 @@ describe("cross-renderer equivalence", () => {
     expect(generated.value.publicTask.responseContract.kind).toBe("CHOICE");
     const rangerTask = cloneTask(generated.value, "task-ranger");
     const bubbleTask = cloneTask(generated.value, "task-bubble");
+    const matchingTask = cloneTask(generated.value, "task-matching");
     const optionId = rangerTask.answerKey.correctOptionIds[0];
     const tasks = new InMemoryLearningTaskRepository();
     const learning = new InMemoryLearningRepository();
@@ -60,6 +65,10 @@ describe("cross-renderer equivalence", () => {
     await tasks.saveGeneratedTask({
       task: bubbleTask,
       assignment: { userId: USER, sessionId: "sess-bubble" },
+    });
+    await tasks.saveGeneratedTask({
+      task: matchingTask,
+      assignment: { userId: USER, sessionId: "sess-matching" },
     });
 
     const rangerIntent: StudentAction = {
@@ -73,6 +82,10 @@ describe("cross-renderer equivalence", () => {
     const bubbleIntent: StudentAction = {
       ...rangerIntent,
       taskId: bubbleTask.publicTask.id,
+    };
+    const matchingIntent: StudentAction = {
+      ...rangerIntent,
+      taskId: matchingTask.publicTask.id,
     };
 
     const ranger = await submitTaskAction({
@@ -97,14 +110,32 @@ describe("cross-renderer equivalence", () => {
       learningRepository: learning,
       now: NOW,
     });
+    const matching = await submitTaskAction({
+      taskId: matchingTask.publicTask.id,
+      action: matchingIntent,
+      userId: USER,
+      sessionId: "sess-matching",
+      gameId: MATCHING_GAME_ID,
+      evidenceId: "ev-matching",
+      learningTaskRepository: tasks,
+      learningRepository: learning,
+      now: NOW,
+    });
 
     expect(ranger.evaluation.outcome).toBe(bubble.evaluation.outcome);
+    expect(ranger.evaluation.outcome).toBe(matching.evaluation.outcome);
     expect(ranger.evaluation.errorType).toBe(bubble.evaluation.errorType);
+    expect(ranger.evaluation.errorType).toBe(matching.evaluation.errorType);
     expect(ranger.evaluation.selectedLexemeId).toBe(
       bubble.evaluation.selectedLexemeId,
     );
+    expect(ranger.evaluation.selectedLexemeId).toBe(
+      matching.evaluation.selectedLexemeId,
+    );
     expect(ranger.evaluation.isCorrect).toBe(bubble.evaluation.isCorrect);
+    expect(ranger.evaluation.isCorrect).toBe(matching.evaluation.isCorrect);
     expect(ranger.evidence.gameId).toBe(RANGER_TRIAL_GAME_ID);
     expect(bubble.evidence.gameId).toBe(WORD_BUBBLE_GAME_ID);
+    expect(matching.evidence.gameId).toBe(MATCHING_GAME_ID);
   });
 });

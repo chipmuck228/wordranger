@@ -23,6 +23,12 @@ export default function Home() {
           单词泡泡
         </Link>
         <Link
+          href="/play/matching"
+          className="text-base font-medium underline underline-offset-4"
+        >
+          连连看
+        </Link>
+        <Link
           href="/debug/vocabulary"
           className="text-sm font-medium underline underline-offset-4"
         >

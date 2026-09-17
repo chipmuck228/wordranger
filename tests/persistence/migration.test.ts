@@ -7,6 +7,7 @@ const sql = [
   "supabase/migrations/202609160002_learning_tasks.sql",
   "supabase/migrations/202609170001_game_sessions.sql",
   "supabase/migrations/202609170002_game_sessions_revision.sql",
+  "supabase/migrations/202609170003_learning_evidence_session_correlation.sql",
 ]
   .map((file) => readFileSync(path.join(process.cwd(), file), "utf8"))
   .join("\n");
@@ -60,5 +61,9 @@ describe("Schema", () => {
     expect(sql).toContain("add column if not exists revision bigint not null default 0");
     expect(sql).toContain("game_sessions_revision_nonnegative");
     expect(sql).toContain("check (revision >= 0)");
+  });
+
+  it("does not require learning_sessions for evidence session_id", () => {
+    expect(sql).toContain("drop constraint if exists learning_evidence_session_id_fkey");
   });
 });

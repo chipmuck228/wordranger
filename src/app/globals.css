@@ -188,7 +188,64 @@
 @media (prefers-reduced-motion: reduce) {
   .word-bubble-float,
   .word-bubble-pop,
-  .word-bubble-shake {
+  .word-bubble-shake,
+  .matching-card-pop,
+  .matching-card-shake {
     animation: none !important;
   }
+}
+
+@keyframes matching-card-pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes matching-card-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+
+.matching-card-pop {
+  animation: matching-card-pop 420ms ease-out;
+}
+
+.matching-card-shake {
+  animation: matching-card-shake 420ms ease-in-out;
+}
+
+.matching-connector {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--border) 12%,
+    var(--border) 88%,
+    transparent 100%
+  );
+  opacity: 0.35;
+}
+
+.matching-connector-on {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    oklch(0.75 0.12 85) 12%,
+    oklch(0.75 0.12 85) 88%,
+    transparent 100%
+  );
+  opacity: 0.9;
 }

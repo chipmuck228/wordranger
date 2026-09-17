@@ -201,10 +201,13 @@ export class LearningGameSessionController {
         }
         throw error;
       }
-      throw new GameSessionError(
-        "SESSION_START_FAILED",
-        "Session start failed",
-      );
+      const cause =
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message: unknown }).message)
+          : String(error);
+      throw new GameSessionError("SESSION_START_FAILED", "Session start failed", {
+        cause,
+      });
     }
   }
 

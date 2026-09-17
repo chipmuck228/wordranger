@@ -13,4 +13,7 @@ export const RANGER_TRIAL_STATE_VERSION = "v1";
 export const WORD_BUBBLE_GAME_ID = "WORD_BUBBLE";
 export const WORD_BUBBLE_GAME_TYPE = "WORD_BUBBLE";
 
+export const MATCHING_GAME_ID = "MATCHING";
+export const MATCHING_GAME_TYPE = "MATCHING";
+
 export const GAME_SESSION_STATE_VERSION = "v1";

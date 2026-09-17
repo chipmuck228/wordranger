@@ -45,6 +45,8 @@ One row per lexeme. `game_tags` describe present data capabilities, not which ga
 
 `learning_evidence` is the source of truth: an append-only event log of learning facts keyed by `lexeme_id` → `lexemes.id`.
 
+`session_id` on evidence is a **correlation token**. Student games write `game_sessions.id` here. It does not require a row in `learning_sessions` (that table is a leftover Core stub; game orchestration is `game_sessions`).
+
 `student_lexeme_models` (+ `student_lexeme_skill_states` + `student_lexeme_weaknesses`) is a derived snapshot used for querying, review queues, and the Debug Lab. It stores `policy_version`. If the v1 policy is replaced, snapshots can be rebuilt by replaying evidence through `processEvidence`.
 
 ## Why evidence is append-only
@@ -85,7 +87,7 @@ Honest limitation: V1 does **not** fake atomicity. A later `process_evidence` Po
 | --- | --- |
 | `id` | Session id (uuid) |
 | `user_id` | Owner (uuid). V1 is the placeholder user, not real auth. |
-| `game_type` | `RANGER_TRIAL` or `WORD_BUBBLE`; a store must not resume another game's session |
+| `game_type` | `RANGER_TRIAL`, `WORD_BUBBLE`, or `MATCHING`; a store must not resume another game's session |
 | `plan_id` | Scheduler plan id |
 | `status` | `active` / `completed` / `failed` |
 | `state` | JSON orchestration (`stateVersion: "v1"`, planned needs, `currentNeedIndex`, `currentTaskId`, phase, presentation stats, last safe feedback, `lastCompletedTaskId`) |
@@ -102,7 +104,7 @@ Cleanup/TTL is future work. A failed session save after `learning_tasks` insert 
 
 ## Phase 04 persistence
 
-Phase 04 adds **no required persistence tables**. The scheduler still generates `LearningSessionPlan` on demand. Phase 05.1+ persist a copy of that plan's playable needs inside `game_sessions.state` so refresh does not re-run the Scheduler. Phase 06 adds no new tables; Word Bubble reuses `game_sessions` with `game_type = WORD_BUBBLE`. Renderer layout is not stored.
+Phase 04 adds **no required persistence tables**. The scheduler still generates `LearningSessionPlan` on demand. Phase 05.1+ persist a copy of that plan's playable needs inside `game_sessions.state` so refresh does not re-run the Scheduler. Phase 06 and Phase 07 add no new tables; Word Bubble and Matching reuse `game_sessions` with `game_type = WORD_BUBBLE` or `MATCHING`. Renderer layout and partial Matching selection are not stored.
 
 The scheduler reads:
 
