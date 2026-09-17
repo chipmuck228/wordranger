@@ -12,7 +12,9 @@ A Game Renderer is a consumer of Core V1. It displays a `PublicLearningTask` and
 | TaskEvaluator | Correctness | Display |
 | Learning Core | `StudentLexemeModel` | Games |
 
-Ranger Trial (单词闯关), Word Bubble (单词泡泡), Matching (连连看), and Snake (贪食蛇) are the four reference renderers. Later games should replace only rendering. They must keep the same submission path.
+Ranger Trial (单词闯关), Word Bubble (单词泡泡), Matching (连连看), and Snake (贪食蛇) are the four reference renderers. Daily Training selects among them. Later games should replace only rendering. They must keep the same submission path.
+
+Renderers are selected by product orchestration. They remain passive consumers of `PublicLearningTask`. Renderer selection does not change task semantics.
 
 ```text
                        ┌──────── Ranger Trial
@@ -86,6 +88,14 @@ Matching V1 is left-first, then right. A candidate tap before the target shows �
 
 `LearningTaskType` may change copy (“选出正确意思”) but not correctness.
 
+## Renderer selection (Daily Training)
+
+Daily Training is not a fifth renderer. After `TaskGenerator` produces one `PublicLearningTask`, `selectRendererForTask` filters the registry with `canRenderTask`, then applies a deterministic preference order and a light diversity cap (avoid the same renderer more than twice in a row when another compatible renderer exists). Compatibility and learning-plan order always beat diversity.
+
+`TEXT_INPUT` / typing tasks route only to Ranger Trial. `MEANING_CHOICE` prefers Word Bubble, then Snake. `RELATION_CHOICE` / `CONFUSABLE_CHOICE` prefer Matching, then Word Bubble. Ranger Trial is the compatible fallback. The selected renderer is persisted on the training item and is stable across refresh.
+
+Daily Training submit still calls `submitTaskAction`. `Evidence.gameId` is the actual renderer (`RANGER_TRIAL`, `WORD_BUBBLE`, `MATCHING`, `SNAKE`), never `DAILY_TRAINING`.
+
 ## GameCapability
 
 `RANGER_TRIAL_CAPABILITY`, `WORD_BUBBLE_CAPABILITY`, `MATCHING_CAPABILITY`, and `SNAKE_CAPABILITY` answer: can this renderer **display** this task?
@@ -145,7 +155,7 @@ If Evidence write succeeds and session save fails, a retry maps `TASK_ALREADY_CO
 
 Randomization is recreated from `scheduler:${gameType}:${sessionId}` and `task:${gameType}:${sessionId}:${needId}`. Word Bubble layout uses `bubble-layout:${taskId}` and is not persisted. Matching keeps public option order and does not persist card selection. Snake rebuilds a deterministic board from `task.id` + `option.id`. The RandomSource object is not persisted.
 
-Production uses Supabase adapters for learner/task/session state. Bundled vocabulary JSON is immutable reference data. `RANGER_TRIAL_RUNTIME=memory` is the legacy name of a shared local/e2e fixture for all four student games; `GAME_RUNTIME=memory` is a backward-compatible alias. Production must not set either flag and must not silently fall back to in-memory Maps. Student-game persistence/network work uses a shared server timeout (`createTimedFetch` / `withPersistenceTimeout`) and maps stalls to `NETWORK_ERROR` (“暂时没能准备好这一轮，请稍后再试。”). Play clients add a secondary loading timeout so “正在安排这一轮单词…” cannot remain forever if the Server Action itself stalls. A client timeout does not cancel server work; retrying start may create another session if the first request later completes.
+Explicit `RANGER_TRIAL_RUNTIME=memory` is the legacy name of a shared local/e2e fixture for Daily Training and all four student games; `GAME_RUNTIME=memory` is a backward-compatible alias. Production must not set either flag and must not silently fall back to in-memory Maps. Student-game persistence/network work uses a shared server timeout (`createTimedFetch` / `withPersistenceTimeout`) and maps stalls to `NETWORK_ERROR`. Daily Training student copy is “暂时没能准备好今天的训练，请稍后再试。” Play clients add a secondary loading timeout so a loading line cannot remain forever if the Server Action itself stalls. A client timeout does not cancel server work; retrying start may create another session if the first request later completes.
 
 If session persistence fails after `learning_tasks` insert, that assigned task may be orphaned. Do not delete it. Recovery starts a new session or regenerates from the persisted need; it does not treat `game_sessions` as learning truth.
 

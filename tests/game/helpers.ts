@@ -11,7 +11,9 @@ import type { InMemoryRangerTrialRuntime } from "@/server/runtime/create-in-memo
 import { createInMemoryWordBubbleRuntime } from "@/server/runtime/create-in-memory-word-bubble-runtime";
 import { createInMemoryMatchingRuntime } from "@/server/runtime/create-in-memory-matching-runtime";
 import { createInMemorySnakeRuntime } from "@/server/runtime/create-in-memory-snake-runtime";
+import { createInMemoryDailyTrainingRuntime } from "@/server/runtime/create-in-memory-daily-training-runtime";
 import type { InMemoryGameSessionStore } from "@/server/game-session/in-memory-game-session-store";
+import type { selectRendererForTask } from "@/server/training/renderer-selector";
 import { LexemeRelationType } from "@/domain/vocabulary/lexeme-relation";
 import { sequentialIdFactory } from "../learning/helpers";
 
@@ -94,6 +96,45 @@ export function createMatchingWorld(
     createController: () => runtime.createController(),
     runtime,
   };
+}
+
+export function createDailyTrainingWorld(
+  userId = "daily-training-test-user",
+  options?: {
+    requestedNeedCount?: number;
+    selectRenderer?: typeof selectRendererForTask;
+  },
+) {
+  const runtime = createInMemoryDailyTrainingRuntime({
+    userId,
+    now: () => RANGER_NOW,
+    createSessionId: sequentialIdFactory("tsess"),
+    createId: sequentialIdFactory("tid"),
+    createEvidenceId: sequentialIdFactory("tev"),
+    requestedNeedCount: options?.requestedNeedCount ?? 8,
+    selectRenderer: options?.selectRenderer,
+  });
+  return {
+    vocabulary: runtime.vocabulary,
+    learning: runtime.learning,
+    query: runtime.learningStateQuery,
+    tasks: runtime.tasks,
+    sessions: runtime.sessions,
+    controller: runtime.createController(),
+    userId,
+    createController: () => runtime.createController(),
+    runtime,
+  };
+}
+
+export function trainingIntent(task: PublicLearningTask) {
+  if (task.responseContract.kind === "CHOICE") {
+    return {
+      kind: "CHOICE" as const,
+      optionId: task.responseContract.options[0].id,
+    };
+  }
+  return { kind: "TEXT_INPUT" as const, value: "x" };
 }
 
 export function createWordBubbleWorld(userId = "bubble-test-user") {

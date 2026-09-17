@@ -19,4 +19,35 @@ describe("R6 shared client runtime error policy", () => {
       expect(text, relative).toContain("onRetry");
     }
   });
+
+  it("Daily Training client bounds loading and uses student-facing retry copy", () => {
+    const text = readFileSync(
+      path.join(process.cwd(), "src/app/train/daily-training-play-client.tsx"),
+      "utf8",
+    );
+    expect(text).toContain("withClientGameTimeout");
+    expect(text).toContain("GameSessionErrorPanel");
+    expect(text).toContain("DAILY_TRAINING_USER_MESSAGES.NETWORK_ERROR");
+    expect(text).toContain("正在准备今天的训练…");
+    expect(text).toContain("onRetry");
+    expect(text).not.toContain("TaskEvaluator");
+    expect(text).not.toContain("LearningRepository");
+    expect(text).not.toContain("DefaultTaskGenerator");
+    expect(text).not.toContain("TaskAnswerKey");
+    expect(text).not.toContain("createClient");
+  });
+
+  it("TrainingRenderer reuses game components and stays off the server registry", () => {
+    const text = readFileSync(
+      path.join(process.cwd(), "src/components/training/TrainingRenderer.tsx"),
+      "utf8",
+    );
+    expect(text).toContain("RangerTrial");
+    expect(text).toContain("WordBubble");
+    expect(text).toContain("MatchingGame");
+    expect(text).toContain("SnakeGame");
+    expect(text).not.toContain("renderer-registry");
+    expect(text).not.toContain("TaskEvaluator");
+    expect(text).not.toContain("DefaultTaskGenerator");
+  });
 });

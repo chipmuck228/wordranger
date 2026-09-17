@@ -12,6 +12,7 @@ export function MatchingGame({
   total,
   disabled,
   result,
+  showProgress = true,
   onAction,
 }: {
   task: PublicLearningTask;
@@ -19,6 +20,7 @@ export function MatchingGame({
   total: number;
   disabled?: boolean;
   result?: "correct" | "incorrect";
+  showProgress?: boolean;
   onAction(intent: StudentActionIntent): void;
 }) {
   const presentation = matchingPresentationFromTask(task);
@@ -74,7 +76,7 @@ export function MatchingGame({
 
   return (
     <div className="flex flex-col gap-6">
-      <MatchingProgress current={current} total={total} />
+      {showProgress ? <MatchingProgress current={current} total={total} /> : null}
       <MatchingPrompt instruction={presentation.instruction} />
       {orderHint ? (
         <p className="text-center text-sm text-amber-700" role="status">

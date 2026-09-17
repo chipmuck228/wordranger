@@ -384,6 +384,48 @@ Snake starts the timer when the task is interactable and stops at option collisi
 
 No student-facing game operation may wait forever on PostgREST or session/task/learning adapters. The shared policy lives in `withPersistenceTimeout` / `createTimedFetch`, applied to the Supabase server client and `LearningGameSessionController` repository awaits. A stall is `NETWORK_ERROR`, not a renderer-specific wrapper. Client loading timeouts are secondary and do not prove the server failed; retrying start can create a second session. `RANGER_TRIAL_RUNTIME=memory` remains the explicit fixture flag; `GAME_RUNTIME=memory` is an alias. Production stays on durable Supabase.
 
+## ADR-065 — Daily Training is product orchestration, not a fifth renderer
+
+**Status:** accepted
+
+今日训练 sits above `LearningGameDefinition`. It does not introduce `DAILY_TRAINING` as an Evidence `gameId` or a new capability. Games remain execution modes. The student-visible product is one training round on `/train`.
+
+## ADR-066 — One LearningSessionPlan drives one Daily Training round
+
+**Status:** accepted
+
+Scheduler runs once at start. The ordered `LearningNeed`s are persisted as orchestration. Do not reschedule independently per renderer or per task. 再来一轮 creates a fresh plan from the updated `StudentLexemeModel`.
+
+## ADR-067 — Renderer selection happens after task generation using PublicLearningTask compatibility
+
+**Status:** accepted
+
+Need → generate one task → inspect the actual public contract → choose a compatible renderer. Do not assume `targetSkill` uniquely determines the game, and do not generate four candidate tasks.
+
+## ADR-068 — Renderer selection is deterministic application policy, not Scheduler policy
+
+**Status:** accepted
+
+`selectRendererForTask` lives in `src/server/training`. Scheduler scoring, quotas, and LearningNeed semantics stay frozen. Selection uses registry `canRenderTask`, a stable preference order, and a secondary diversity cap. No `Math.random`, no student game-preference model.
+
+## ADR-069 — Selected renderer is persisted per exposed task and stable across refresh
+
+**Status:** accepted
+
+Once a task and renderer are shown, resume restores that pair. Renderer-local ephemeral state (Snake board, Matching partial selection, Bubble pixels) may reset. No extra Evidence is created.
+
+## ADR-070 — Daily Training Evidence records the actual renderer gameId
+
+**Status:** accepted
+
+Submit passes `RANGER_TRIAL` / `WORD_BUBBLE` / `MATCHING` / `SNAKE`. Product correlation uses `game_sessions.id` (`game_type = DAILY_TRAINING`) as `session_id`. Do not write `DAILY_TRAINING` onto Evidence.
+
+## ADR-071 — Free Play and Daily Training feed the same learner model
+
+**Status:** accepted
+
+Direct `/play/*` routes keep producing normal Evidence. Daily Training does not own a parallel weak-word or mastery store. One Learning Core, one `StudentLexemeModel`.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

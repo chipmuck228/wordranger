@@ -53,6 +53,7 @@ export const SnakeGame = forwardRef<
     result?: "correct" | "incorrect";
     autoTick?: boolean;
     logicalTickMs?: number;
+    showProgress?: boolean;
     onAction(intent: StudentActionIntent): void;
   }
 >(function SnakeGame(
@@ -64,6 +65,7 @@ export const SnakeGame = forwardRef<
     result,
     autoTick = true,
     logicalTickMs = SNAKE_LOGICAL_TICK_MS,
+    showProgress = true,
     onAction,
   },
   ref,
@@ -175,7 +177,7 @@ export const SnakeGame = forwardRef<
 
   return (
     <div className="flex flex-col gap-5">
-      <SnakeHud current={current} total={total} />
+      {showProgress ? <SnakeHud current={current} total={total} /> : null}
       <SnakePrompt
         instruction={presentation.instruction}
         promptText={presentation.promptText}

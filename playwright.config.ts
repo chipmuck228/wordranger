@@ -23,6 +23,7 @@ export default defineConfig({
     env: {
       ...process.env,
       RANGER_TRIAL_RUNTIME: "memory",
+      GAME_RUNTIME: "memory",
     },
   },
 });

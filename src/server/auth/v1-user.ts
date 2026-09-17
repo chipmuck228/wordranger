@@ -19,4 +19,11 @@ export const MATCHING_GAME_TYPE = "MATCHING";
 export const SNAKE_GAME_ID = "SNAKE";
 export const SNAKE_GAME_TYPE = "SNAKE";
 
+/**
+ * Product orchestration type for Daily Training rows in `game_sessions`.
+ * Not an Evidence.gameId and not a fifth renderer.
+ */
+export const DAILY_TRAINING_ORCHESTRATION_TYPE = "DAILY_TRAINING";
+export const DAILY_TRAINING_TASK_COUNT = 8;
+
 export const GAME_SESSION_STATE_VERSION = "v1";

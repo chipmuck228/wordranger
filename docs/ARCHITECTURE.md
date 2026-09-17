@@ -1,11 +1,13 @@
 # WordRanger Architecture
 
-WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 08 adds **Snake** (贪食蛇) as the fourth Game Renderer. Ranger Trial remains the CHOICE + TEXT_INPUT reference. Word Bubble is single-tap CHOICE. Matching is composite two-gesture CHOICE. Snake is a real-time loop that collapses option collision into one CHOICE. There is still no student login.
+WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 09 adds **Daily Training** (今日训练) as the product orchestration layer: one student-visible round, one `LearningSessionPlan`, lazy task generation, and a renderer selected after the public task exists. Ranger Trial, Word Bubble, Matching, and Snake remain interchangeable renderers and secondary free-play routes. There is still no student login.
 
 ## Formal layers
 
 ```mermaid
 flowchart TD
+  student[Student]
+  daily[Daily Training]
   vocab[Vocabulary Domain]
   model[StudentLexemeModel]
   generator[Learning Need Generator]
@@ -17,18 +19,21 @@ flowchart TD
   generated[GeneratedLearningTask]
   assignment[Task Assignment / Persistence]
   publicTask[PublicLearningTask]
+  selector[Renderer Selector]
   ranger[Ranger Trial]
   bubble[Word Bubble]
   matching[Matching]
   snake[Snake]
   action[StudentAction]
-  sessionCtl[Generic Game Session Controller]
+  trainCtl[Daily Training Controller]
   submit[submitTaskAction]
   answerKey[server-side TaskAnswerKey]
   evaluator[TaskEvaluator]
   evidence[LearningEvidence]
   core[Learning Core]
 
+  student --> daily
+  daily --> scheduler
   vocab --> model
   model --> generator
   generator --> candidates
@@ -39,14 +44,17 @@ flowchart TD
   gen --> generated
   generated --> assignment
   assignment --> publicTask
-  publicTask --> ranger
-  publicTask --> bubble
-  publicTask --> matching
+  publicTask --> selector
+  selector --> ranger
+  selector --> bubble
+  selector --> matching
+  selector --> snake
   ranger --> action
   bubble --> action
   matching --> action
-  action --> sessionCtl
-  sessionCtl --> submit
+  snake --> action
+  action --> trainCtl
+  trainCtl --> submit
   assignment --> answerKey
   answerKey --> submit
   submit --> evaluator
@@ -56,29 +64,19 @@ flowchart TD
 ```
 
 ```text
-StudentLexemeModel
+Student
         ↓
-Need Generator
+Daily Training
         ↓
-Scheduler
+Scheduler / LearningSessionPlan
         ↓
-LearningNeed
+TaskGenerator
         ↓
-Task Generator
+Renderer Selector
         ↓
-Task Assignment
-        ↓
-PublicLearningTask
-        ↓
-   ┌────┴────────────┐
-Ranger Trial  Word Bubble  Matching  Snake
-   └────┬────────────┘
-        ↓
-  semantic event only
+PublicLearningTask + Renderer
         ↓
 StudentAction
-        ↓
-Generic Game Session Controller
         ↓
 submitTaskAction
         ↓
@@ -101,7 +99,9 @@ Responsibilities:
 - **Task Generator** — which task should represent the need
 - **Task Assignment** — which user/session owns the generated task
 - **Game Renderer** — how the public task is presented; emits only student action intent. Ranger Trial: CHOICE + TEXT_INPUT. Word Bubble: CHOICE single-tap. Matching: CHOICE via two ephemeral UI gestures. Snake: real-time ticks stay renderer-local; only option collision is a semantic event. Renderer-local interaction state is ephemeral and is not learning truth.
-- **Game Session Controller** — generic `LearningGameSessionController` plans once, filters playable needs after scheduling, generates one assigned task at a time, calls `submitTaskAction`, returns a safe feedback DTO
+- **Game Session Controller** — generic `LearningGameSessionController` plans once, filters playable needs after scheduling, generates one assigned task at a time, calls `submitTaskAction`, returns a safe feedback DTO. Free-play routes still use this path.
+- **Daily Training Controller** — product orchestration above any one `LearningGameDefinition`. One `LearningSessionPlan` per round, lazy one-task generation, renderer selected from `PublicLearningTask` compatibility, `submitTaskAction` with the **actual renderer** `gameId`. Not a fifth renderer.
+- **Renderer Selector** — deterministic application policy. Not Scheduler policy and not Core.
 - **Submission Service** (`submitTaskAction`) — loads the server-side answer key, verifies ownership, then grades
 - **TaskEvaluator** — what the student action means
 - **LearningEvidence** — the immutable fact
@@ -209,8 +209,9 @@ UI, API routes, and repositories contain no stage-transition rules. Those live i
 
 ```text
 browser
-  → Ranger Trial, Word Bubble, Matching, or Snake Server Action
-  → LearningGameSessionController
+  → Daily Training Server Action  (primary)
+     or Ranger Trial / Word Bubble / Matching / Snake Server Action (free play)
+  → DailyTrainingController or LearningGameSessionController
   → durable Game Session (`game_sessions.game_type`, revision CAS)
   → one authoritative session transition
   → durable LearningTask assignment (`learning_tasks`)
@@ -221,13 +222,15 @@ browser
   → Learning Core
 ```
 
-Student-facing `/play/ranger-trial`, `/play/word-bubble`, `/play/matching`, and `/play/snake` production wiring share `SupabaseLearningRepository`, `SupabaseLearningStateQueryRepository`, `SupabaseLearningTaskRepository`, bundled vocabulary, and `game_sessions`. Each game uses a session store configured with `expectedUserId` + `expectedGameType`. Session writes are `INSERT` on create and revision CAS on update. There is no production in-memory Map for learning state, assigned tasks, or session orchestration.
+Daily Training is where WordRanger changes from a collection of games to a learning engine that uses interchangeable games. Free-play `/play/ranger-trial`, `/play/word-bubble`, `/play/matching`, and `/play/snake` remain. Both paths write the same `LearningEvidence` / `StudentLexemeModel`. Daily Training rows in `game_sessions` use `game_type = DAILY_TRAINING` as **orchestration identity only**. `Evidence.gameId` is still `RANGER_TRIAL`, `WORD_BUBBLE`, `MATCHING`, or `SNAKE`.
+
+Student-facing `/train` and the four free-play routes share `SupabaseLearningRepository`, `SupabaseLearningStateQueryRepository`, `SupabaseLearningTaskRepository`, bundled vocabulary, and `game_sessions`. Session writes are `INSERT` on create and revision CAS on update. There is no production in-memory Map for learning state, assigned tasks, or session orchestration.
 
 Vocabulary on the student path is the bundled JSON dataset (`InMemoryVocabularyRepository` over git-versioned files). That is immutable reference data, not learner state.
 
-Debug Labs and unit tests may still use in-memory repositories. Explicit `RANGER_TRIAL_RUNTIME=memory` (or the alias `GAME_RUNTIME=memory`) is a shared local/e2e fixture for all four student games. Production must leave both unset. Missing Supabase config in production fails closed. `npm run dev` follows `.env.local`; the code default is durable Supabase, and a stalled persistence call fails as `NETWORK_ERROR` instead of hanging.
+Debug Labs and unit tests may still use in-memory repositories. Explicit `RANGER_TRIAL_RUNTIME=memory` (or the alias `GAME_RUNTIME=memory`) is a shared local/e2e fixture for Daily Training and all four student games. Production must leave both unset. Missing Supabase config in production fails closed. `npm run dev` follows `.env.local`; the code default is durable Supabase, and a stalled persistence call fails as `NETWORK_ERROR` instead of hanging.
 
 There is no auth; student pages use `V1_PLACEHOLDER_USER_ID` (a UUID placeholder). Auth/RLS is future work. Server actions must not accept `userId` from the browser.
 
-There is no global game selector in Phase 08. Home exposes 单词闯关, 单词泡泡, 连连看, and 贪食蛇 as explicit launch options.
+The home primary CTA is 开始今天的训练 → `/train`. Free-play cards stay secondary. See `docs/DAILY_TRAINING_EXPERIENCE.md`.
 

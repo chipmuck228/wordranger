@@ -23,6 +23,7 @@ describe("G5 renderer architecture boundary", () => {
       join(process.cwd(), "src/components/game/matching"),
       join(process.cwd(), "src/components/game/snake"),
       join(process.cwd(), "src/components/game/shared"),
+      join(process.cwd(), "src/components/training"),
     ];
     const forbidden = [
       "LearningRepository",
@@ -60,5 +61,39 @@ describe("G5 renderer architecture boundary", () => {
     expect(engine).not.toMatch(/next\//);
     expect(engine).not.toMatch(/StudentLexemeModel/);
     expect(engine).not.toMatch(/submitTaskAction/);
+  });
+
+  it("Daily Training client does not import Core, Scheduler, or AnswerKey", () => {
+    const files = [
+      join(process.cwd(), "src/app/train/daily-training-play-client.tsx"),
+      join(process.cwd(), "src/components/training/TrainingRenderer.tsx"),
+      join(process.cwd(), "src/components/training/TrainingComplete.tsx"),
+      join(process.cwd(), "src/components/training/home-daily-status.tsx"),
+    ];
+    const forbidden = [
+      "TaskEvaluator",
+      "LearningRepository",
+      "DeterministicScheduler",
+      "DefaultTaskGenerator",
+      "@supabase",
+      "TaskAnswerKey",
+    ];
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      for (const token of forbidden) {
+        expect(text, `${file} ${token}`).not.toMatch(new RegExp(token));
+      }
+    }
+  });
+
+  it("renderer selector inspects PublicLearningTask only", () => {
+    const text = readFileSync(
+      join(process.cwd(), "src/server/training/renderer-selector.ts"),
+      "utf8",
+    );
+    expect(text).not.toMatch(/AnswerKey/);
+    expect(text).not.toMatch(/correctOptionIds/);
+    expect(text).not.toMatch(/expectedAnswer/);
+    expect(text).not.toMatch(/Math\.random/);
   });
 });

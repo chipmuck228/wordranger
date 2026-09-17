@@ -56,6 +56,21 @@ const snakeSelector = readFileSync(
   path.join(process.cwd(), "src/server/runtime/create-snake-runtime.ts"),
   "utf8",
 );
+const trainingActions = readFileSync(
+  path.join(process.cwd(), "src/app/train/actions.ts"),
+  "utf8",
+);
+const trainingProduction = readFileSync(
+  path.join(
+    process.cwd(),
+    "src/server/runtime/create-supabase-daily-training-runtime.ts",
+  ),
+  "utf8",
+);
+const trainingSelector = readFileSync(
+  path.join(process.cwd(), "src/server/runtime/create-daily-training-runtime.ts"),
+  "utf8",
+);
 
 describe("Ranger Trial production wiring", () => {
   it("student-facing actions do not instantiate in-memory learning/task/session stores", () => {
@@ -143,6 +158,27 @@ describe("Snake production wiring", () => {
     expect(snakeProduction).not.toContain("InMemoryLearningRepository");
     expect(snakeSelector).toContain("isMemoryGameRuntime");
     expect(snakeSelector).toContain("createSupabaseSnakeRuntime");
+  });
+});
+
+describe("Daily Training production wiring", () => {
+  it("student-facing actions use the Daily Training runtime selector", () => {
+    expect(trainingActions).toContain("createDailyTrainingRuntime");
+    expect(trainingActions).not.toContain("InMemoryLearningRepository");
+    expect(trainingActions).not.toContain("InMemoryLearningTaskRepository");
+    expect(trainingActions).not.toContain("InMemoryDailyTrainingSessionStore");
+    expect(trainingActions).not.toContain("new SeededRandomSource");
+  });
+
+  it("Supabase factory reuses durable adapters and game_sessions orchestration", () => {
+    expect(trainingProduction).toContain("SupabaseLearningRepository");
+    expect(trainingProduction).toContain("SupabaseLearningTaskRepository");
+    expect(trainingProduction).toContain("SupabaseLearningStateQueryRepository");
+    expect(trainingProduction).toContain("SupabaseDailyTrainingSessionStore");
+    expect(trainingProduction).toContain("DAILY_TRAINING");
+    expect(trainingProduction).not.toContain("InMemoryLearningRepository");
+    expect(trainingSelector).toContain("isMemoryGameRuntime");
+    expect(trainingSelector).toContain("createSupabaseDailyTrainingRuntime");
   });
 });
 

@@ -11,6 +11,7 @@ export function WordBubble({
   disabled,
   selectedOptionId,
   result,
+  showProgress = true,
   onAction,
 }: {
   task: PublicLearningTask;
@@ -19,11 +20,12 @@ export function WordBubble({
   disabled?: boolean;
   selectedOptionId?: string | null;
   result?: "correct" | "incorrect";
+  showProgress?: boolean;
   onAction(intent: StudentActionIntent): void;
 }) {
   return (
     <div className="flex flex-col gap-6">
-      <BubbleProgress current={current} total={total} />
+      {showProgress ? <BubbleProgress current={current} total={total} /> : null}
       <BubblePrompt task={task} />
       <BubbleArena
         task={task}

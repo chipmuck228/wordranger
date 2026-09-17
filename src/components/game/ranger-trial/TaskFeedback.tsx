@@ -13,7 +13,7 @@ export function TaskFeedback({
   const tone =
     feedback.status === "CORRECT" || feedback.status === "ASSISTED"
       ? "答对了"
-      : "需要订正";
+      : "再看看";
   return (
     <div className="flex flex-col gap-6" role="status" aria-live="polite">
       <div className="space-y-2 text-center">

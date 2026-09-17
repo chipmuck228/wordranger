@@ -8,17 +8,19 @@ export function RangerTrial({
   current,
   total,
   disabled,
+  showProgress = true,
   onAction,
 }: {
   task: PublicLearningTask;
   current: number;
   total: number;
   disabled?: boolean;
+  showProgress?: boolean;
   onAction(intent: StudentActionIntent): void;
 }) {
   return (
     <div className="flex flex-col gap-8">
-      <TaskProgress current={current} total={total} />
+      {showProgress ? <TaskProgress current={current} total={total} /> : null}
       <RangerTrialTask task={task} disabled={disabled} onAction={onAction} />
     </div>
   );

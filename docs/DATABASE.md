@@ -87,7 +87,7 @@ Honest limitation: V1 does **not** fake atomicity. A later `process_evidence` Po
 | --- | --- |
 | `id` | Session id (uuid) |
 | `user_id` | Owner (uuid). V1 is the placeholder user, not real auth. |
-| `game_type` | `RANGER_TRIAL`, `WORD_BUBBLE`, `MATCHING`, or `SNAKE`; a store must not resume another game's session |
+| `game_type` | Free play: `RANGER_TRIAL`, `WORD_BUBBLE`, `MATCHING`, or `SNAKE`. Daily Training: `DAILY_TRAINING` as orchestration identity only (not `Evidence.gameId`). A store must not resume another type's session |
 | `plan_id` | Scheduler plan id |
 | `status` | `active` / `completed` / `failed` |
 | `state` | JSON orchestration (`stateVersion: "v1"`, planned needs, `currentNeedIndex`, `currentTaskId`, phase, presentation stats, last safe feedback, `lastCompletedTaskId`) |
@@ -104,7 +104,7 @@ Cleanup/TTL is future work. A failed session save after `learning_tasks` insert 
 
 ## Phase 04 persistence
 
-Phase 04 adds **no required persistence tables**. The scheduler still generates `LearningSessionPlan` on demand. Phase 05.1+ persist a copy of that plan's playable needs inside `game_sessions.state` so refresh does not re-run the Scheduler. Phase 06–08 add no new tables; Word Bubble, Matching, and Snake reuse `game_sessions` with their `game_type`. Renderer layout, Matching partial selection, and Snake body/ticks are not stored.
+Phase 04 adds **no required persistence tables**. The scheduler still generates `LearningSessionPlan` on demand. Phase 05.1+ persist a copy of that plan's playable needs inside `game_sessions.state` so refresh does not re-run the Scheduler. Phase 06–09 add no new tables. Word Bubble, Matching, Snake, and Daily Training reuse `game_sessions` with their `game_type`. Daily Training needs a product-session id, revision CAS, and `session_id` correlation on assigned tasks; `game_sessions` already provides those without copying learning truth. A separate `training_sessions` table is not required. Renderer layout, Matching partial selection, and Snake body/ticks are not stored.
 
 The scheduler reads:
 
