@@ -141,6 +141,11 @@ function validatePlanSnapshot(plan: LearningExperiencePlan) {
     );
   }
 
+  const unreachable = findUnreachableRequiredSteps(plan);
+  if (unreachable) {
+    return unreachable;
+  }
+
   const completion = plan.completionPolicy as unknown as Record<string, unknown>;
   for (const key of LEARNER_MUTATION_KEYS) {
     if (key in completion) {
@@ -152,5 +157,33 @@ function validatePlanSnapshot(plan: LearningExperiencePlan) {
     }
   }
 
+  return null;
+}
+
+/**
+ * A terminal / END step ends the experience. Every required step must already
+ * be completable by that index; otherwise the policy can never be satisfied.
+ */
+function findUnreachableRequiredSteps(plan: LearningExperiencePlan) {
+  const required = plan.completionPolicy.requiredStepIds;
+  for (const [index, step] of plan.steps.entries()) {
+    const endsExperience =
+      step.transition.onTaskCompleted === "END" ||
+      plan.completionPolicy.terminalStepIds.includes(step.id);
+    if (!endsExperience) {
+      continue;
+    }
+    const completable = new Set(
+      plan.steps.slice(0, index + 1).map((item) => item.id),
+    );
+    const missing = required.filter((stepId) => !completable.has(stepId));
+    if (missing.length > 0) {
+      return executionError(
+        ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,
+        `Terminal step ${step.id} would end the experience before required steps ${missing.join(", ")} can complete`,
+        "plan.completionPolicy",
+      );
+    }
+  }
   return null;
 }

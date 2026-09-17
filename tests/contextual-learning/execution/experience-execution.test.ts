@@ -8,12 +8,16 @@ import {
   issueCurrentStep,
   recordTaskCompletion,
 } from "@/contextual-learning/candidate-v0/execution";
+import type { ExperienceRun } from "@/contextual-learning/candidate-v0/execution";
 import { createSafeLexicalRecallPlan } from "@/contextual-learning/candidate-v0/fixtures/execution/safe-lexical-recall";
 import { classroomRulerFrame } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/contexts";
 import { BORROW_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/knowledge";
 import { createBorrowBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/plans";
 import { borrowingSharingSkeleton } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/skeleton";
-import { homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
+import {
+  homeBreakfastFrame,
+  picnicLunchFrame,
+} from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
 import { createMealBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
@@ -24,6 +28,7 @@ import { schoolChallengeSkeleton } from "@/contextual-learning/candidate-v0/fixt
 import {
   FIXTURE_PROVENANCE,
   completeAll,
+  nextOrEnd,
   profileMap,
 } from "@/contextual-learning/candidate-v0/fixtures/shared";
 import type { LearningExperiencePlan } from "@/contextual-learning/candidate-v0/domain/types";
@@ -52,6 +57,59 @@ function expectReadyRun(plan: LearningExperiencePlan) {
     true,
   );
   return created.run;
+}
+
+function unreachableTerminalBeforeRequiredPlan(): LearningExperiencePlan {
+  const recall = createSafeLexicalRecallPlan(homeBreakfastFrame);
+  const earlyEnd = {
+    ...recall.steps[0]!,
+    id: "early-end",
+    transition: nextOrEnd(true),
+  };
+  const laterRequired = {
+    ...recall.steps[0]!,
+    id: "later-required",
+    transition: nextOrEnd(false),
+  };
+  return {
+    ...recall,
+    id: "unreachable-terminal-before-required",
+    steps: [earlyEnd, laterRequired],
+    completionPolicy: {
+      requiredStepIds: ["later-required"],
+      terminalStepIds: ["early-end"],
+      onCompilationFailure: "ABORT_PLAN",
+    },
+  };
+}
+
+function handIssuedUnreachableRun(): ExperienceRun {
+  const plan = unreachableTerminalBeforeRequiredPlan();
+  return {
+    id: "hand-built-unreachable",
+    schemaVersion: "candidate-v0",
+    experienceId: plan.id,
+    planSnapshot: { plan },
+    status: "TASK_ISSUED",
+    currentStepIndex: 0,
+    stepRuns: [
+      {
+        stepId: "early-end",
+        status: "TASK_ISSUED",
+        taskId: "task-early-end",
+        issuedAt: now,
+      },
+      { stepId: "later-required", status: "PENDING" },
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function expectStepNotStillIssued(run: ExperienceRun, taskId: string) {
+  const step = run.stepRuns.find((item) => item.taskId === taskId);
+  expect(step).toBeDefined();
+  expect(step?.status).not.toBe("TASK_ISSUED");
 }
 
 describe("Candidate V0 experience execution — creation", () => {
@@ -112,6 +170,18 @@ describe("Candidate V0 experience execution — creation", () => {
     }
     expect(created.error.code).toBe(ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT);
   });
+
+  it("rejects a terminal / END step that cannot complete required later steps", () => {
+    const created = createExperienceRun({
+      plan: unreachableTerminalBeforeRequiredPlan(),
+      now,
+    });
+    expect(created.ok).toBe(false);
+    if (created.ok) {
+      return;
+    }
+    expect(created.error.code).toBe(ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT);
+  });
 });
 
 describe("Candidate V0 experience execution — safe lexical recall", () => {
@@ -155,6 +225,131 @@ describe("Candidate V0 experience execution — safe lexical recall", () => {
     expect(completed.run.status).toBe("COMPLETED");
     expect(completed.run.stepRuns[0]?.status).toBe("TASK_COMPLETED");
     expect(completed.run.currentStepIndex).toBe(0);
+    expectStepNotStillIssued(completed.run, issued.issuedTask!.id);
+  });
+});
+
+describe("Candidate V0 experience execution — completion persistence", () => {
+  it("does not leave TASK_ISSUED after a legal receipt, even if the terminal policy fails", () => {
+    const run = handIssuedUnreachableRun();
+    const receipt = { taskId: "task-early-end", completedAt: now };
+    const first = recordTaskCompletion({ run, receipt });
+    expect(first.ok).toBe(false);
+    if (first.ok) {
+      return;
+    }
+    expect(first.error.code).toBe(
+      ExecutionErrorCode.EXEC_TERMINAL_POLICY_NOT_SATISFIED,
+    );
+    expect(first.run.status).not.toBe("TASK_ISSUED");
+    expectStepNotStillIssued(first.run, receipt.taskId);
+
+    const retry = recordTaskCompletion({ run: first.run, receipt });
+    expect(retry.ok).toBe(false);
+    if (retry.ok) {
+      return;
+    }
+    expect(retry.error.code).toBe(ExecutionErrorCode.EXEC_DUPLICATE_COMPLETION);
+    expectStepNotStillIssued(retry.run, receipt.taskId);
+  });
+});
+
+describe("Candidate V0 experience execution — plan snapshot binding", () => {
+  function readySafeRecall() {
+    const plan = createSafeLexicalRecallPlan(homeBreakfastFrame);
+    return {
+      plan,
+      run: expectReadyRun(plan),
+      request: compilationRequest({
+        plan,
+        step: plan.steps[0]!,
+        frame: homeBreakfastFrame,
+        skeleton: mealSkeleton,
+        profiles: profileMap(MEAL_PROFILES),
+      }),
+    };
+  }
+
+  it("rejects the correct stepId with a swapped contextFrameId", () => {
+    const { run, request } = readySafeRecall();
+    const issued = issueCurrentStep({
+      run,
+      now,
+      compilationRequest: {
+        ...request,
+        resolvedContext: {
+          ...request.resolvedContext,
+          contextFrameId: picnicLunchFrame.id,
+        },
+      },
+    });
+    expect(issued.ok).toBe(false);
+    if (issued.ok) {
+      return;
+    }
+    expect(issued.error.code).toBe(ExecutionErrorCode.EXEC_STEP_REQUEST_MISMATCH);
+    expect(issued.run.status).toBe("READY");
+    expect(issued.run).toBe(run);
+  });
+
+  it("rejects the correct stepId with a swapped skeletonId", () => {
+    const { run, request } = readySafeRecall();
+    const issued = issueCurrentStep({
+      run,
+      now,
+      compilationRequest: {
+        ...request,
+        resolvedContext: {
+          ...request.resolvedContext,
+          skeletonId: schoolChallengeSkeleton.id,
+        },
+      },
+    });
+    expect(issued.ok).toBe(false);
+    if (issued.ok) {
+      return;
+    }
+    expect(issued.error.code).toBe(ExecutionErrorCode.EXEC_STEP_REQUEST_MISMATCH);
+    expect(issued.run.status).toBe("READY");
+  });
+
+  it("rejects the correct stepId with a swapped targetId", () => {
+    const { run, request } = readySafeRecall();
+    const issued = issueCurrentStep({
+      run,
+      now,
+      compilationRequest: {
+        ...request,
+        resolvedTargets: request.resolvedTargets.map((target) => ({
+          ...target,
+          targetId: "wrong-target",
+        })),
+      },
+    });
+    expect(issued.ok).toBe(false);
+    if (issued.ok) {
+      return;
+    }
+    expect(issued.error.code).toBe(ExecutionErrorCode.EXEC_STEP_REQUEST_MISMATCH);
+    expect(issued.run.status).toBe("READY");
+  });
+
+  it("rejects the correct stepId with a swapped learningNeedId", () => {
+    const { run, request } = readySafeRecall();
+    const issued = issueCurrentStep({
+      run,
+      now,
+      compilationRequest: {
+        ...request,
+        learningNeedId: "need-other",
+      },
+    });
+    expect(issued.ok).toBe(false);
+    if (issued.ok) {
+      return;
+    }
+    expect(issued.error.code).toBe(ExecutionErrorCode.EXEC_STEP_REQUEST_MISMATCH);
+    expect(issued.run.status).toBe("READY");
   });
 });
 

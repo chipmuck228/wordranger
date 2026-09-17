@@ -7,6 +7,7 @@ import { compileExperienceStep } from "../compilation/compile-experience-step";
 import type { TaskCompilationRequest } from "../compilation/types";
 import { cloneValue } from "./clone";
 import { ExecutionErrorCode, executionError } from "./errors";
+import { matchCompilationRequestToSnapshot } from "./match-compilation-request";
 import type { ExperienceRun, ExperienceRunResult } from "./types";
 
 export interface IssueCurrentStepInput {
@@ -65,19 +66,14 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
     };
   }
 
-  if (
-    compilationRequest.experienceId !== run.experienceId ||
-    compilationRequest.step.id !== snapshotStep.id
-  ) {
-    return {
-      ok: false,
-      run,
-      error: executionError(
-        ExecutionErrorCode.EXEC_STEP_REQUEST_MISMATCH,
-        "Compilation request does not match the current snapshotted step",
-        "compilationRequest.step",
-      ),
-    };
+  const mismatch = matchCompilationRequestToSnapshot({
+    plan: run.planSnapshot.plan,
+    snapshotStep,
+    experienceId: run.experienceId,
+    compilationRequest,
+  });
+  if (mismatch) {
+    return { ok: false, run, error: mismatch };
   }
 
   const now = input.now ?? "2026-09-17T12:00:00.000Z";

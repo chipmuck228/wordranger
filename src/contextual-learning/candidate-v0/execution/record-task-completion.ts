@@ -96,6 +96,11 @@ export function recordTaskCompletion(
         }
       : { ...stepRun },
   );
+  const acceptedRun = {
+    ...cloneValue(run),
+    updatedAt: now,
+    stepRuns: completedRuns,
+  };
   const nextIndex = run.currentStepIndex + 1;
   const hasNext = nextIndex < run.planSnapshot.plan.steps.length;
   const isTerminal = run.planSnapshot.plan.completionPolicy.terminalStepIds.includes(
@@ -111,10 +116,34 @@ export function recordTaskCompletion(
   const wantsEnd =
     snapshotStep.transition.onTaskCompleted === "END" || isTerminal;
 
+  if (wantsEnd && requiredSatisfied) {
+    return {
+      ok: true,
+      run: {
+        ...acceptedRun,
+        status: "COMPLETED",
+      },
+    };
+  }
+
+  if (hasNext && snapshotStep.transition.onTaskCompleted === "NEXT" && !wantsEnd) {
+    return {
+      ok: true,
+      run: {
+        ...acceptedRun,
+        status: "READY",
+        currentStepIndex: nextIndex,
+      },
+    };
+  }
+
   if (wantsEnd && !requiredSatisfied) {
     return {
       ok: false,
-      run,
+      run: {
+        ...acceptedRun,
+        status: "BLOCKED",
+      },
       error: executionError(
         ExecutionErrorCode.EXEC_TERMINAL_POLICY_NOT_SATISFIED,
         "Terminal completion is not allowed until required steps are completed",
@@ -123,34 +152,12 @@ export function recordTaskCompletion(
     };
   }
 
-  if (wantsEnd && requiredSatisfied) {
-    return {
-      ok: true,
-      run: {
-        ...cloneValue(run),
-        status: "COMPLETED",
-        updatedAt: now,
-        stepRuns: completedRuns,
-      },
-    };
-  }
-
-  if (hasNext && snapshotStep.transition.onTaskCompleted === "NEXT") {
-    return {
-      ok: true,
-      run: {
-        ...cloneValue(run),
-        status: "READY",
-        currentStepIndex: nextIndex,
-        updatedAt: now,
-        stepRuns: completedRuns,
-      },
-    };
-  }
-
   return {
     ok: false,
-    run,
+    run: {
+      ...acceptedRun,
+      status: "BLOCKED",
+    },
     error: executionError(
       ExecutionErrorCode.EXEC_INVALID_STATE_TRANSITION,
       "Completed step has no legal next or terminal transition",
