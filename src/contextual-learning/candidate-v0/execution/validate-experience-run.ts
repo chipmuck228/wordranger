@@ -4,9 +4,14 @@
 
 import { ExecutionErrorCode, executionError } from "./errors";
 import type { ExperienceRun } from "./types";
+import { validateResolvedSnapshotAgainstPlan } from "./validate-resolved-snapshot";
 
 export function validateExperienceRun(run: ExperienceRun) {
   const plan = run.planSnapshot.plan;
+  const resolvedError = validateResolvedSnapshotAgainstPlan(run.planSnapshot);
+  if (resolvedError) {
+    return resolvedError;
+  }
   if (run.schemaVersion !== "candidate-v0") {
     return executionError(
       ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,

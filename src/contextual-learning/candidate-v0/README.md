@@ -125,9 +125,9 @@ validated LearningExperiencePlan
 
 It manages plan order and issued-task identity only.
 
-`createExperienceRun` rejects a plan whose terminal / `END` step would fire before every required step can complete.
+`createExperienceRun` deep-copies the plan plus the real `ResolvedContextSnapshot` and `ResolvedTargetSnapshot[]`. It rejects a plan whose terminal / `END` step would fire before every required step can complete, or whose resolved ids do not match the plan.
 
-`issueCurrentStep` binds the compilation request to the snapshotted `learningNeedId`, `contextFrameId`, `skeletonId`, and current-step `targetIds`. A swapped Meal context or target is `EXEC_STEP_REQUEST_MISMATCH`.
+`issueCurrentStep` assembles `TaskCompilationRequest` from that snapshot. The caller cannot supply `resolvedContext`, `resolvedTargets`, `displayForm`, facts, or entity bindings at issue time.
 
 A valid completion receipt always persists `TASK_COMPLETED` on that step. The run never stays `TASK_ISSUED` after the frozen task has been recorded.
 

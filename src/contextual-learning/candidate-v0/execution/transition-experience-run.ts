@@ -24,7 +24,7 @@ export function applyExperienceCommand(
   if (command.kind === "ISSUE_CURRENT_STEP") {
     return issueCurrentStep({
       run,
-      compilationRequest: command.compilationRequest,
+      createId: command.createId,
       now: options.now,
     });
   }

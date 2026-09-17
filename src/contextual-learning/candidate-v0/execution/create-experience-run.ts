@@ -2,11 +2,16 @@
  * Candidate V0 / Experimental / Not a Standard.
  */
 
-import type { LearningExperiencePlan } from "../domain/types";
+import type {
+  LearningExperiencePlan,
+  ResolvedContextSnapshot,
+  ResolvedTargetSnapshot,
+} from "../domain/types";
 import { cloneValue } from "./clone";
 import { ExecutionErrorCode, executionError } from "./errors";
 import type { ExperienceRun, ExperienceRunResult, ExperienceStepRun } from "./types";
 import { validateExperienceRun } from "./validate-experience-run";
+import { validateResolvedSnapshotAgainstPlan } from "./validate-resolved-snapshot";
 
 const LEARNER_MUTATION_KEYS = [
   "updateLearnerState",
@@ -18,6 +23,8 @@ const LEARNER_MUTATION_KEYS = [
 
 export interface CreateExperienceRunInput {
   plan: LearningExperiencePlan;
+  resolvedContext: ResolvedContextSnapshot;
+  resolvedTargets: ResolvedTargetSnapshot[];
   now?: string;
   createId?: () => string;
 }
@@ -25,19 +32,34 @@ export interface CreateExperienceRunInput {
 export function createExperienceRun(
   input: CreateExperienceRunInput,
 ): ExperienceRunResult {
-  const snapshot = cloneValue(input.plan);
-  const invalid = validatePlanSnapshot(snapshot);
+  const plan = cloneValue(input.plan);
+  const resolvedContext = cloneValue(input.resolvedContext);
+  const resolvedTargets = cloneValue(input.resolvedTargets);
+  const invalid =
+    validatePlanSnapshot(plan) ??
+    validateResolvedSnapshotAgainstPlan({
+      plan,
+      resolvedContext,
+      resolvedTargets,
+    });
   if (invalid) {
     return {
       ok: false,
-      run: placeholderRun(snapshot, input),
+      run: placeholderRun(
+        {
+          plan,
+          resolvedContext,
+          resolvedTargets,
+        },
+        input,
+      ),
       error: invalid,
     };
   }
 
   const now = input.now ?? "2026-09-17T12:00:00.000Z";
-  const createId = input.createId ?? (() => `experience-run-${snapshot.id}`);
-  const stepRuns: ExperienceStepRun[] = snapshot.steps.map((step) => ({
+  const createId = input.createId ?? (() => `experience-run-${plan.id}`);
+  const stepRuns: ExperienceStepRun[] = plan.steps.map((step) => ({
     stepId: step.id,
     status: "PENDING",
   }));
@@ -45,8 +67,8 @@ export function createExperienceRun(
   const run: ExperienceRun = {
     id: createId(),
     schemaVersion: "candidate-v0",
-    experienceId: snapshot.id,
-    planSnapshot: { plan: snapshot },
+    experienceId: plan.id,
+    planSnapshot: { plan, resolvedContext, resolvedTargets },
     status: "READY",
     currentStepIndex: 0,
     stepRuns,
@@ -62,15 +84,15 @@ export function createExperienceRun(
 }
 
 function placeholderRun(
-  plan: LearningExperiencePlan,
+  snapshot: ExperienceRun["planSnapshot"],
   input: CreateExperienceRunInput,
 ): ExperienceRun {
   const now = input.now ?? "2026-09-17T12:00:00.000Z";
   return {
     id: "invalid-experience-run",
     schemaVersion: "candidate-v0",
-    experienceId: plan.id,
-    planSnapshot: { plan },
+    experienceId: snapshot.plan.id,
+    planSnapshot: snapshot,
     status: "ABORTED",
     currentStepIndex: 0,
     stepRuns: [],

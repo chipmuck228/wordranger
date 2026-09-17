@@ -4,8 +4,14 @@
  */
 
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
-import type { CompilationError, TaskCompilationRequest } from "../compilation/types";
-import type { CompilationTrace, LearningExperiencePlan } from "../domain/types";
+import type { TaskAnswerKey } from "@/domain/tasks/task-answer-key";
+import type { CompilationError } from "../compilation/types";
+import type {
+  CompilationTrace,
+  LearningExperiencePlan,
+  ResolvedContextSnapshot,
+  ResolvedTargetSnapshot,
+} from "../domain/types";
 import type { ExperienceExecutionError } from "./errors";
 
 export type ExperienceRunStatus =
@@ -24,6 +30,8 @@ export type ExperienceStepRunStatus =
 
 export interface ExperiencePlanSnapshot {
   plan: LearningExperiencePlan;
+  resolvedContext: ResolvedContextSnapshot;
+  resolvedTargets: ResolvedTargetSnapshot[];
 }
 
 export interface ExperienceStepRun {
@@ -60,7 +68,7 @@ export interface FrozenTaskCompletionReceipt {
 export type ExperienceRunCommand =
   | {
       kind: "ISSUE_CURRENT_STEP";
-      compilationRequest: TaskCompilationRequest;
+      createId?: () => string;
     }
   | {
       kind: "RECORD_TASK_COMPLETION";
@@ -76,6 +84,7 @@ export type ExperienceRunResult =
       ok: true;
       run: ExperienceRun;
       issuedTask?: PublicLearningTask;
+      answerKey?: TaskAnswerKey;
     }
   | {
       ok: false;

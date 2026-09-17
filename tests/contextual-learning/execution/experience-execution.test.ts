@@ -17,6 +17,7 @@ import { borrowingSharingSkeleton } from "@/contextual-learning/candidate-v0/fix
 import {
   homeBreakfastFrame,
   picnicLunchFrame,
+  restaurantMealFrame,
 } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
 import { createMealBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
@@ -34,16 +35,49 @@ import {
 import type { LearningExperiencePlan } from "@/contextual-learning/candidate-v0/domain/types";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import { LearningTaskType } from "@/domain/tasks/task-type";
-import { compilationRequest } from "../helpers";
+import { resolvedSnapshotFor } from "../helpers";
 
 const now = "2026-09-17T12:00:00.000Z";
+const ALL_PROFILES = profileMap([
+  ...MEAL_PROFILES,
+  ...SCHOOL_PROFILES,
+  ...BORROW_PROFILES,
+]);
+const FRAME_BY_ID = Object.fromEntries(
+  [
+    homeBreakfastFrame,
+    picnicLunchFrame,
+    restaurantMealFrame,
+    scienceTowerFrame,
+    classroomRulerFrame,
+  ].map((frame) => [frame.id, frame]),
+);
+const SKELETON_BY_ID = Object.fromEntries(
+  [mealSkeleton, schoolChallengeSkeleton, borrowingSharingSkeleton].map(
+    (skeleton) => [skeleton.id, skeleton],
+  ),
+);
 
-function expectReadyRun(plan: LearningExperiencePlan) {
-  const created = createExperienceRun({
+function resolvedSnapshotForPlan(plan: LearningExperiencePlan) {
+  const frame = FRAME_BY_ID[plan.contextFrameId];
+  const skeleton = SKELETON_BY_ID[plan.skeletonId];
+  if (!frame || !skeleton) {
+    throw new Error(`No fixture snapshot for ${plan.id}`);
+  }
+  return resolvedSnapshotFor(plan, frame, skeleton, ALL_PROFILES);
+}
+
+function createRun(plan: LearningExperiencePlan) {
+  return createExperienceRun({
     plan,
+    ...resolvedSnapshotForPlan(plan),
     now,
     createId: () => `run-${plan.id}`,
   });
+}
+
+function expectReadyRun(plan: LearningExperiencePlan) {
+  const created = createRun(plan);
   expect(created.ok).toBe(true);
   if (!created.ok) {
     throw new Error(created.error.message);
@@ -89,7 +123,7 @@ function handIssuedUnreachableRun(): ExperienceRun {
     id: "hand-built-unreachable",
     schemaVersion: "candidate-v0",
     experienceId: plan.id,
-    planSnapshot: { plan },
+    planSnapshot: { plan, ...resolvedSnapshotForPlan(plan) },
     status: "TASK_ISSUED",
     currentStepIndex: 0,
     stepRuns: [
@@ -124,7 +158,7 @@ describe("Candidate V0 experience execution — creation", () => {
     const plan = createSafeLexicalRecallPlan(homeBreakfastFrame);
     plan.steps = [];
     plan.completionPolicy = completeAll([]);
-    const created = createExperienceRun({ plan, now });
+    const created = createRun(plan);
     expect(created.ok).toBe(false);
     if (created.ok) {
       return;
@@ -135,7 +169,7 @@ describe("Candidate V0 experience execution — creation", () => {
   it("rejects duplicate step ids", () => {
     const plan = createSafeLexicalRecallPlan(homeBreakfastFrame);
     plan.steps = [plan.steps[0]!, { ...plan.steps[0]!, id: plan.steps[0]!.id }];
-    const created = createExperienceRun({ plan, now });
+    const created = createRun(plan);
     expect(created.ok).toBe(false);
     if (created.ok) {
       return;
@@ -149,7 +183,7 @@ describe("Candidate V0 experience execution — creation", () => {
       ...plan.completionPolicy,
       requiredStepIds: ["missing-required"],
     };
-    const created = createExperienceRun({ plan, now });
+    const created = createRun(plan);
     expect(created.ok).toBe(false);
     if (created.ok) {
       return;
@@ -163,7 +197,7 @@ describe("Candidate V0 experience execution — creation", () => {
       ...plan.completionPolicy,
       terminalStepIds: ["missing-terminal"],
     };
-    const created = createExperienceRun({ plan, now });
+    const created = createRun(plan);
     expect(created.ok).toBe(false);
     if (created.ok) {
       return;
@@ -172,10 +206,7 @@ describe("Candidate V0 experience execution — creation", () => {
   });
 
   it("rejects a terminal / END step that cannot complete required later steps", () => {
-    const created = createExperienceRun({
-      plan: unreachableTerminalBeforeRequiredPlan(),
-      now,
-    });
+    const created = createRun(unreachableTerminalBeforeRequiredPlan());
     expect(created.ok).toBe(false);
     if (created.ok) {
       return;
@@ -191,13 +222,6 @@ describe("Candidate V0 experience execution — safe lexical recall", () => {
     const issued = issueCurrentStep({
       run,
       now,
-      compilationRequest: compilationRequest({
-        plan,
-        step: plan.steps[0]!,
-        frame: homeBreakfastFrame,
-        skeleton: mealSkeleton,
-        profiles: profileMap(MEAL_PROFILES),
-      }),
     });
     expect(issued.ok).toBe(true);
     if (!issued.ok) {
@@ -210,6 +234,8 @@ describe("Candidate V0 experience execution — safe lexical recall", () => {
       "lexical-form-type-recall-to-active-recall",
     );
     expect(issued.run.stepRuns[0]?.taskId).toBe(issued.issuedTask?.id);
+    expect(issued.answerKey?.exactAcceptedTexts).toEqual(["spoon"]);
+    expect(issued.issuedTask?.lexemeId).toBe("lex-spoon");
 
     const completed = recordTaskCompletion({
       run: issued.run,
@@ -254,102 +280,131 @@ describe("Candidate V0 experience execution — completion persistence", () => {
   });
 });
 
-describe("Candidate V0 experience execution — plan snapshot binding", () => {
-  function readySafeRecall() {
+describe("Candidate V0 experience execution — resolved snapshot binding", () => {
+  it("freezes resolvedTargets.displayForm after create", () => {
     const plan = createSafeLexicalRecallPlan(homeBreakfastFrame);
-    return {
+    const resolved = resolvedSnapshotForPlan(plan);
+    const created = createExperienceRun({
       plan,
-      run: expectReadyRun(plan),
-      request: compilationRequest({
-        plan,
-        step: plan.steps[0]!,
-        frame: homeBreakfastFrame,
-        skeleton: mealSkeleton,
-        profiles: profileMap(MEAL_PROFILES),
-      }),
+      ...resolved,
+      now,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) {
+      return;
+    }
+    resolved.resolvedTargets[0]!.displayForm = "fork";
+    expect(created.run.planSnapshot.resolvedTargets[0]?.displayForm).toBe("spoon");
+  });
+
+  it("issues from the snapshot even if the caller tries to replace displayForm", () => {
+    const plan = createSafeLexicalRecallPlan(homeBreakfastFrame);
+    const run = expectReadyRun(plan);
+    const leaked = {
+      run,
+      now,
+      resolvedTargets: run.planSnapshot.resolvedTargets.map((target) => ({
+        ...target,
+        displayForm: "fork",
+      })),
     };
-  }
-
-  it("rejects the correct stepId with a swapped contextFrameId", () => {
-    const { run, request } = readySafeRecall();
-    const issued = issueCurrentStep({
-      run,
-      now,
-      compilationRequest: {
-        ...request,
-        resolvedContext: {
-          ...request.resolvedContext,
-          contextFrameId: picnicLunchFrame.id,
-        },
-      },
-    });
-    expect(issued.ok).toBe(false);
-    if (issued.ok) {
+    const issued = issueCurrentStep(leaked);
+    expect(issued.ok).toBe(true);
+    if (!issued.ok) {
       return;
     }
-    expect(issued.error.code).toBe(ExecutionErrorCode.EXEC_STEP_REQUEST_MISMATCH);
-    expect(issued.run.status).toBe("READY");
-    expect(issued.run).toBe(run);
+    expect(issued.answerKey?.exactAcceptedTexts).toEqual(["spoon"]);
+    expect(issued.issuedTask?.lexemeId).toBe("lex-spoon");
+    expect(issued.run.planSnapshot.resolvedTargets[0]?.displayForm).toBe("spoon");
   });
 
-  it("rejects the correct stepId with a swapped skeletonId", () => {
-    const { run, request } = readySafeRecall();
-    const issued = issueCurrentStep({
+  it("cannot use the same contextFrameId with different facts at issue time", () => {
+    const plan = createSafeLexicalRecallPlan(homeBreakfastFrame);
+    const run = expectReadyRun(plan);
+    const originalFacts = structuredClone(run.planSnapshot.resolvedContext.facts);
+    const picnic = resolvedSnapshotFor(
+      { ...plan, contextFrameId: picnicLunchFrame.id },
+      picnicLunchFrame,
+      mealSkeleton,
+      ALL_PROFILES,
+    );
+    const leaked = {
       run,
       now,
-      compilationRequest: {
-        ...request,
-        resolvedContext: {
-          ...request.resolvedContext,
-          skeletonId: schoolChallengeSkeleton.id,
-        },
+      resolvedContext: {
+        ...run.planSnapshot.resolvedContext,
+        facts: picnic.resolvedContext.facts,
       },
-    });
-    expect(issued.ok).toBe(false);
-    if (issued.ok) {
+    };
+    const issued = issueCurrentStep(leaked);
+    expect(issued.ok).toBe(true);
+    if (!issued.ok) {
       return;
     }
-    expect(issued.error.code).toBe(ExecutionErrorCode.EXEC_STEP_REQUEST_MISMATCH);
-    expect(issued.run.status).toBe("READY");
+    expect(issued.run.planSnapshot.resolvedContext.facts).toEqual(originalFacts);
+    expect(issued.run.planSnapshot.resolvedContext.facts).not.toEqual(
+      picnic.resolvedContext.facts,
+    );
   });
 
-  it("rejects the correct stepId with a swapped targetId", () => {
-    const { run, request } = readySafeRecall();
-    const issued = issueCurrentStep({
+  it("cannot use the same skeletonId with different entityBindings at issue time", () => {
+    const plan = createSafeLexicalRecallPlan(homeBreakfastFrame);
+    const run = expectReadyRun(plan);
+    const originalBindings = structuredClone(
+      run.planSnapshot.resolvedContext.entityBindings,
+    );
+    const picnic = resolvedSnapshotFor(
+      { ...plan, contextFrameId: picnicLunchFrame.id },
+      picnicLunchFrame,
+      mealSkeleton,
+      ALL_PROFILES,
+    );
+    const leaked = {
       run,
       now,
-      compilationRequest: {
-        ...request,
-        resolvedTargets: request.resolvedTargets.map((target) => ({
-          ...target,
-          targetId: "wrong-target",
-        })),
+      resolvedContext: {
+        ...run.planSnapshot.resolvedContext,
+        entityBindings: picnic.resolvedContext.entityBindings,
       },
-    });
-    expect(issued.ok).toBe(false);
-    if (issued.ok) {
+    };
+    const issued = issueCurrentStep(leaked);
+    expect(issued.ok).toBe(true);
+    if (!issued.ok) {
       return;
     }
-    expect(issued.error.code).toBe(ExecutionErrorCode.EXEC_STEP_REQUEST_MISMATCH);
-    expect(issued.run.status).toBe("READY");
+    expect(issued.run.planSnapshot.resolvedContext.entityBindings).toEqual(
+      originalBindings,
+    );
+    expect(issued.run.planSnapshot.resolvedContext.entityBindings).not.toEqual(
+      picnic.resolvedContext.entityBindings,
+    );
   });
 
-  it("rejects the correct stepId with a swapped learningNeedId", () => {
-    const { run, request } = readySafeRecall();
-    const issued = issueCurrentStep({
-      run,
+  it("compiles the answerKey from the snapshotted displayForm", () => {
+    const plan = createSafeLexicalRecallPlan(homeBreakfastFrame);
+    const resolved = resolvedSnapshotForPlan(plan);
+    resolved.resolvedTargets[0] = {
+      ...resolved.resolvedTargets[0]!,
+      displayForm: "spoon",
+    };
+    const created = createExperienceRun({
+      plan,
+      ...resolved,
       now,
-      compilationRequest: {
-        ...request,
-        learningNeedId: "need-other",
-      },
     });
-    expect(issued.ok).toBe(false);
-    if (issued.ok) {
+    expect(created.ok).toBe(true);
+    if (!created.ok) {
       return;
     }
-    expect(issued.error.code).toBe(ExecutionErrorCode.EXEC_STEP_REQUEST_MISMATCH);
-    expect(issued.run.status).toBe("READY");
+    const issued = issueCurrentStep({ run: created.run, now });
+    expect(issued.ok).toBe(true);
+    if (!issued.ok) {
+      return;
+    }
+    expect(issued.answerKey?.exactAcceptedTexts).toEqual(
+      [created.run.planSnapshot.resolvedTargets[0]?.displayForm],
+    );
+    expect(issued.answerKey?.exactAcceptedTexts).toEqual(["spoon"]);
   });
 });
 
@@ -360,13 +415,6 @@ describe("Candidate V0 experience execution — unsupported first steps stay BLO
     const issued = issueCurrentStep({
       run,
       now,
-      compilationRequest: compilationRequest({
-        plan,
-        step: plan.steps[0]!,
-        frame: homeBreakfastFrame,
-        skeleton: mealSkeleton,
-        profiles: profileMap(MEAL_PROFILES),
-      }),
     });
     expect(issued.ok).toBe(false);
     if (issued.ok) {
@@ -389,13 +437,6 @@ describe("Candidate V0 experience execution — unsupported first steps stay BLO
     const issued = issueCurrentStep({
       run,
       now,
-      compilationRequest: compilationRequest({
-        plan,
-        step: plan.steps[0]!,
-        frame: scienceTowerFrame,
-        skeleton: schoolChallengeSkeleton,
-        profiles: profileMap(SCHOOL_PROFILES),
-      }),
     });
     expect(issued.ok).toBe(false);
     if (issued.ok) {
@@ -413,13 +454,6 @@ describe("Candidate V0 experience execution — unsupported first steps stay BLO
     const issued = issueCurrentStep({
       run,
       now,
-      compilationRequest: compilationRequest({
-        plan,
-        step: plan.steps[0]!,
-        frame: classroomRulerFrame,
-        skeleton: borrowingSharingSkeleton,
-        profiles: profileMap(BORROW_PROFILES),
-      }),
     });
     expect(issued.ok).toBe(false);
     if (issued.ok) {
@@ -456,13 +490,6 @@ describe("Candidate V0 experience execution — no skip", () => {
     const issued = issueCurrentStep({
       run,
       now,
-      compilationRequest: compilationRequest({
-        plan,
-        step: plan.steps[0]!,
-        frame: scienceTowerFrame,
-        skeleton: schoolChallengeSkeleton,
-        profiles: profileMap(SCHOOL_PROFILES),
-      }),
     });
     expect(issued.ok).toBe(false);
     if (issued.ok) {
@@ -501,13 +528,6 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
     const issued = issueCurrentStep({
       run,
       now,
-      compilationRequest: compilationRequest({
-        plan,
-        step: plan.steps[0]!,
-        frame: homeBreakfastFrame,
-        skeleton: mealSkeleton,
-        profiles: profileMap(MEAL_PROFILES),
-      }),
     });
     expect(issued.ok).toBe(true);
     if (!issued.ok) {
@@ -531,13 +551,6 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
     const issued = issueCurrentStep({
       run,
       now,
-      compilationRequest: compilationRequest({
-        plan,
-        step: plan.steps[0]!,
-        frame: homeBreakfastFrame,
-        skeleton: mealSkeleton,
-        profiles: profileMap(MEAL_PROFILES),
-      }),
     });
     expect(issued.ok).toBe(true);
     if (!issued.ok) {
@@ -566,13 +579,6 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
     const blocked = issueCurrentStep({
       run: expectReadyRun(meal),
       now,
-      compilationRequest: compilationRequest({
-        plan: meal,
-        step: meal.steps[0]!,
-        frame: homeBreakfastFrame,
-        skeleton: mealSkeleton,
-        profiles: profileMap(MEAL_PROFILES),
-      }),
     });
     expect(blocked.ok).toBe(false);
     if (blocked.ok) {
@@ -581,13 +587,6 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
     const reissue = issueCurrentStep({
       run: blocked.run,
       now,
-      compilationRequest: compilationRequest({
-        plan: meal,
-        step: meal.steps[0]!,
-        frame: homeBreakfastFrame,
-        skeleton: mealSkeleton,
-        profiles: profileMap(MEAL_PROFILES),
-      }),
     });
     expect(reissue.ok).toBe(false);
     if (reissue.ok) {
@@ -599,13 +598,6 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
     const issued = issueCurrentStep({
       run: expectReadyRun(recall),
       now,
-      compilationRequest: compilationRequest({
-        plan: recall,
-        step: recall.steps[0]!,
-        frame: homeBreakfastFrame,
-        skeleton: mealSkeleton,
-        profiles: profileMap(MEAL_PROFILES),
-      }),
     });
     expect(issued.ok).toBe(true);
     if (!issued.ok) {
@@ -622,13 +614,6 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
     const afterComplete = issueCurrentStep({
       run: completed.run,
       now,
-      compilationRequest: compilationRequest({
-        plan: recall,
-        step: recall.steps[0]!,
-        frame: homeBreakfastFrame,
-        skeleton: mealSkeleton,
-        profiles: profileMap(MEAL_PROFILES),
-      }),
     });
     expect(afterComplete.ok).toBe(false);
     if (afterComplete.ok) {
@@ -671,13 +656,6 @@ describe("Candidate V0 experience execution — immutability", () => {
 
     const issued = applyExperienceCommand(run, {
       kind: "ISSUE_CURRENT_STEP",
-      compilationRequest: compilationRequest({
-        plan,
-        step: plan.steps[0]!,
-        frame: homeBreakfastFrame,
-        skeleton: mealSkeleton,
-        profiles: profileMap(MEAL_PROFILES),
-      }),
     }, { now });
     expect(issued.ok).toBe(true);
     if (!issued.ok) {

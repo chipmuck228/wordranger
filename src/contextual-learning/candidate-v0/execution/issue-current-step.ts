@@ -1,23 +1,28 @@
 /**
  * Candidate V0 / Experimental / Not a Standard.
  * Compiles the snapshotted current step. Does not skip on failure.
+ * Semantic context and targets come only from the run snapshot.
  */
 
 import { compileExperienceStep } from "../compilation/compile-experience-step";
 import type { TaskCompilationRequest } from "../compilation/types";
+import type { ExperienceStepSpec } from "../domain/types";
 import { cloneValue } from "./clone";
 import { ExecutionErrorCode, executionError } from "./errors";
-import { matchCompilationRequestToSnapshot } from "./match-compilation-request";
-import type { ExperienceRun, ExperienceRunResult } from "./types";
+import type {
+  ExperiencePlanSnapshot,
+  ExperienceRun,
+  ExperienceRunResult,
+} from "./types";
 
 export interface IssueCurrentStepInput {
   run: ExperienceRun;
-  compilationRequest: TaskCompilationRequest;
   now?: string;
+  createId?: () => string;
 }
 
 export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunResult {
-  const { run, compilationRequest } = input;
+  const { run } = input;
   if (run.status === "BLOCKED") {
     return {
       ok: false,
@@ -66,23 +71,26 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
     };
   }
 
-  const mismatch = matchCompilationRequestToSnapshot({
-    plan: run.planSnapshot.plan,
+  const compilationRequest = compilationRequestFromSnapshot({
+    run,
     snapshotStep,
-    experienceId: run.experienceId,
-    compilationRequest,
+    now: input.now,
+    createId: input.createId,
   });
-  if (mismatch) {
-    return { ok: false, run, error: mismatch };
+  if (!compilationRequest) {
+    return {
+      ok: false,
+      run,
+      error: executionError(
+        ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,
+        "Current step targets are missing from the resolved snapshot",
+        "planSnapshot.resolvedTargets",
+      ),
+    };
   }
 
   const now = input.now ?? "2026-09-17T12:00:00.000Z";
-  const compiled = compileExperienceStep({
-    ...compilationRequest,
-    step: snapshotStep,
-    supportPolicy: snapshotStep.supportPolicy,
-    experienceId: run.experienceId,
-  });
+  const compiled = compileExperienceStep(compilationRequest);
 
   if (!compiled.ok) {
     return {
@@ -112,6 +120,7 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
   return {
     ok: true,
     issuedTask: compiled.value.publicLearningTask,
+    answerKey: compiled.value.answerKey,
     run: {
       ...cloneValue(run),
       status: "TASK_ISSUED",
@@ -129,4 +138,41 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
       ),
     },
   };
+}
+
+function compilationRequestFromSnapshot(input: {
+  run: ExperienceRun;
+  snapshotStep: ExperienceStepSpec;
+  now?: string;
+  createId?: () => string;
+}): TaskCompilationRequest | null {
+  const resolvedTargets = targetsForStep(input.run.planSnapshot, input.snapshotStep);
+  if (!resolvedTargets) {
+    return null;
+  }
+  return {
+    experienceId: input.run.experienceId,
+    learningNeedId: input.run.planSnapshot.plan.sourceLearningNeedRef,
+    step: cloneValue(input.snapshotStep),
+    resolvedContext: cloneValue(input.run.planSnapshot.resolvedContext),
+    resolvedTargets,
+    supportPolicy: cloneValue(input.snapshotStep.supportPolicy),
+    now: input.now,
+    createId: input.createId,
+  };
+}
+
+function targetsForStep(
+  snapshot: ExperiencePlanSnapshot,
+  step: ExperienceStepSpec,
+) {
+  const selected = [];
+  for (const targetId of step.targetIds) {
+    const target = snapshot.resolvedTargets.find((item) => item.targetId === targetId);
+    if (!target) {
+      return null;
+    }
+    selected.push(cloneValue(target));
+  }
+  return selected;
 }
