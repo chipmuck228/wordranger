@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:progress": "RUN_SUPABASE_PROGRESS=1 vitest run tests/persistence/daily-training-supabase-progress.test.ts",
     "import:vocabulary": "tsx scripts/import-vocabulary.ts"
   },
   "dependencies": {

@@ -17,6 +17,7 @@ import type { DailyTrainingRuntime } from "./create-in-memory-daily-training-run
 export function createSupabaseDailyTrainingRuntime(input?: {
   client?: SupabaseClient;
   userId?: string;
+  requestedNeedCount?: number;
 }): DailyTrainingRuntime {
   const client = input?.client ?? createSupabaseServerClient();
   if (!client) {
@@ -47,7 +48,7 @@ export function createSupabaseDailyTrainingRuntime(input?: {
       createId: () => crypto.randomUUID(),
       createSessionId: () => crypto.randomUUID(),
       createEvidenceId: () => crypto.randomUUID(),
-      requestedNeedCount: DAILY_TRAINING_TASK_COUNT,
+      requestedNeedCount: input?.requestedNeedCount ?? DAILY_TRAINING_TASK_COUNT,
     });
   }
 

@@ -118,6 +118,35 @@ test("Home → Daily Training start → answer → feedback → continue", async
   await expect(page.getByText("2 / 8").or(page.getByText("这一轮完成"))).toBeVisible();
 });
 
+test("Daily Training reload resumes the same round from server sessionId", async ({
+  page,
+}) => {
+  // Playwright uses GAME_RUNTIME=memory. This checks client resume needs only
+  // sessionId, not a word index. Learner-model persistence is the Supabase test.
+  await startDailyTraining(page);
+  await expect(page.getByText("1 / 8")).toBeVisible();
+  await answerCurrentItem(page);
+  await expect(page.getByRole("button", { name: "继续" })).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.reload();
+  await expect(
+    page
+      .getByRole("button", { name: "继续" })
+      .or(page.locator("[data-renderer]")),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("1 / 8")).toBeVisible();
+  if (await page.getByRole("button", { name: "继续" }).isVisible()) {
+    await page.getByRole("button", { name: "继续" }).click();
+  }
+  await expect(
+    page
+      .getByRole("heading", { name: "这一轮完成" })
+      .or(page.locator("[data-renderer]")),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("2 / 8").or(page.getByText("这一轮完成"))).toBeVisible();
+});
+
 test("Daily Training shows more than one renderer without leaving /train", async ({
   page,
 }) => {

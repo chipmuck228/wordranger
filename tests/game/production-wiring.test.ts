@@ -179,6 +179,7 @@ describe("Daily Training production wiring", () => {
     expect(trainingProduction).not.toContain("InMemoryLearningRepository");
     expect(trainingSelector).toContain("isMemoryGameRuntime");
     expect(trainingSelector).toContain("createSupabaseDailyTrainingRuntime");
+    expect(trainingProduction).toContain("requestedNeedCount");
   });
 });
 

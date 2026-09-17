@@ -67,6 +67,7 @@ Changing an outcome after the fact would destroy rebuildability. Application rep
 
 - **In-memory**: append + snapshot in one try/catch; rollback both on failure.
 - **Supabase JS**: write evidence first, then snapshot. The JS client does not give a multi-table transaction without an RPC. If the snapshot write fails, evidence remains. That is recoverable because evidence is the source of truth.
+- **Planning does not auto-rebuild.** `planLearningSession` reads `student_lexeme_models` (and recent evidence for recency only). A snapshot-miss after a successful evidence insert would look like UNSEEN to NEW_WORD until a manual replay. Daily Training submit surfaces `SNAPSHOT_WRITE_FAILED` rather than silently continuing. This is residual risk, not a redesigned Core transaction.
 
 Honest limitation: V1 does **not** fake atomicity. A later `process_evidence` Postgres function should insert evidence and upsert snapshot rows in one transaction.
 

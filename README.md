@@ -8,13 +8,14 @@ Game-based vocabulary learning engine for junior-high English. Student games: Ra
 npm install
 npm run dev
 npm test
+npm run test:progress
 npm run lint
 npm run import:vocabulary -- --dry-run
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-`npm run dev` uses whatever is in `.env.local`. The **code default is durable Supabase**. In-memory fixtures are opt-in via `RANGER_TRIAL_RUNTIME=memory` (legacy name; also `GAME_RUNTIME=memory`). Playwright sets the memory fixture itself. Production must leave both unset.
+`npm run dev` uses whatever is in `.env.local`. The **code default is durable Supabase**. In-memory fixtures are opt-in via `RANGER_TRIAL_RUNTIME=memory` (legacy name; also `GAME_RUNTIME=memory`). Playwright sets the memory fixture itself. Production must leave both unset. `npm run test:progress` runs the live Daily Training learner-persistence check against Supabase (not the memory fixture).
 
 ## Docs
 

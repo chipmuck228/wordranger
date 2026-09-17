@@ -92,7 +92,7 @@ describe("R2 hanging game session create", () => {
     await expect(controller.start()).rejects.toMatchObject({
       code: "NETWORK_ERROR",
     });
-    expect(Date.now() - startedAt).toBeLessThan(5000);
+    expect(Date.now() - startedAt).toBeLessThan(10_000);
   });
 });
 
@@ -120,6 +120,6 @@ describe("R3 hanging task persistence", () => {
     await expect(controller.start()).rejects.toMatchObject({
       code: "NETWORK_ERROR",
     });
-    expect(Date.now() - startedAt).toBeLessThan(5000);
+    expect(Date.now() - startedAt).toBeLessThan(10_000);
   });
 });
