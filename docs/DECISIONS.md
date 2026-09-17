@@ -478,7 +478,7 @@ Phase 12 inspected bundled placement metadata and `word-placement.json` (zero ov
 
 **Status:** accepted
 
-Human review writes sparse CURATED records (`wordranger-human-review/v1`) to `data/vocabulary/placement/curated-word-placement.json`, keyed by `Lexeme.id`. The provisional artifact is never rewritten. Effective placement for admin/review tooling is curated override if present, otherwise the provisional suggestion. Agreeing with the provisional band still writes an explicit CURATED record so reviewed coverage is countable. This overlay is local/internal file tooling, not learner state. Scheduler v2 and Daily Training do not read it. Adaptive Placement stays `PLACEMENT_DATA_BLOCKER` until a later step treats these reviewed `BAND_*` values as production authority.
+Human review writes sparse CURATED records (`wordranger-human-review/v1`) to `data/vocabulary/placement/curated-word-placement.json`, keyed by `Lexeme.id`. The provisional artifact is never rewritten. Effective placement for admin/review tooling is curated override if present, otherwise the provisional suggestion. Agreeing with the provisional band still writes an explicit CURATED record so reviewed coverage is countable. This overlay is local/internal file tooling, not learner state and not production-deployment persistence. Writes go through `CuratedPlacementStore`; a later production store can implement the same interface. The `/debug/vocabulary-placement` UI is not student navigation. Scheduler v2 and Daily Training do not read it. Adaptive Placement stays `PLACEMENT_DATA_BLOCKER` until a later step treats these reviewed `BAND_*` values as production authority.
 
 ## Additional notes
 

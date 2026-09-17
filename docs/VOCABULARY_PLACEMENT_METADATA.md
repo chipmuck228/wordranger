@@ -155,7 +155,7 @@ Provenance is `INFERRED` with `wordranger-provisional-band-generator/v1`. Record
 
 Human review stores **CURATED** overrides in `curated-word-placement.json` without rewriting the provisional file. Effective placement is curated override if present, else the provisional suggestion. Agreeing with the provisional band still writes an explicit CURATED record. Scheduler and Daily Training still do not consume this layer. Production Adaptive Placement remains `PLACEMENT_DATA_BLOCKER` until a later step decides these human-reviewed `BAND_*` values are sufficient production authority.
 
-Internal review UI: `/debug/vocabulary-placement` (local/internal file-backed writes; not a student route).
+Internal review UI: `/debug/vocabulary-placement`. This is local/internal tooling, not a student route, and must not appear in student navigation. File-backed curated writes are allowed for local/internal tooling via `CuratedPlacementStore`; they are **not** production-deployment persistence. A read-only deploy filesystem may return `CURATED_PLACEMENT_WRITE_UNAVAILABLE`. Later production review persistence can swap behind the same `CuratedPlacementStore` interface; do not treat the bundled JSON file as the deployed write store.
 
 ---
 

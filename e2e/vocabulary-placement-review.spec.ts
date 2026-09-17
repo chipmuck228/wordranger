@@ -12,6 +12,22 @@ test.afterEach(() => {
   writeFileSync(curatedPath, originalCurated);
 });
 
+test("student home does not link to vocabulary placement review", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "开始今天的训练" })).toBeVisible();
+  await expect(page.locator('a[href="/debug/vocabulary-placement"]')).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Open Vocabulary Placement Review" }),
+  ).toHaveCount(0);
+});
+
+test("internal placement review route still exists", async ({ page }) => {
+  await page.goto("/debug/vocabulary-placement");
+  await expect(page.getByRole("heading", { name: "Vocabulary Placement Review" })).toBeVisible();
+});
+
 test("Vocabulary placement review can save a curated override across reload", async ({
   page,
 }) => {
