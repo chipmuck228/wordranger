@@ -66,6 +66,7 @@ describe("Scheduler planning query shape", () => {
     expect(calls.listLexemes).toBe(1);
     expect(calls.listRelations).toBe(1);
     expect(calls.getRelations).toBe(0);
+    expect(calls.listPlacementMetadata).toBe(0);
   });
 
   it("PERF2: 1000 lexemes still issue one listRelations and no getRelations", async () => {
@@ -86,6 +87,7 @@ describe("Scheduler planning query shape", () => {
     expect(calls.listLexemes).toBe(1);
     expect(calls.listRelations).toBe(1);
     expect(calls.getRelations).toBe(0);
+    expect(calls.listPlacementMetadata).toBe(0);
   });
 });
 

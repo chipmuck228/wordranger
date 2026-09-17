@@ -6,7 +6,7 @@ WordRanger stores five different kinds of data. They must not be collapsed into 
 | --- | --- | --- |
 | Source facts | `vocabulary_source_entries`, `data/vocabulary/source/` | Immutable-ish PDF facts. Canonical corrections must not rewrite them. |
 | Canonical facts | `lexemes`, `data/vocabulary/canonical/` | Trainable vocabulary units. Identified by UUID + `canonical_key`. |
-| Enrichment | `lexeme_relations`, `lexeme_tags`, `data/vocabulary/enrichment/` | Relations and tags with `confidence` / `provenance`. |
+| Enrichment | `lexeme_relations`, `lexeme_tags`, `data/vocabulary/enrichment/` | Relations and tags with `confidence` / `provenance`. Placement metadata is derived reference data plus optional overlay `word-placement.json`; it is not stored on learner tables. |
 | Learning event log | `learning_evidence` | Append-only source of truth. Optional `task_id`. |
 | Generated tasks | `learning_tasks` | Public payload + server-only answer key + generation trace. |
 | Learning snapshot | `student_lexeme_models` + skill states + weaknesses | Derived projection. Rebuildable from evidence. |
@@ -29,6 +29,8 @@ Word-graph edges. Constraints: `from_lexeme_id <> to_lexeme_id`, `confidence` in
 ### `lexeme_tags`
 
 One row per lexeme. `game_tags` describe present data capabilities, not which game to play. Confidence columns are nullable with a `0..1` check.
+
+Placement metadata is **not** a learner table. It is derived from source/canonical facts (PDF section, starred marker, normalized POS) with optional curated overlay JSON. Do not add `functionWord`, CEFR, or difficulty onto `student_lexeme_models`, `learning_evidence`, `learning_tasks`, or `game_sessions`.
 
 ## Learning tasks
 

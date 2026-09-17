@@ -41,7 +41,7 @@ Layer ownership:
 
 | Layer | Owns |
 | --- | --- |
-| Vocabulary Domain | What content exists and is production-approved |
+| Vocabulary Domain | What content exists, which of it is production-approved, and placement/curriculum **reference** metadata (not learner state) |
 | StudentLexemeModel | Learner snapshot for one `lexemeId` |
 | Need Generator | What pedagogical needs exist |
 | Scheduler | Which needs belong in this plan |
@@ -112,6 +112,7 @@ Flow: Need Generator → lexeme-aware content capability facts → score → ded
 - 再来一轮 / a new free-play session creates a **fresh** plan from the current `StudentLexemeModel`.
 - UNSEEN means unobserved (no evidence), not “the student does not know the word.”
 - `sourceIndex` is source-list order, not difficulty. Do not build a fake difficulty ladder from it.
+- Placement metadata lives in Vocabulary Domain (`listPlacementMetadata()`), not on `StudentLexemeModel` / Evidence / `game_sessions` / `learning_tasks`. Every placement field needs provenance (`SOURCE` / `CURATED` / `EXTERNAL_REFERENCE` / `INFERRED`). `INFERRED` is not production placement authority. Do not rank, skip, or jump Scheduler admission using placement fields until a later reviewed phase.
 - Scheduler v2 defers healthy `STAGE_PROGRESS` on a skill that already has independent success until `nextReviewAt`. Failures/assisted/weakness results stay eligible. Do not invent `knownWords` or mark MASTERED from one multiple-choice probe.
 
 ---

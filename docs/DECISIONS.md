@@ -438,6 +438,30 @@ Direct `/play/*` routes keep producing normal Evidence. Daily Training does not 
 
 `DEFAULT_SCHEDULER_POLICY` is v2. `SCHEDULER_POLICY_V1` keeps the previous generator behavior. After an independent success, Core still promotes `UNSEEN` → `EXPOSED` and sets `nextReviewAt`. v2 omits healthy same-skill `STAGE_PROGRESS` until that review is due so a few early probes cannot block new-word admission. Incorrect, assisted, and weakness results are not deferred. `sourceIndex` remains source-list order, not difficulty. One multiple-choice success does not grant `MASTERED`.
 
+## ADR-074 — Placement metadata belongs to Vocabulary Domain, not learner state
+
+**Status:** accepted
+
+Curriculum / placement facts describe the wordlist, not the student. They live on vocabulary reference data (`VocabularyPlacementMetadata`, `listPlacementMetadata()`). They must not be columns or fields on `StudentLexemeModel`, `LearningEvidence`, `game_sessions`, or `learning_tasks`.
+
+## ADR-075 — sourceIndex is not pedagogical difficulty
+
+**Status:** accepted
+
+`sourceIndex` (and PDF `section` A–Z) is printed list order. It is not difficulty, grade, CEFR, frequency, or mastery order. NEW_WORD scheduling may still use `sourceIndex` as stable source-list order. It must not be copied into a difficulty band.
+
+## ADR-076 — Placement fields require provenance
+
+**Status:** accepted
+
+Every present placement field declares `source` (`SOURCE` / `CURATED` / `EXTERNAL_REFERENCE` / `INFERRED`) and a non-empty `provenance` list. Unknown values stay absent. Validation rejects missing provenance, unknown lexemeIds, duplicates, and out-of-range confidence.
+
+## ADR-077 — Inferred metadata cannot drive production placement without review
+
+**Status:** accepted
+
+Rule-inferred fields such as `functionWord` are labeled `INFERRED` and are not production placement authority. LLM-guessed CEFR/grade/frequency/difficulty is forbidden as truth; inferred band fields are invalid. Adaptive placement waits for curated or licensed external data.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

@@ -1,6 +1,8 @@
 import type { Lexeme } from "@/domain/vocabulary/lexeme";
 import type { LexemeRelation } from "@/domain/vocabulary/lexeme-relation";
 import type { LexemeTags } from "@/domain/vocabulary/lexeme-tags";
+import { buildPlacementMetadata } from "@/domain/vocabulary/derive-placement-metadata";
+import type { VocabularyPlacementMetadata } from "@/domain/vocabulary/placement-metadata";
 import { selectApprovedRelations, sortLexemeRelations } from "@/domain/vocabulary/relation-policy";
 import {
   DEFAULT_VOCABULARY_CONTENT_POLICY,
@@ -18,6 +20,7 @@ export class InMemoryVocabularyRepository implements VocabularyRepository {
   private readonly lemmaIndex = new Map<string, Lexeme[]>();
   private readonly relationsByLexeme = new Map<string, LexemeRelation[]>();
   private readonly tags = new Map<string, LexemeTags>();
+  private readonly placementMetadata: VocabularyPlacementMetadata[];
   readonly sourceEntries: VocabularySourceEntry[];
   readonly allRelations: LexemeRelation[];
   readonly policy: VocabularyContentPolicy;
@@ -48,6 +51,14 @@ export class InMemoryVocabularyRepository implements VocabularyRepository {
     for (const tag of dataset.tags) {
       this.tags.set(tag.lexemeId, tag);
     }
+    this.placementMetadata =
+      dataset.placementMetadata !== undefined
+        ? dataset.placementMetadata
+        : buildPlacementMetadata(
+            dataset.lexemes,
+            dataset.sourceEntries,
+            dataset.placementOverlay ?? [],
+          );
   }
 
   async getLexeme(lexemeId: string): Promise<Lexeme | null> {
@@ -84,6 +95,10 @@ export class InMemoryVocabularyRepository implements VocabularyRepository {
 
   async getTags(lexemeId: string): Promise<LexemeTags | null> {
     return this.tags.get(lexemeId) ?? null;
+  }
+
+  async listPlacementMetadata(): Promise<VocabularyPlacementMetadata[]> {
+    return [...this.placementMetadata];
   }
 
   getSourceEntry(sourceEntryId: string): VocabularySourceEntry | null {

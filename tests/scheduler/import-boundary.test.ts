@@ -13,6 +13,8 @@ describe("Scheduler domain import boundary", () => {
       expect(text, file).not.toMatch(/DefaultTaskGenerator/);
       expect(text, file).not.toMatch(/TaskEvaluator/);
       expect(text, file).not.toMatch(/submitTaskAction/);
+      expect(text, file).not.toMatch(/placement-metadata/);
+      expect(text, file).not.toMatch(/listPlacementMetadata/);
     }
   });
 });

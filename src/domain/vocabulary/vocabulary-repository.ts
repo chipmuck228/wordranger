@@ -5,6 +5,7 @@ import type {
   LexemeRelationType,
 } from "./lexeme-relation";
 import type { LexemeTags } from "./lexeme-tags";
+import type { VocabularyPlacementMetadata } from "./placement-metadata";
 
 export interface GetRelationsOptions {
   types?: LexemeRelationType[];
@@ -28,4 +29,10 @@ export interface VocabularyRepository {
    */
   listRelations(options?: GetRelationsOptions): Promise<LexemeRelation[]>;
   getTags(lexemeId: string): Promise<LexemeTags | null>;
+  /**
+   * Bulk placement / curriculum metadata keyed by lexemeId.
+   * Derived from vocabulary reference data. Not learner state.
+   * Callers must not treat this as production placement authority yet.
+   */
+  listPlacementMetadata(): Promise<VocabularyPlacementMetadata[]>;
 }

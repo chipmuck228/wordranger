@@ -6,6 +6,8 @@ import {
   type LexemeRelation,
 } from "@/domain/vocabulary/lexeme-relation";
 import type { LexemeTags } from "@/domain/vocabulary/lexeme-tags";
+import { buildPlacementMetadata } from "@/domain/vocabulary/derive-placement-metadata";
+import type { VocabularyPlacementMetadata } from "@/domain/vocabulary/placement-metadata";
 import { selectApprovedRelations, sortLexemeRelations } from "@/domain/vocabulary/relation-policy";
 import {
   DEFAULT_VOCABULARY_CONTENT_POLICY,
@@ -208,5 +210,22 @@ export class SupabaseVocabularyRepository implements VocabularyRepository {
       semanticConfidence: Number(row.semantic_confidence ?? 0),
       gameConfidence: Number(row.game_confidence ?? 0),
     };
+  }
+
+  async listPlacementMetadata(): Promise<VocabularyPlacementMetadata[]> {
+    const [lexemes, sourceResult] = await Promise.all([
+      this.listLexemes(),
+      this.client.from("vocabulary_source_entries").select("id,section"),
+    ]);
+    if (sourceResult.error) {
+      throw sourceResult.error;
+    }
+    const sourceEntries = (
+      (sourceResult.data ?? []) as Array<{ id: string; section: string | null }>
+    ).map((row) => ({
+      id: row.id,
+      section: row.section,
+    }));
+    return buildPlacementMetadata(lexemes, sourceEntries);
   }
 }

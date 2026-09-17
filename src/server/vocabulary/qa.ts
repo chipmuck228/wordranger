@@ -1,3 +1,4 @@
+import { placementMetadataIssues } from "@/domain/vocabulary/validate-placement-metadata";
 import { relationInvariantIssues } from "@/domain/vocabulary/validate-relation";
 import type { VocabularyDataset } from "./load-vocabulary-dataset";
 
@@ -12,6 +13,7 @@ export interface VocabularyQaReport {
   lexemeCount: number;
   relationCount: number;
   tagCount: number;
+  placementCount: number;
   issues: VocabularyQaIssue[];
 }
 
@@ -104,11 +106,29 @@ export function validateVocabularyDataset(
     }
   }
 
+  const placement = dataset.placementMetadata ?? [];
+  issues.push(...placementMetadataIssues(placement, lexemeIds));
+  if (dataset.placementOverlay) {
+    issues.push(
+      ...placementMetadataIssues(dataset.placementOverlay, lexemeIds),
+    );
+  }
+  if (
+    dataset.meta.placementMetadataCount !== undefined &&
+    placement.length !== dataset.meta.placementMetadataCount
+  ) {
+    issues.push({
+      code: "PLACEMENT_COUNT_MISMATCH",
+      message: `Expected ${dataset.meta.placementMetadataCount} placement records, found ${placement.length}`,
+    });
+  }
+
   return {
     sourceEntryCount: dataset.sourceEntries.length,
     lexemeCount: dataset.lexemes.length,
     relationCount: dataset.relations.length,
     tagCount: dataset.tags.length,
+    placementCount: placement.length,
     issues,
   };
 }

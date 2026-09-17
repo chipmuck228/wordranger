@@ -118,6 +118,8 @@ Example: source `#19 actor / actress` is one source entry and two trainable `Lex
 
 `LexemeRelation` and `LexemeTags` form the word graph / enrichment layer. Relation `confidence` and `provenance` control production usability via `VocabularyContentPolicy`. `gameTags` describe data capabilities; they do not choose the next game.
 
+Placement / curriculum metadata is also Vocabulary Domain reference data (`VocabularyPlacementMetadata`, bulk `listPlacementMetadata()`). It is keyed by `lexemeId`, carries per-field provenance, and is **not** learner state. `sourceIndex` is PDF numbered order, not difficulty. See `docs/VOCABULARY_PLACEMENT_METADATA.md`. Scheduler planning still reads only `listLexemes()` + `listRelations()`.
+
 ## Learning Core
 
 The Learning Core is game-agnostic and does not import React, Supabase, or concrete games:

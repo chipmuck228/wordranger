@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "project": "WordRanger",
+    "phase": "Phase 11 - Vocabulary Placement Metadata",
+    "description": "Optional curated or externally licensed placement overlay. Empty until a reviewed dataset exists. Do not infer CEFR, grade, frequency, or difficulty here.",
+    "recordCount": 0
+  },
+  "records": []
+}

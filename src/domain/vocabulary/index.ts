@@ -9,6 +9,31 @@ export {
   type LexemeRelationProvenance,
 } from "./lexeme-relation";
 export type { LexemeTags } from "./lexeme-tags";
+export type {
+  PlacementField,
+  PlacementFieldName,
+  PlacementMetadataSource,
+  VocabularyPlacementMetadata,
+} from "./placement-metadata";
+export {
+  CONTENT_WORD_POS,
+  FUNCTION_WORD_POS,
+  FUNCTION_WORD_POS_RULE_ID,
+  FUNCTION_WORD_RULE_CONFIDENCE,
+  PLACEMENT_BAND_FIELDS,
+  PLACEMENT_FIELD_NAMES,
+  PLACEMENT_METADATA_SOURCES,
+  classifyFunctionWord,
+  parsePlacementMetadataSource,
+} from "./placement-metadata";
+export {
+  buildPlacementMetadata,
+  derivePlacementMetadata,
+} from "./derive-placement-metadata";
+export {
+  placementMetadataIssues,
+  type PlacementMetadataIssue,
+} from "./validate-placement-metadata";
 export type { VocabularyRepository, GetRelationsOptions } from "./vocabulary-repository";
 export {
   DEFAULT_VOCABULARY_CONTENT_POLICY,

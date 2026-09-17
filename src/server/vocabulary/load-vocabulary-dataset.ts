@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import type { Lexeme } from "@/domain/vocabulary/lexeme";
 import {
@@ -7,6 +7,13 @@ import {
   type LexemeRelation,
 } from "@/domain/vocabulary/lexeme-relation";
 import type { LexemeTags } from "@/domain/vocabulary/lexeme-tags";
+import { buildPlacementMetadata } from "@/domain/vocabulary/derive-placement-metadata";
+import {
+  parsePlacementMetadataSource,
+  PLACEMENT_FIELD_NAMES,
+  type PlacementField,
+  type VocabularyPlacementMetadata,
+} from "@/domain/vocabulary/placement-metadata";
 import type { VocabularySourceEntry } from "@/domain/vocabulary/source-entry";
 import {
   lexemeIdFromCanonicalKey,
@@ -20,11 +27,14 @@ export interface VocabularyDataset {
   lexemes: Lexeme[];
   relations: LexemeRelation[];
   tags: LexemeTags[];
+  placementMetadata?: VocabularyPlacementMetadata[];
+  placementOverlay?: VocabularyPlacementMetadata[];
   meta: {
     sourceEntryCount: number;
     lexemeCount: number;
     relationCount: number;
     taggedLexemeCount: number;
+    placementMetadataCount?: number;
   };
 }
 
@@ -89,6 +99,29 @@ interface TagFileItem {
   };
 }
 
+interface OverlayFile {
+  meta?: { recordCount?: number };
+  records: OverlayFileRecord[];
+}
+
+interface OverlayFileRecord {
+  lexemeId: string;
+  alphabeticalSection?: OverlayField;
+  coreFoundation?: OverlayField;
+  functionWord?: OverlayField;
+  curriculumBand?: OverlayField;
+  gradeBand?: OverlayField;
+  frequencyBand?: OverlayField;
+  difficultyBand?: OverlayField;
+}
+
+interface OverlayField {
+  value: unknown;
+  source: string;
+  provenance: string[];
+  confidence?: number;
+}
+
 function readJson<T>(filePath: string): T {
   return JSON.parse(readFileSync(filePath, "utf8")) as T;
 }
@@ -114,6 +147,10 @@ export function loadVocabularyDataset(
   const tagFile = readJson<TagFileItem[]>(
     path.join(dataRoot, "enrichment", "word-tags.json"),
   );
+  const overlayPath = path.join(dataRoot, "enrichment", "word-placement.json");
+  const overlayFile = existsSync(overlayPath)
+    ? readJson<OverlayFile>(overlayPath)
+    : { records: [] };
 
   const sourceEntries = sourceFile.records.map((record) => {
     const canonicalKey = sourceCanonicalKey(record.sourceIndex);
@@ -229,16 +266,66 @@ export function loadVocabularyDataset(
     };
   });
 
+  const placementOverlay = overlayFile.records.map((record) =>
+    mapOverlayRecord(record, lexemesByCanonical),
+  );
+  const placementMetadata = buildPlacementMetadata(
+    lexemes,
+    sourceEntries,
+    placementOverlay,
+  );
+
   return {
     sourceEntries,
     lexemes,
     relations,
     tags,
+    placementMetadata,
+    placementOverlay,
     meta: {
       sourceEntryCount: sourceFile.meta.actualEntryCount,
       lexemeCount: canonicalFile.meta.lexemeCount,
       relationCount: relations.length,
       taggedLexemeCount: tags.length,
+      placementMetadataCount: placementMetadata.length,
     },
   };
+}
+
+function mapOverlayRecord(
+  record: OverlayFileRecord,
+  lexemesByCanonical: Map<string, Lexeme>,
+): VocabularyPlacementMetadata {
+  const lexeme = lexemesByCanonical.get(record.lexemeId);
+  const mapped: VocabularyPlacementMetadata = {
+    lexemeId: lexeme?.id ?? record.lexemeId,
+  };
+  for (const name of PLACEMENT_FIELD_NAMES) {
+    const raw = record[name];
+    if (!raw) {
+      continue;
+    }
+    mapped[name] = mapOverlayField(raw) as never;
+  }
+  const allowed = new Set<string>(["lexemeId", ...PLACEMENT_FIELD_NAMES]);
+  const extras = record as unknown as Record<string, unknown>;
+  const target = mapped as unknown as Record<string, unknown>;
+  for (const key of Object.keys(extras)) {
+    if (!allowed.has(key)) {
+      target[key] = extras[key];
+    }
+  }
+  return mapped;
+}
+
+function mapOverlayField(raw: OverlayField): PlacementField<unknown> {
+  const field: PlacementField<unknown> = {
+    value: raw.value,
+    source: parsePlacementMetadataSource(raw.source),
+    provenance: [...(raw.provenance ?? [])],
+  };
+  if (raw.confidence !== undefined) {
+    field.confidence = raw.confidence;
+  }
+  return field;
 }

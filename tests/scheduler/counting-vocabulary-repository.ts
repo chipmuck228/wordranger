@@ -1,6 +1,7 @@
 import type { Lexeme } from "@/domain/vocabulary/lexeme";
 import type { LexemeRelation } from "@/domain/vocabulary/lexeme-relation";
 import type { LexemeTags } from "@/domain/vocabulary/lexeme-tags";
+import type { VocabularyPlacementMetadata } from "@/domain/vocabulary/placement-metadata";
 import type {
   GetRelationsOptions,
   VocabularyRepository,
@@ -14,6 +15,7 @@ export interface VocabularyRepositoryCallCounts {
   getLexemes: number;
   findLexemeByLemma: number;
   getTags: number;
+  listPlacementMetadata: number;
 }
 
 export class CountingVocabularyRepository implements VocabularyRepository {
@@ -25,6 +27,7 @@ export class CountingVocabularyRepository implements VocabularyRepository {
     getLexemes: 0,
     findLexemeByLemma: 0,
     getTags: 0,
+    listPlacementMetadata: 0,
   };
 
   constructor(private readonly inner: VocabularyRepository) {}
@@ -65,5 +68,10 @@ export class CountingVocabularyRepository implements VocabularyRepository {
   async getTags(lexemeId: string): Promise<LexemeTags | null> {
     this.calls.getTags += 1;
     return this.inner.getTags(lexemeId);
+  }
+
+  async listPlacementMetadata(): Promise<VocabularyPlacementMetadata[]> {
+    this.calls.listPlacementMetadata += 1;
+    return this.inner.listPlacementMetadata();
   }
 }

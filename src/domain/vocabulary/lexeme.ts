@@ -15,6 +15,9 @@ export interface Lexeme {
   id: string;
   canonicalKey: string;
   sourceEntryId: string;
+  /**
+   * PDF/source numbered order. Not difficulty, grade, CEFR, frequency, or mastery.
+   */
   sourceIndex: number;
   lemma: string;
   display: string;
