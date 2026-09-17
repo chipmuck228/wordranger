@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { compileExperienceStep } from "@/contextual-learning/candidate-v0/compilation/compile-experience-step";
+import { SEMANTIC_PROJECTION_WHITELIST } from "@/contextual-learning/candidate-v0/compilation/semantic-projection";
+import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
 import { homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
 import { createMealBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
@@ -67,12 +69,43 @@ describe("Candidate V0 frozen-contract protection", () => {
     );
   });
 
-  it("emits a value assignable to the frozen PublicLearningTask type", () => {
+  it("has no generic choice → meaning recognition fallback", () => {
+    const choiceAdapter = readFileSync(
+      join(root, "compilation/adapters/choice-adapter.ts"),
+      "utf8",
+    );
+    const capabilityRegistry = readFileSync(
+      join(root, "capabilities/capability-registry.ts"),
+      "utf8",
+    );
+    expect(choiceAdapter).not.toContain("VocabularySkill.MEANING_RECOGNITION");
+    expect(choiceAdapter).not.toContain("LearningTaskType.MEANING_CHOICE");
+    expect(choiceAdapter).not.toContain(".includes(");
+    expect(choiceAdapter).not.toMatch(/correct:\s*predicate\.expected/);
+    expect(choiceAdapter).not.toMatch(/correct:\s*[^\n]*\.expected/);
+    expect(capabilityRegistry).toContain("GENERIC_CHOICE_MEANING_RECOGNITION");
+    expect(
+      SEMANTIC_PROJECTION_WHITELIST.every(
+        (projection) =>
+          projection.responseKind !== "CLAIM_CHOICE" &&
+          projection.responseKind !== "RELATION_CHOICE" &&
+          projection.responseKind !== "SEMANTIC_CLASS" &&
+          projection.responseKind !== "ENTITY_REF",
+      ),
+    ).toBe(true);
+  });
+
+  it("emits a frozen PublicLearningTask only when a semantic projection exists", () => {
     const plan = createMealBuildPlan(homeBreakfastFrame);
+    const recall = plan.steps.find((step) => step.purpose === "RECALL");
+    expect(recall).toBeDefined();
+    if (!recall) {
+      return;
+    }
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,
-        step: plan.steps[0],
+        step: recall,
         frame: homeBreakfastFrame,
         skeleton: mealSkeleton,
         profiles: profileMap(MEAL_PROFILES),
@@ -85,5 +118,24 @@ describe("Candidate V0 frozen-contract protection", () => {
     const task: PublicLearningTask = compiled.value.publicLearningTask;
     expect(task.id).toBe(compiled.value.answerKey.taskId);
     expect(task.hints).toBeDefined();
+    expect(compiled.value.trace.semanticProjectionId.length).toBeGreaterThan(0);
+  });
+
+  it("does not emit a PublicLearningTask when no projection exists", () => {
+    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const compiled = compileExperienceStep(
+      compilationRequest({
+        plan,
+        step: plan.steps[0],
+        frame: homeBreakfastFrame,
+        skeleton: mealSkeleton,
+        profiles: profileMap(MEAL_PROFILES),
+      }),
+    );
+    expect(compiled.ok).toBe(false);
+    if (compiled.ok) {
+      return;
+    }
+    expect(compiled.error.code).toBe(DomainErrorCode.COMPILATION_SEMANTIC_MISMATCH);
   });
 });

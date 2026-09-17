@@ -1,6 +1,8 @@
 import { collectReferencedIds } from "../domain/predicates";
+import { sameLexemeSense } from "../domain/lexeme-sense";
 import type {
   ContextFrame,
+  LexemeSenseRef,
   SemanticSkeleton,
 } from "../domain/types";
 import { DIRECTIONAL_SENSE_MARKERS } from "../domain/types";
@@ -90,7 +92,7 @@ export function validateContextFrame(
       }
       if (
         lexeme.bindingKind === "EXPRESSES_CLAIM" &&
-        !hasClaimGrounding(frame, lexeme.sense.senseId)
+        !hasClaimGrounding(frame, lexeme.sense)
       ) {
         issues.push(
           errorIssue(
@@ -238,12 +240,15 @@ export function validateContextFrame(
           ),
         );
       }
-      if (!perspective.expressedSense.senseId.trim()) {
+      if (
+        !perspective.expressedSense.senseId.trim() ||
+        !perspective.expressedSense.lexemeId.trim()
+      ) {
         issues.push(
           errorIssue(
             DomainErrorCode.CTX_MISSING_SENSE_ID,
             `perspectiveBindings.${perspective.eventId}.expressedSense`,
-            "Perspective expressed sense is missing senseId",
+            "Perspective expressed sense is missing lexemeId or senseId",
           ),
         );
       }
@@ -263,10 +268,10 @@ export function validateContextFrame(
   return validationResult(issues);
 }
 
-function hasClaimGrounding(frame: ContextFrame, senseId: string): boolean {
+function hasClaimGrounding(frame: ContextFrame, sense: LexemeSenseRef): boolean {
   return (frame.claimGroundings ?? []).some(
     (item) =>
-      item.sense.senseId === senseId && item.supportingFacts.length > 0,
+      sameLexemeSense(item.sense, sense) && item.supportingFacts.length > 0,
   );
 }
 

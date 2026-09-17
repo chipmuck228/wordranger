@@ -1,4 +1,5 @@
 import type { TaskCompilationRequest } from "@/contextual-learning/candidate-v0/compilation/types";
+import { findProfile } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
 import type {
   ContextFrame,
   ExperienceStepSpec,
@@ -28,7 +29,7 @@ export function resolveTargets(
       {
         targetId: target.id,
         sense: target.sense,
-        displayForm: profiles.get(target.sense.senseId)?.displayForm ?? "",
+        displayForm: findProfile(profiles, target.sense)?.displayForm ?? "",
         focus: target.focus,
       },
     ];

@@ -7,6 +7,7 @@ import {
   FIXTURE_PROVENANCE,
   MINIMAL_SUPPORT,
   completeAll,
+  explicitChoice,
   nextOrEnd,
   pred,
   roleArg,
@@ -25,6 +26,11 @@ function borrowTargets(includeShare: boolean) {
         focus: "DISCRIMINATION" as const,
         requiredRelationIds: ["OWNS"],
       },
+      {
+        id: "target-share-form",
+        sense: BORROW_SENSE.share,
+        focus: "MEANING_TO_FORM" as const,
+      },
     ];
   }
   return [
@@ -39,6 +45,11 @@ function borrowTargets(includeShare: boolean) {
       sense: BORROW_SENSE.lend,
       focus: "RELATION_USE" as const,
       requiredRelationIds: ["OWNS"],
+    },
+    {
+      id: "target-borrow-form",
+      sense: BORROW_SENSE.borrow,
+      focus: "MEANING_TO_FORM" as const,
     },
   ];
 }
@@ -70,7 +81,29 @@ function borrowChoiceSteps(
     },
     expectedResponse: {
       kind: "RELATION_CHOICE",
-      allowedRelationIds: ["rel-borrow", "rel-lend", "rel-give"],
+      ...explicitChoice(
+        [
+          {
+            id: `${prefix}-opt-borrow`,
+            value: "rel-borrow",
+            displayText: "temporary receive",
+            lexemeRef: BORROW_SENSE.borrow,
+          },
+          {
+            id: `${prefix}-opt-lend`,
+            value: "rel-lend",
+            displayText: "temporary provide",
+            lexemeRef: BORROW_SENSE.lend,
+          },
+          {
+            id: `${prefix}-opt-give`,
+            value: "rel-give",
+            displayText: "transfer ownership",
+            lexemeRef: BORROW_SENSE.give,
+          },
+        ],
+        [`${prefix}-opt-borrow`],
+      ),
     },
     supportPolicy: mode === "BUILD" ? MINIMAL_SUPPORT : strengthenPolicy,
     requiredCapabilities: ["frozen-choice:SELECT"],
@@ -89,7 +122,29 @@ function borrowChoiceSteps(
     },
     expectedResponse: {
       kind: "RELATION_CHOICE",
-      allowedRelationIds: ["rel-borrow", "rel-lend", "rel-give"],
+      ...explicitChoice(
+        [
+          {
+            id: `${prefix}-opt-borrow-owner`,
+            value: "rel-borrow",
+            displayText: "temporary receive",
+            lexemeRef: BORROW_SENSE.borrow,
+          },
+          {
+            id: `${prefix}-opt-lend-owner`,
+            value: "rel-lend",
+            displayText: "temporary provide",
+            lexemeRef: BORROW_SENSE.lend,
+          },
+          {
+            id: `${prefix}-opt-give-owner`,
+            value: "rel-give",
+            displayText: "transfer ownership",
+            lexemeRef: BORROW_SENSE.give,
+          },
+        ],
+        [`${prefix}-opt-lend-owner`],
+      ),
     },
     supportPolicy: mode === "BUILD" ? MINIMAL_SUPPORT : strengthenPolicy,
     requiredCapabilities: ["frozen-choice:DISTINGUISH"],
@@ -99,7 +154,7 @@ function borrowChoiceSteps(
   const recall: ExperienceStepSpec = {
     id: `${prefix}-${mode.toLowerCase()}-recall`,
     purpose: "RECALL",
-    targetIds: includeShare ? ["target-share"] : ["target-borrow"],
+    targetIds: includeShare ? ["target-share-form"] : ["target-borrow-form"],
     semanticAction: "TYPE",
     promptIntent: {
       instructionKey: includeShare
@@ -124,7 +179,29 @@ function borrowChoiceSteps(
         targetIds: ["target-share"],
         expectedResponse: {
           kind: "RELATION_CHOICE",
-          allowedRelationIds: ["rel-share", "rel-give", "rel-borrow"],
+          ...explicitChoice(
+            [
+              {
+                id: `${prefix}-opt-share`,
+                value: "rel-share",
+                displayText: "joint access",
+                lexemeRef: BORROW_SENSE.share,
+              },
+              {
+                id: `${prefix}-opt-give-share`,
+                value: "rel-give",
+                displayText: "transfer ownership",
+                lexemeRef: BORROW_SENSE.give,
+              },
+              {
+                id: `${prefix}-opt-borrow-share`,
+                value: "rel-borrow",
+                displayText: "temporary receive",
+                lexemeRef: BORROW_SENSE.borrow,
+              },
+            ],
+            [`${prefix}-opt-share`],
+          ),
         },
       },
       recall,

@@ -8,6 +8,7 @@ import {
   MINIMAL_SUPPORT,
   completeAll,
   entityArg,
+  explicitChoice,
   nextOrEnd,
   pred,
   strengthenLadder,
@@ -16,13 +17,21 @@ import { mealPrefixForFrame } from "./contexts";
 import { MEAL_SENSE } from "./knowledge";
 import { MEAL_SKELETON_ID } from "./skeleton";
 
-function spoonTarget() {
+function spoonInterpretationTarget() {
   return {
     id: "target-spoon",
     sense: MEAL_SENSE.spoon,
     focus: "CONTEXT_INTERPRETATION" as const,
     requiredRoleIds: ["EATING_TOOL"],
     requiredRelationIds: ["SUITABLE_FOR"],
+  };
+}
+
+function spoonFormTarget() {
+  return {
+    id: "target-spoon-form",
+    sense: MEAL_SENSE.spoon,
+    focus: "MEANING_TO_FORM" as const,
   };
 }
 
@@ -50,7 +59,23 @@ function mealSteps(prefix: string, mode: "BUILD" | "STRENGTHEN"): ExperienceStep
     },
     expectedResponse: {
       kind: "ENTITY_REF",
-      allowedEntityIds: [spoon, fork],
+      ...explicitChoice(
+        [
+          {
+            id: `${prefix}-opt-spoon`,
+            value: spoon,
+            displayText: "spoon",
+            lexemeRef: MEAL_SENSE.spoon,
+          },
+          {
+            id: `${prefix}-opt-fork`,
+            value: fork,
+            displayText: "fork",
+            lexemeRef: MEAL_SENSE.fork,
+          },
+        ],
+        [`${prefix}-opt-spoon`],
+      ),
     },
     supportPolicy: mode === "BUILD" ? MINIMAL_SUPPORT : strengthenPolicy,
     requiredCapabilities: [`frozen-choice:IDENTIFY`],
@@ -69,7 +94,23 @@ function mealSteps(prefix: string, mode: "BUILD" | "STRENGTHEN"): ExperienceStep
     },
     expectedResponse: {
       kind: "ENTITY_REF",
-      allowedEntityIds: [spoon, fork],
+      ...explicitChoice(
+        [
+          {
+            id: `${prefix}-opt-spoon-fit`,
+            value: spoon,
+            displayText: "spoon",
+            lexemeRef: MEAL_SENSE.spoon,
+          },
+          {
+            id: `${prefix}-opt-fork-fit`,
+            value: fork,
+            displayText: "fork",
+            lexemeRef: MEAL_SENSE.fork,
+          },
+        ],
+        [`${prefix}-opt-spoon-fit`],
+      ),
     },
     supportPolicy: mode === "BUILD" ? MINIMAL_SUPPORT : strengthenPolicy,
     requiredCapabilities: [`frozen-choice:DISTINGUISH`],
@@ -79,7 +120,7 @@ function mealSteps(prefix: string, mode: "BUILD" | "STRENGTHEN"): ExperienceStep
   const recall: ExperienceStepSpec = {
     id: `${prefix}-${mode.toLowerCase()}-recall`,
     purpose: "RECALL",
-    targetIds: ["target-spoon"],
+    targetIds: ["target-spoon-form"],
     semanticAction: "TYPE",
     promptIntent: {
       instructionKey: "Produce the English word for the required tool.",
@@ -103,7 +144,7 @@ export function createMealBuildPlan(frame: ContextFrame): LearningExperiencePlan
     schemaVersion: "candidate-v0",
     mode: "BUILD",
     sourceLearningNeedRef: "need-meal-spoon",
-    targets: [spoonTarget()],
+    targets: [spoonInterpretationTarget(), spoonFormTarget()],
     skeletonId: MEAL_SKELETON_ID,
     contextFrameId: frame.id,
     activeGoalId: "EATER_CAN_EAT_FOOD",
@@ -123,7 +164,10 @@ export function createMealStrengthenPlan(
     schemaVersion: "candidate-v0",
     mode: "STRENGTHEN",
     sourceLearningNeedRef: "need-meal-spoon",
-    targets: [{ ...spoonTarget(), focus: "DISCRIMINATION" }],
+    targets: [
+      { ...spoonInterpretationTarget(), focus: "DISCRIMINATION" },
+      spoonFormTarget(),
+    ],
     skeletonId: MEAL_SKELETON_ID,
     contextFrameId: frame.id,
     activeGoalId: "EATER_CAN_EAT_FOOD",

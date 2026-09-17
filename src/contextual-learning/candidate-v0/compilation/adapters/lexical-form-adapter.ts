@@ -1,15 +1,16 @@
-import { AnswerMode, PromptMode } from "@/domain/learning/evidence.types";
-import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
 import type { TaskAnswerKey } from "@/domain/tasks/task-answer-key";
 import {
-  LearningTaskType,
   TASK_GENERATOR_VERSION,
   TASK_PROTOCOL_VERSION,
 } from "@/domain/tasks/task-type";
+import type { ResponseTransportCapability } from "../../capabilities/capability-registry";
 import { LEXICAL_FORM_COMPILER_ID } from "../../capabilities/capability-registry";
+import { sameLexemeSense } from "../../domain/lexeme-sense";
 import { DomainErrorCode } from "../../domain/errors";
-import type { RuntimeCapability, SupportBlock } from "../../domain/types";
+import type { SupportBlock } from "../../domain/types";
+import type { FrozenSemanticProjection } from "../semantic-projection";
+import type { SenseProjectionOk } from "../sense-projection";
 import { compileSupportHints } from "../support-hints";
 import {
   compileFail,
@@ -20,14 +21,16 @@ import {
 
 export interface LexicalFormAdapterInput {
   request: TaskCompilationRequest;
-  capability: RuntimeCapability;
+  transport: ResponseTransportCapability;
+  projection: FrozenSemanticProjection;
+  senseProjection: SenseProjectionOk;
   supportBlocks?: ReadonlyMap<string, SupportBlock>;
 }
 
 export function compileLexicalFormStep(
   input: LexicalFormAdapterInput,
 ): CompileResult {
-  const { request, capability } = input;
+  const { request, transport, projection, senseProjection } = input;
   const expected = request.step.expectedResponse;
   if (expected.kind !== "LEXICAL_FORM") {
     return compileFail(
@@ -37,19 +40,15 @@ export function compileLexicalFormStep(
     );
   }
 
-  const target =
-    request.resolvedTargets.find(
-      (item) => item.sense.senseId === expected.sense.senseId,
-    ) ?? request.resolvedTargets[0];
-  if (!target) {
+  if (!sameLexemeSense(expected.sense, senseProjection.target.sense)) {
     return compileFail(
-      DomainErrorCode.EXP_TARGET_NOT_REACHABLE,
-      "Lexical-form compilation requires a resolved target",
-      "resolvedTargets",
+      DomainErrorCode.COMPILATION_SEMANTIC_MISMATCH,
+      "Lexical-form expected sense does not match the projected target",
+      "expectedResponse.sense",
     );
   }
 
-  const form = target.displayForm.trim();
+  const form = senseProjection.target.displayForm.trim();
   if (!form) {
     return compileFail(
       DomainErrorCode.COMPILATION_FROZEN_CONTRACT_MISMATCH,
@@ -71,7 +70,21 @@ export function compileLexicalFormStep(
     );
   }
 
-  const createId = request.createId ?? (() => `candidate-v0-text-${target.sense.senseId}`);
+  const frozenLexemeId = senseProjection.frozenLexemeId;
+  if (
+    expected.sense.lexemeId !== frozenLexemeId ||
+    senseProjection.target.sense.lexemeId !== frozenLexemeId
+  ) {
+    return compileFail(
+      DomainErrorCode.COMPILATION_AMBIGUOUS_SENSE_PROJECTION,
+      "PublicLearningTask.lexemeId must equal the target sense lexemeId",
+      "expectedResponse.sense",
+    );
+  }
+
+  const createId =
+    request.createId ??
+    (() => `candidate-v0-text-${expected.sense.lexemeId}::${expected.sense.senseId}`);
   const taskId = createId();
 
   const publicLearningTask: PublicLearningTask = {
@@ -79,11 +92,11 @@ export function compileLexicalFormStep(
     protocolVersion: TASK_PROTOCOL_VERSION,
     generatorVersion: TASK_GENERATOR_VERSION,
     learningNeedId: request.learningNeedId,
-    lexemeId: expected.sense.lexemeId,
-    targetSkill: VocabularySkill.ACTIVE_RECALL,
-    taskType: LearningTaskType.ACTIVE_RECALL_TYPING,
-    promptMode: PromptMode.MEANING_TO_WORD,
-    answerMode: AnswerMode.TYPING,
+    lexemeId: frozenLexemeId,
+    targetSkill: projection.targetSkill,
+    taskType: projection.taskType,
+    promptMode: projection.promptMode,
+    answerMode: projection.answerMode,
     difficulty: 0.5,
     prompt: {
       kind: "MEANING_TEXT",
@@ -100,7 +113,7 @@ export function compileLexicalFormStep(
 
   const answerKey: TaskAnswerKey = {
     taskId,
-    targetLexemeId: expected.sense.lexemeId,
+    targetLexemeId: frozenLexemeId,
     correctOptionIds: [],
     optionLexemeIds: {},
     exactAcceptedTexts: [form],
@@ -117,12 +130,17 @@ export function compileLexicalFormStep(
       contextFrameId: request.resolvedContext.contextFrameId,
       skeletonId: request.resolvedContext.skeletonId,
       targetSenseIds: [expected.sense.senseId],
-      capabilityId: capability.id,
+      capabilityId: transport.id,
       compilerId: LEXICAL_FORM_COMPILER_ID,
       sourceContentIds: [
         request.resolvedContext.contextFrameId,
-        expected.sense.senseId,
+        `${expected.sense.lexemeId}::${expected.sense.senseId}`,
       ],
+      semanticProjectionId: projection.id,
+      senseProjection: {
+        candidateSense: expected.sense,
+        frozenLexemeId,
+      },
     },
   });
 }

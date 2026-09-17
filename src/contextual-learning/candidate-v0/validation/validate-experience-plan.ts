@@ -1,6 +1,9 @@
+import { validateExplicitAnswerSpec } from "../compilation/validate-answer-spec";
+import { findProfile, sameLexemeSense } from "../domain/lexeme-sense";
 import type {
   ContextFrame,
   LearningExperiencePlan,
+  LexemeSenseRef,
   RuntimeCapability,
   SemanticSkeleton,
   SenseSemanticProfile,
@@ -58,25 +61,27 @@ export function validateExperiencePlan(
     );
   }
 
-  const reachableSenseIds = collectReachableSenseIds(frame);
+  const reachableSenses = collectReachableSenses(frame);
   const targetById = new Map(plan.targets.map((target) => [target.id, target]));
 
   for (const target of plan.targets) {
-    if (!target.sense.senseId.trim()) {
+    if (!target.sense.senseId.trim() || !target.sense.lexemeId.trim()) {
       issues.push(
         errorIssue(
           DomainErrorCode.CTX_MISSING_SENSE_ID,
           `targets.${target.id}`,
-          "Target is missing senseId",
+          "Target is missing lexemeId or senseId",
         ),
       );
     }
-    if (!reachableSenseIds.has(target.sense.senseId)) {
+    if (
+      !reachableSenses.some((sense) => sameLexemeSense(sense, target.sense))
+    ) {
       issues.push(
         errorIssue(
           DomainErrorCode.EXP_TARGET_NOT_REACHABLE,
           `targets.${target.id}`,
-          `Target sense ${target.sense.senseId} is not bound in frame ${frame.id}`,
+          `Target sense ${target.sense.lexemeId}::${target.sense.senseId} is not bound in frame ${frame.id}`,
         ),
       );
     }
@@ -115,7 +120,7 @@ export function validateExperiencePlan(
           errorIssue(
             DomainErrorCode.EXP_NO_RUNTIME_CAPABILITY,
             `steps.${step.id}.requiredCapabilities`,
-            `No frozen runtime capability for ${step.semanticAction}/${step.expectedResponse.kind}`,
+            `No frozen runtime transport for ${step.semanticAction}/${step.expectedResponse.kind}`,
           ),
         );
       }
@@ -124,9 +129,22 @@ export function validateExperiencePlan(
         errorIssue(
           DomainErrorCode.EXP_NO_RUNTIME_CAPABILITY,
           `steps.${step.id}`,
-          `No frozen runtime capability for ${step.semanticAction}/${step.expectedResponse.kind}`,
+          `No frozen runtime transport for ${step.semanticAction}/${step.expectedResponse.kind}`,
         ),
       );
+    }
+
+    if (step.expectedResponse.kind !== "ORDERED_ENTITY_REFS") {
+      const answerError = validateExplicitAnswerSpec(step.expectedResponse);
+      if (answerError && !answerError.ok) {
+        issues.push(
+          errorIssue(
+            answerError.error.code,
+            `steps.${step.id}.${answerError.error.path}`,
+            answerError.error.message,
+          ),
+        );
+      }
     }
 
     issues.push(
@@ -146,7 +164,7 @@ export function validateExperiencePlan(
         if (!target) {
           continue;
         }
-        const profile = senseProfiles.get(target.sense.senseId);
+        const profile = findProfile(senseProfiles, target.sense);
         const form = profile?.displayForm ?? "";
         if (form && promptRevealsForm(step.promptIntent, form)) {
           issues.push(
@@ -195,20 +213,20 @@ export function findCapability(
   );
 }
 
-function collectReachableSenseIds(frame: ContextFrame): Set<string> {
-  const ids = new Set<string>();
+function collectReachableSenses(frame: ContextFrame): LexemeSenseRef[] {
+  const senses: LexemeSenseRef[] = [];
   for (const binding of frame.entityBindings) {
     for (const lexeme of binding.lexemeSenseBindings ?? []) {
-      ids.add(lexeme.sense.senseId);
+      senses.push(lexeme.sense);
     }
   }
   for (const perspective of frame.perspectiveBindings ?? []) {
-    ids.add(perspective.expressedSense.senseId);
+    senses.push(perspective.expressedSense);
   }
   for (const grounding of frame.claimGroundings ?? []) {
-    ids.add(grounding.sense.senseId);
+    senses.push(grounding.sense);
   }
-  return ids;
+  return senses;
 }
 
 function promptRevealsForm(

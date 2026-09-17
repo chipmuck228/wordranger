@@ -29,5 +29,8 @@ export function resolveContextSnapshot(
       [skeleton.id]: skeleton.version,
       [frame.id]: 0,
     },
+    perspectiveBindings: frame.perspectiveBindings?.map((binding) => ({
+      ...binding,
+    })),
   };
 }

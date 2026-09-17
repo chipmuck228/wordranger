@@ -299,6 +299,7 @@ export interface ResolvedContextSnapshot {
   activeGoalId: string;
   allowedSemanticActions: SemanticAction[];
   sourceVersions: Record<string, number>;
+  perspectiveBindings?: PerspectiveBinding[];
 }
 
 export type SupportType =
@@ -365,15 +366,32 @@ export interface PromptIntent {
   mustNotRevealTargetForm?: boolean;
 }
 
+export interface SemanticChoiceCandidate<TValue> {
+  id: string;
+  value: TValue;
+  displayText: string;
+  lexemeRef?: LexemeSenseRef;
+}
+
+export interface ExplicitSemanticChoice<TValue> {
+  candidates: SemanticChoiceCandidate<TValue>[];
+  correctCandidateIds: string[];
+}
+
 export type ExpectedSemanticResponse =
-  | { kind: "ENTITY_REF"; allowedEntityIds: ContextEntityId[] }
-  | { kind: "RELATION_CHOICE"; allowedRelationIds: SemanticRelationId[] }
+  | ({ kind: "ENTITY_REF" } & ExplicitSemanticChoice<ContextEntityId>)
+  | ({ kind: "RELATION_CHOICE" } & ExplicitSemanticChoice<SemanticRelationId>)
   | { kind: "ORDERED_ENTITY_REFS"; allowedSequences: ContextEntityId[][] }
   | { kind: "LEXICAL_FORM"; sense: LexemeSenseRef }
-  | { kind: "SEMANTIC_CLASS"; allowedConceptIds: SemanticConceptId[] }
-  | { kind: "CLAIM_CHOICE"; allowedPredicates: SemanticPredicate[] };
+  | ({ kind: "SEMANTIC_CLASS" } & ExplicitSemanticChoice<SemanticConceptId>)
+  | ({ kind: "CLAIM_CHOICE" } & ExplicitSemanticChoice<SemanticPredicate>);
 
 export type ExpectedSemanticResponseKind = ExpectedSemanticResponse["kind"];
+
+export type ChoiceExpectedResponse = Exclude<
+  ExpectedSemanticResponse,
+  { kind: "ORDERED_ENTITY_REFS" } | { kind: "LEXICAL_FORM" }
+>;
 
 export type ExperienceStepPurpose =
   | "GROUND"
@@ -460,6 +478,11 @@ export interface CompilationTrace {
   capabilityId: string;
   compilerId: string;
   sourceContentIds: string[];
+  semanticProjectionId: string;
+  senseProjection?: {
+    candidateSense: LexemeSenseRef;
+    frozenLexemeId: string;
+  };
 }
 
 export const DIRECTIONAL_SENSE_MARKERS = ["borrow", "lend"] as const;

@@ -21,6 +21,7 @@ export type {
   RuntimeCapability,
   SemanticSkeleton,
 } from "./domain/types";
+export { sameLexemeSense, lexemeSenseKey } from "./domain/lexeme-sense";
 
 export { validateSemanticSkeleton } from "./validation/validate-semantic-skeleton";
 export { validateContextFrame } from "./validation/validate-context-frame";
@@ -30,8 +31,13 @@ export { resolveContextSnapshot } from "./validation/resolve-context";
 export {
   FROZEN_RUNTIME_CAPABILITIES,
   FROZEN_RUNTIME_GAPS,
+  findResponseTransport,
   listFrozenRuntimeCapabilities,
 } from "./capabilities/capability-registry";
+export {
+  SEMANTIC_PROJECTION_WHITELIST,
+  findSemanticProjection,
+} from "./compilation/semantic-projection";
 
 export { compileExperienceStep } from "./compilation/compile-experience-step";
 export type {

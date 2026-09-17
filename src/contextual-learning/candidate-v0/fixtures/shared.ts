@@ -3,10 +3,13 @@
  */
 
 import { curatedFixtureProvenance } from "../domain/provenance";
+import { findProfile, lexemeSenseKey } from "../domain/lexeme-sense";
 import type {
   ExperienceCompletionPolicy,
   ExperienceStepSpec,
+  ExplicitSemanticChoice,
   LexemeSenseRef,
+  SemanticChoiceCandidate,
   SemanticFact,
   SemanticPredicate,
   SenseSemanticProfile,
@@ -167,5 +170,14 @@ export function supportMap(
 export function profileMap(
   profiles: SenseSemanticProfile[],
 ): Map<string, SenseSemanticProfile> {
-  return new Map(profiles.map((item) => [item.sense.senseId, item]));
+  return new Map(profiles.map((item) => [lexemeSenseKey(item.sense), item]));
+}
+
+export { findProfile };
+
+export function explicitChoice<TValue>(
+  candidates: SemanticChoiceCandidate<TValue>[],
+  correctCandidateIds: string[],
+): ExplicitSemanticChoice<TValue> {
+  return { candidates, correctCandidateIds };
 }
