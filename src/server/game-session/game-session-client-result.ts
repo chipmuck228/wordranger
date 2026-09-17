@@ -1,4 +1,8 @@
 import {
+  isAbortLike,
+  isPersistenceTimeoutError,
+} from "@/lib/runtime/persistence-timeout";
+import {
   GAME_SESSION_USER_MESSAGES,
   GameSessionError,
   type GameSessionErrorCode,
@@ -19,6 +23,14 @@ export function gameSessionFail(
       ok: false,
       code: error.code,
       message: messages[error.code],
+    };
+  }
+  if (isPersistenceTimeoutError(error) || isAbortLike(error)) {
+    console.error(`[${logLabel}]`, "NETWORK_ERROR", error);
+    return {
+      ok: false,
+      code: "NETWORK_ERROR",
+      message: messages.NETWORK_ERROR,
     };
   }
   console.error(`[${logLabel}]`, error);

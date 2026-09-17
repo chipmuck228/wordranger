@@ -225,7 +225,7 @@ Student-facing `/play/ranger-trial`, `/play/word-bubble`, `/play/matching`, and 
 
 Vocabulary on the student path is the bundled JSON dataset (`InMemoryVocabularyRepository` over git-versioned files). That is immutable reference data, not learner state.
 
-Debug Labs and unit tests may still use in-memory repositories. Explicit `RANGER_TRIAL_RUNTIME=memory` is a local/e2e fixture only (all four student games honor it). Missing Supabase config in production fails closed.
+Debug Labs and unit tests may still use in-memory repositories. Explicit `RANGER_TRIAL_RUNTIME=memory` (or the alias `GAME_RUNTIME=memory`) is a shared local/e2e fixture for all four student games. Production must leave both unset. Missing Supabase config in production fails closed. `npm run dev` follows `.env.local`; the code default is durable Supabase, and a stalled persistence call fails as `NETWORK_ERROR` instead of hanging.
 
 There is no auth; student pages use `V1_PLACEHOLDER_USER_ID` (a UUID placeholder). Auth/RLS is future work. Server actions must not accept `userId` from the browser.
 

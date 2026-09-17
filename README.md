@@ -1,6 +1,6 @@
 # WordRanger
 
-Game-based vocabulary learning engine for junior-high English. This repository currently contains the **Vocabulary Domain**, **Learning Core**, and **Learning Task Protocol**. No production games yet.
+Game-based vocabulary learning engine for junior-high English. Student games: Ranger Trial, Word Bubble, Matching, and Snake.
 
 ## Scripts
 
@@ -12,11 +12,9 @@ npm run lint
 npm run import:vocabulary -- --dry-run
 ```
 
-Open [http://localhost:3000](http://localhost:3000):
+Open [http://localhost:3000](http://localhost:3000).
 
-- Vocabulary Debug Lab
-- Task Protocol Debug Lab
-- Learning Core Debug Lab
+`npm run dev` uses whatever is in `.env.local`. The **code default is durable Supabase**. In-memory fixtures are opt-in via `RANGER_TRIAL_RUNTIME=memory` (legacy name; also `GAME_RUNTIME=memory`). Playwright sets the memory fixture itself. Production must leave both unset.
 
 ## Docs
 

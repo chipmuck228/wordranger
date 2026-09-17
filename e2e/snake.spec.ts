@@ -38,7 +38,14 @@ async function steerToFirstOption(page: Page): Promise<void> {
       });
       return;
     }
-    await control.click();
+    try {
+      await control.click({ timeout: 2_000 });
+    } catch {
+      await expect(page.getByRole("button", { name: "继续" })).toBeVisible({
+        timeout: 15_000,
+      });
+      return;
+    }
     last =
       want === "向上" ? "UP" : want === "向下" ? "DOWN" : want === "向左" ? "LEFT" : "RIGHT";
     await page.waitForTimeout(50);

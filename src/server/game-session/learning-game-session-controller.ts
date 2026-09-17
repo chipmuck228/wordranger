@@ -10,6 +10,11 @@ import type { TaskGenerator } from "@/domain/tasks/task-generator";
 import { TaskProtocolError } from "@/domain/tasks/task-evaluator";
 import { LearningDomainError } from "@/domain/learning/engine/math";
 import type { VocabularyRepository } from "@/domain/vocabulary/vocabulary-repository";
+import {
+  isAbortLike,
+  isPersistenceTimeoutError,
+  withPersistenceTimeout,
+} from "@/lib/runtime/persistence-timeout";
 import { planLearningSession } from "@/server/scheduler/plan-learning-session";
 import type { LearningStateQueryRepository } from "@/server/scheduler/learning-state-query-repository";
 import { submitTaskAction } from "@/server/tasks/submit-task-action";
@@ -117,6 +122,10 @@ function persistFailure(error: unknown): never {
   );
 }
 
+function isTimeoutFailure(error: unknown): boolean {
+  return isPersistenceTimeoutError(error) || isAbortLike(error);
+}
+
 export class LearningGameSessionController {
   private readonly definition: LearningGameDefinition;
   private readonly generator: TaskGenerator;
@@ -153,20 +162,39 @@ export class LearningGameSessionController {
         createTaskRandom(this.definition.gameType, sessionId, needId));
   }
 
+  private async bounded<T>(operation: Promise<T>): Promise<T> {
+    try {
+      return await withPersistenceTimeout(operation);
+    } catch (error) {
+      if (error instanceof GameSessionError) {
+        throw error;
+      }
+      if (isTimeoutFailure(error)) {
+        throw new GameSessionError(
+          "NETWORK_ERROR",
+          "Persistence operation timed out",
+        );
+      }
+      throw error;
+    }
+  }
+
   async start(): Promise<StartGameSessionResult> {
     const now = this.now();
     const sessionId = this.createSessionId();
     try {
-      const plan = await planLearningSession({
-        userId: this.deps.userId,
-        now,
-        requestedNeedCount:
-          this.deps.requestedNeedCount ?? this.definition.requestedNeedCount,
-        createId: () => this.createId(),
-        random: this.schedulerRandom(sessionId),
-        vocabulary: this.deps.vocabulary,
-        query: this.deps.query,
-      });
+      const plan = await this.bounded(
+        planLearningSession({
+          userId: this.deps.userId,
+          now,
+          requestedNeedCount:
+            this.deps.requestedNeedCount ?? this.definition.requestedNeedCount,
+          createId: () => this.createId(),
+          random: this.schedulerRandom(sessionId),
+          vocabulary: this.deps.vocabulary,
+          query: this.deps.query,
+        }),
+      );
       const { playable, excluded } = playableNeedsFromPlan(
         plan.needs,
         this.definition,
@@ -200,6 +228,12 @@ export class LearningGameSessionController {
           );
         }
         throw error;
+      }
+      if (isTimeoutFailure(error)) {
+        throw new GameSessionError(
+          "NETWORK_ERROR",
+          "Persistence operation timed out",
+        );
       }
       const cause =
         error && typeof error === "object" && "message" in error
@@ -253,18 +287,20 @@ export class LearningGameSessionController {
       hintCount: 0,
     };
     try {
-      const submitted = await submitTaskAction({
-        taskId: input.taskId,
-        action,
-        userId: record.userId,
-        sessionId: record.sessionId,
-        gameId: this.definition.gameId,
-        evidenceId: this.createEvidenceId(),
-        learningTaskRepository: this.deps.tasks,
-        learningRepository: this.deps.learning,
-        now: action.occurredAt,
-        createId: () => this.createId(),
-      });
+      const submitted = await this.bounded(
+        submitTaskAction({
+          taskId: input.taskId,
+          action,
+          userId: record.userId,
+          sessionId: record.sessionId,
+          gameId: this.definition.gameId,
+          evidenceId: this.createEvidenceId(),
+          learningTaskRepository: this.deps.tasks,
+          learningRepository: this.deps.learning,
+          now: action.occurredAt,
+          createId: () => this.createId(),
+        }),
+      );
       const feedback = toGameSubmissionFeedback(submitted.evaluation);
       applySubmitOnce(record, input.taskId, feedback);
       try {
@@ -337,7 +373,7 @@ export class LearningGameSessionController {
 
   private async persistCreate(record: GameSessionRecord): Promise<void> {
     try {
-      const saved = await this.deps.sessions.create(record);
+      const saved = await this.bounded(this.deps.sessions.create(record));
       record.revision = saved.revision;
     } catch (error) {
       persistFailure(error);
@@ -346,7 +382,7 @@ export class LearningGameSessionController {
 
   private async persist(record: GameSessionRecord): Promise<void> {
     try {
-      const saved = await this.deps.sessions.save(record);
+      const saved = await this.bounded(this.deps.sessions.save(record));
       record.revision = saved.revision;
     } catch (error) {
       persistFailure(error);
@@ -456,8 +492,8 @@ export class LearningGameSessionController {
     if (!record.currentTaskId) {
       throw new GameSessionError("TASK_NOT_FOUND", "Current task missing");
     }
-    const assigned = await this.deps.tasks.getTaskForEvaluation(
-      record.currentTaskId,
+    const assigned = await this.bounded(
+      this.deps.tasks.getTaskForEvaluation(record.currentTaskId),
     );
     if (!assigned) {
       throw new GameSessionError("TASK_NOT_FOUND", "Current task missing");
@@ -487,8 +523,8 @@ export class LearningGameSessionController {
     if (!record.currentTaskId) {
       throw new GameSessionError("TASK_NOT_FOUND", "Active task was not found");
     }
-    const assigned = await this.deps.tasks.getTaskForEvaluation(
-      record.currentTaskId,
+    const assigned = await this.bounded(
+      this.deps.tasks.getTaskForEvaluation(record.currentTaskId),
     );
     if (!assigned) {
       throw new GameSessionError("TASK_NOT_FOUND", "Active task was not found");
@@ -556,7 +592,9 @@ export class LearningGameSessionController {
         { taskId },
       );
     }
-    const assigned = await this.deps.tasks.getTaskForEvaluation(taskId);
+    const assigned = await this.bounded(
+      this.deps.tasks.getTaskForEvaluation(taskId),
+    );
     if (!assigned) {
       throw new GameSessionError("TASK_NOT_FOUND", "Completed task was not found");
     }
@@ -611,7 +649,9 @@ export class LearningGameSessionController {
     lexemeId: string,
     taskId: string,
   ): Promise<LearningEvidence | undefined> {
-    const items = await this.deps.learning.getEvidenceForLexeme(userId, lexemeId);
+    const items = await this.bounded(
+      this.deps.learning.getEvidenceForLexeme(userId, lexemeId),
+    );
     return items.find((item) => item.taskId === taskId);
   }
 
@@ -620,7 +660,7 @@ export class LearningGameSessionController {
   ): Promise<GameSessionRecord> {
     let record: GameSessionRecord | null;
     try {
-      record = await this.deps.sessions.get(sessionId);
+      record = await this.bounded(this.deps.sessions.get(sessionId));
     } catch (error) {
       if (error instanceof GameSessionError) {
         throw error;
@@ -689,13 +729,15 @@ export class LearningGameSessionController {
       return null;
     }
     assertGameCanRender(this.definition, generation.value.publicTask);
-    await this.deps.tasks.saveGeneratedTask({
-      task: generation.value,
-      assignment: {
-        userId: record.userId,
-        sessionId: record.sessionId,
-      },
-    });
+    await this.bounded(
+      this.deps.tasks.saveGeneratedTask({
+        task: generation.value,
+        assignment: {
+          userId: record.userId,
+          sessionId: record.sessionId,
+        },
+      }),
+    );
     record.currentTaskId = generation.value.publicTask.id;
     record.phase = "awaiting_action";
     record.recentTasks.push({

@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button";
 import { WordBubble } from "@/components/game/word-bubble/WordBubble";
 import { WordBubbleComplete } from "@/components/game/word-bubble/WordBubbleComplete";
 import { BubbleFeedback } from "@/components/game/word-bubble/BubbleFeedback";
+import { GameSessionErrorPanel } from "@/components/game/shared/GameSessionErrorPanel";
+import { withClientGameTimeout } from "@/components/game/shared/bounded-game-operation";
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
 import type { StudentActionIntent } from "@/components/game/word-bubble/types";
+import { GAME_SESSION_USER_MESSAGES } from "@/server/game-session/ranger-trial-errors";
 import type {
   GamePublicSession,
   GameSessionStats,
@@ -51,6 +54,8 @@ export function WordBubblePlayClient() {
     incorrect: 0,
   });
   const startedAt = useRef<number>(0);
+  const requestId = useRef(0);
+  const [errorSource, setErrorSource] = useState<"start" | "play">("start");
 
   useEffect(() => {
     const sessionId = sessionStorage.getItem(SESSION_KEY);
@@ -97,10 +102,29 @@ export function WordBubblePlayClient() {
     }
   }, [screen, task?.id]);
 
+  function backToStart(): void {
+    requestId.current += 1;
+    sessionStorage.removeItem(SESSION_KEY);
+    setError(null);
+    setScreen("start");
+  }
+
   async function start(): Promise<void> {
+    const id = requestId.current + 1;
+    requestId.current = id;
+    setErrorSource("start");
     setError(null);
     setScreen("loading");
-    const result = await startWordBubbleSession();
+    const outcome = await withClientGameTimeout(startWordBubbleSession());
+    if (id !== requestId.current) {
+      return;
+    }
+    if (outcome.timedOut) {
+      setError(GAME_SESSION_USER_MESSAGES.NETWORK_ERROR);
+      setScreen("error");
+      return;
+    }
+    const result = outcome.value;
     if (!result.ok) {
       setError(result.message);
       setScreen("error");
@@ -119,14 +143,28 @@ export function WordBubblePlayClient() {
     if (!session || !task || screen !== "playing") {
       return;
     }
+    const id = requestId.current + 1;
+    requestId.current = id;
+    setErrorSource("play");
     setSelectedOptionId(intent.optionId);
     setScreen("submitting");
-    const result = await submitWordBubbleAction({
-      sessionId: session.sessionId,
-      taskId: task.id,
-      intent,
-      responseTimeMs: Math.round(performance.now() - startedAt.current),
-    });
+    const outcome = await withClientGameTimeout(
+      submitWordBubbleAction({
+        sessionId: session.sessionId,
+        taskId: task.id,
+        intent,
+        responseTimeMs: Math.round(performance.now() - startedAt.current),
+      }),
+    );
+    if (id !== requestId.current) {
+      return;
+    }
+    if (outcome.timedOut) {
+      setError(GAME_SESSION_USER_MESSAGES.NETWORK_ERROR);
+      setScreen("error");
+      return;
+    }
+    const result = outcome.value;
     if (!result.ok) {
       setError(result.message);
       setScreen("error");
@@ -142,8 +180,22 @@ export function WordBubblePlayClient() {
     if (!session || screen !== "feedback") {
       return;
     }
+    const id = requestId.current + 1;
+    requestId.current = id;
+    setErrorSource("play");
     setScreen("continuing");
-    const result = await continueWordBubbleSession(session.sessionId);
+    const outcome = await withClientGameTimeout(
+      continueWordBubbleSession(session.sessionId),
+    );
+    if (id !== requestId.current) {
+      return;
+    }
+    if (outcome.timedOut) {
+      setError(GAME_SESSION_USER_MESSAGES.NETWORK_ERROR);
+      setScreen("error");
+      return;
+    }
+    const result = outcome.value;
     if (!result.ok) {
       setError(result.message);
       setScreen("error");
@@ -159,6 +211,7 @@ export function WordBubblePlayClient() {
       return;
     }
     if (!result.task) {
+      setErrorSource("start");
       setError("这一轮题目没能准备好，请稍后再试。");
       setScreen("error");
       return;
@@ -245,23 +298,14 @@ export function WordBubblePlayClient() {
         <WordBubbleComplete stats={stats} onPlayAgain={playAgain} />
       ) : null}
 
-      {screen === "error" ? (
-        <div className="flex flex-col gap-6 text-center">
-          <p className="text-base" role="alert">
-            {error}
-          </p>
-          <Button
-            type="button"
-            className="h-12 w-full text-base"
-            onClick={() => {
-              sessionStorage.removeItem(SESSION_KEY);
-              setError(null);
-              setScreen("start");
-            }}
-          >
-            返回
-          </Button>
-        </div>
+      {screen === "error" && error ? (
+        <GameSessionErrorPanel
+          message={error}
+          onRetry={
+            errorSource === "start" ? () => void start() : undefined
+          }
+          onBack={backToStart}
+        />
       ) : null}
 
       <Link

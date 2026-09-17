@@ -378,6 +378,12 @@ One `PublicLearningTask` maps to one board and one option collision. After feedb
 
 Snake starts the timer when the task is interactable and stops at option collision. Navigation time is included. Ranger Trial tap time and Snake path time are not the same measurement. Core V1 still stores `responseTimeMs` and may emit `SLOW_RESPONSE` from `detect-weaknesses` using `slowResponseFallbackMs` (8000) or 1.8× the median of prior successful samples. This is `GAME_INTERACTION_LATENCY_CONFOUND` / `CORE_MEASUREMENT_CONCERN`. Do not add Snake-specific scoring or change Core thresholds in Phase 08.
 
+## ADR-064 — Student-game persistence is bounded
+
+**Status:** accepted
+
+No student-facing game operation may wait forever on PostgREST or session/task/learning adapters. The shared policy lives in `withPersistenceTimeout` / `createTimedFetch`, applied to the Supabase server client and `LearningGameSessionController` repository awaits. A stall is `NETWORK_ERROR`, not a renderer-specific wrapper. Client loading timeouts are secondary and do not prove the server failed; retrying start can create a second session. `RANGER_TRIAL_RUNTIME=memory` remains the explicit fixture flag; `GAME_RUNTIME=memory` is an alias. Production stays on durable Supabase.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

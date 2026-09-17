@@ -145,7 +145,7 @@ If Evidence write succeeds and session save fails, a retry maps `TASK_ALREADY_CO
 
 Randomization is recreated from `scheduler:${gameType}:${sessionId}` and `task:${gameType}:${sessionId}:${needId}`. Word Bubble layout uses `bubble-layout:${taskId}` and is not persisted. Matching keeps public option order and does not persist card selection. Snake rebuilds a deterministic board from `task.id` + `option.id`. The RandomSource object is not persisted.
 
-Production uses Supabase adapters for learner/task/session state. Bundled vocabulary JSON is immutable reference data. `RANGER_TRIAL_RUNTIME=memory` is an explicit local/e2e fixture; production must not silently fall back to in-memory Maps.
+Production uses Supabase adapters for learner/task/session state. Bundled vocabulary JSON is immutable reference data. `RANGER_TRIAL_RUNTIME=memory` is the legacy name of a shared local/e2e fixture for all four student games; `GAME_RUNTIME=memory` is a backward-compatible alias. Production must not set either flag and must not silently fall back to in-memory Maps. Student-game persistence/network work uses a shared server timeout (`createTimedFetch` / `withPersistenceTimeout`) and maps stalls to `NETWORK_ERROR` (“暂时没能准备好这一轮，请稍后再试。”). Play clients add a secondary loading timeout so “正在安排这一轮单词…” cannot remain forever if the Server Action itself stalls. A client timeout does not cancel server work; retrying start may create another session if the first request later completes.
 
 If session persistence fails after `learning_tasks` insert, that assigned task may be orphaned. Do not delete it. Recovery starts a new session or regenerates from the persisted need; it does not treat `game_sessions` as learning truth.
 

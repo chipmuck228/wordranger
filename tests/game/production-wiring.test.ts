@@ -77,7 +77,7 @@ describe("Ranger Trial production wiring", () => {
   });
 
   it("does not silently fall back to in-memory when Supabase is unconfigured", () => {
-    expect(selector).toContain('RANGER_TRIAL_RUNTIME === "memory"');
+    expect(selector).toContain("isMemoryGameRuntime");
     expect(selector).toContain("createSupabaseRangerTrialRuntime");
     expect(productionRuntime).toContain("requires Supabase configuration");
   });
@@ -99,7 +99,7 @@ describe("Word Bubble production wiring", () => {
     expect(bubbleProduction).toContain("SupabaseGameSessionStore");
     expect(bubbleProduction).toContain("WORD_BUBBLE");
     expect(bubbleProduction).not.toContain("InMemoryLearningRepository");
-    expect(bubbleSelector).toContain('RANGER_TRIAL_RUNTIME === "memory"');
+    expect(bubbleSelector).toContain("isMemoryGameRuntime");
     expect(bubbleSelector).toContain("createSupabaseWordBubbleRuntime");
   });
 });
@@ -120,7 +120,7 @@ describe("Matching production wiring", () => {
     expect(matchingProduction).toContain("SupabaseGameSessionStore");
     expect(matchingProduction).toContain("MATCHING");
     expect(matchingProduction).not.toContain("InMemoryLearningRepository");
-    expect(matchingSelector).toContain('RANGER_TRIAL_RUNTIME === "memory"');
+    expect(matchingSelector).toContain("isMemoryGameRuntime");
     expect(matchingSelector).toContain("createSupabaseMatchingRuntime");
   });
 });
@@ -141,7 +141,26 @@ describe("Snake production wiring", () => {
     expect(snakeProduction).toContain("SupabaseGameSessionStore");
     expect(snakeProduction).toContain("SNAKE");
     expect(snakeProduction).not.toContain("InMemoryLearningRepository");
-    expect(snakeSelector).toContain('RANGER_TRIAL_RUNTIME === "memory"');
+    expect(snakeSelector).toContain("isMemoryGameRuntime");
     expect(snakeSelector).toContain("createSupabaseSnakeRuntime");
+  });
+});
+
+describe("Shared game runtime reliability wiring", () => {
+  it("Supabase server client uses the shared timed fetch adapter", () => {
+    const supabaseServer = readFileSync(
+      path.join(process.cwd(), "src/lib/supabase/server.ts"),
+      "utf8",
+    );
+    expect(supabaseServer).toContain("createTimedFetch");
+  });
+
+  it("memory fixture helper keeps RANGER_TRIAL_RUNTIME and accepts GAME_RUNTIME", () => {
+    const helper = readFileSync(
+      path.join(process.cwd(), "src/lib/runtime/game-runtime-mode.ts"),
+      "utf8",
+    );
+    expect(helper).toContain("GAME_RUNTIME");
+    expect(helper).toContain("RANGER_TRIAL_RUNTIME");
   });
 });

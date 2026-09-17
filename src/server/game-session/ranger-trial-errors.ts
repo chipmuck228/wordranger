@@ -39,5 +39,5 @@ export const GAME_SESSION_USER_MESSAGES: Record<GameSessionErrorCode, string> =
     SESSION_NOT_FOUND: "找不到这一轮闯关，请重新开始。",
     SESSION_COMPLETED: "这一轮已经完成。",
     SESSION_CONFLICT: "刚才的进度已经在另一个请求中更新，请重试。",
-    NETWORK_ERROR: "网络好像出了点问题，请再试一次。",
+    NETWORK_ERROR: "暂时没能准备好这一轮，请稍后再试。",
   };
