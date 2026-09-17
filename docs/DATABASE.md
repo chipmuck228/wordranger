@@ -55,6 +55,8 @@ Placement metadata is **not** a learner table. It is derived from source/canonic
 
 Changing an outcome after the fact would destroy rebuildability. Application repositories do not implement `updateEvidence`. Postgres also rejects `UPDATE`/`DELETE` on `learning_evidence` via `prevent_learning_evidence_mutation`.
 
+Live progress tests may call `cleanup_progress_test_user(target_user uuid)` to delete rows for **one randomized test user**. That RPC refuses `V1_PLACEHOLDER_USER_ID`, is granted only to `service_role`, and does not change application append-only APIs. `npm run test:progress` still requires `ALLOW_SUPABASE_PROGRESS_WRITES=1` before any mutation.
+
 ## Indexes
 
 - `lexemes`: `lemma`, `source_entry_id`, `source_index`, unique `canonical_key`

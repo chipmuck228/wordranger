@@ -39,3 +39,15 @@ export function supabaseProgressConfigured(): boolean {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
   );
 }
+
+export function supabaseProgressRunRequested(): boolean {
+  return process.env.RUN_SUPABASE_PROGRESS === "1";
+}
+
+/** Live progress tests must not mutate whichever project is in `.env.local` without both flags. */
+export function supabaseProgressWritesAllowed(): boolean {
+  return (
+    supabaseProgressRunRequested() &&
+    process.env.ALLOW_SUPABASE_PROGRESS_WRITES === "1"
+  );
+}

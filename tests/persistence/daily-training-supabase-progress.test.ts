@@ -8,10 +8,17 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseDailyTrainingRuntime } from "@/server/runtime/create-supabase-daily-training-runtime";
 import { loadVocabularyDataset } from "@/server/vocabulary/load-vocabulary-dataset";
 import {
+  cleanupProgressTestUser,
+  type ProgressTestCleanupClient,
+} from "./cleanup-progress-test-user";
+import {
   supabaseProgressConfigured,
+  supabaseProgressRunRequested,
+  supabaseProgressWritesAllowed,
 } from "./load-local-env";
 
-const requireLive = process.env.RUN_SUPABASE_PROGRESS === "1";
+const requireLive = supabaseProgressRunRequested();
+const allowWrites = supabaseProgressWritesAllowed();
 const configured = supabaseProgressConfigured();
 
 describe("Daily Training identity (no live DB)", () => {
@@ -52,10 +59,20 @@ describe("Daily Training identity (no live DB)", () => {
   });
 });
 
-describe.skipIf(!requireLive)(
+describe.skipIf(!requireLive)("Supabase progress write opt-in", () => {
+  it("refuses to mutate without ALLOW_SUPABASE_PROGRESS_WRITES=1", () => {
+    if (!allowWrites) {
+      throw new Error(
+        "Refusing Supabase progress-test writes. Set ALLOW_SUPABASE_PROGRESS_WRITES=1 in addition to RUN_SUPABASE_PROGRESS=1 before mutating the live database.",
+      );
+    }
+  });
+});
+
+describe.skipIf(!requireLive || !allowWrites)(
   "Daily Training Supabase progress persistence",
   () => {
-    if (requireLive && !configured) {
+    if (!configured) {
       throw new Error(
         "PROGRESS_RUNTIME_BLOCKER: RUN_SUPABASE_PROGRESS=1 but Supabase env is missing",
       );
@@ -65,26 +82,14 @@ describe.skipIf(!requireLive)(
 
     afterAll(async () => {
       if (!client) {
-        return;
+        throw new Error(
+          "Progress test cleanup failed: Supabase client is missing",
+        );
       }
-      const models = await client
-        .from("student_lexeme_models")
-        .select("id")
-        .eq("user_id", userId);
-      const modelIds = (models.data ?? []).map((row: { id: string }) => row.id);
-      if (modelIds.length > 0) {
-        await client
-          .from("student_lexeme_weaknesses")
-          .delete()
-          .in("student_lexeme_model_id", modelIds);
-        await client
-          .from("student_lexeme_skill_states")
-          .delete()
-          .in("student_lexeme_model_id", modelIds);
-      }
-      await client.from("student_lexeme_models").delete().eq("user_id", userId);
-      await client.from("learning_tasks").delete().eq("user_id", userId);
-      await client.from("game_sessions").delete().eq("user_id", userId);
+      await cleanupProgressTestUser(
+        client as unknown as ProgressTestCleanupClient,
+        userId,
+      );
     });
 
     it("P1–P9 / T1–T6 / T9: Evidence and snapshots survive runtime recreation", async () => {

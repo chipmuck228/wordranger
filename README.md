@@ -15,7 +15,15 @@ npm run import:vocabulary -- --dry-run
 
 Open [http://localhost:3000](http://localhost:3000).
 
-`npm run dev` uses whatever is in `.env.local`. The **code default is durable Supabase**. In-memory fixtures are opt-in via `RANGER_TRIAL_RUNTIME=memory` (legacy name; also `GAME_RUNTIME=memory`). Playwright sets the memory fixture itself. Production must leave both unset. `npm run test:progress` runs the live Daily Training learner-persistence check against Supabase (not the memory fixture).
+`npm run dev` uses whatever is in `.env.local`. The **code default is durable Supabase**. In-memory fixtures are opt-in via `RANGER_TRIAL_RUNTIME=memory` (legacy name; also `GAME_RUNTIME=memory`). Playwright sets the memory fixture itself. Production must leave both unset.
+
+`npm test` does not write to Supabase. The live Daily Training persistence check is opt-in:
+
+```bash
+ALLOW_SUPABASE_PROGRESS_WRITES=1 npm run test:progress
+```
+
+That requires both `RUN_SUPABASE_PROGRESS=1` (set by the script) and `ALLOW_SUPABASE_PROGRESS_WRITES=1`. Without the write flag, the suite refuses to mutate whichever project is in `.env.local`. Apply `supabase/migrations/202609170004_cleanup_progress_test_user.sql` so leftover test evidence can be removed; the RPC still refuses the placeholder student user.
 
 ## Docs
 

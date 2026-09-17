@@ -8,6 +8,7 @@ const sql = [
   "supabase/migrations/202609170001_game_sessions.sql",
   "supabase/migrations/202609170002_game_sessions_revision.sql",
   "supabase/migrations/202609170003_learning_evidence_session_correlation.sql",
+  "supabase/migrations/202609170004_cleanup_progress_test_user.sql",
 ]
   .map((file) => readFileSync(path.join(process.cwd(), file), "utf8"))
   .join("\n");
@@ -65,5 +66,29 @@ describe("Schema", () => {
 
   it("does not require learning_sessions for evidence session_id", () => {
     expect(sql).toContain("drop constraint if exists learning_evidence_session_id_fkey");
+  });
+
+  it("adds a test-user-only evidence cleanup RPC without dropping append-only", () => {
+    expect(sql).toContain("create or replace function cleanup_progress_test_user(target_user uuid)");
+    expect(sql).toContain(
+      "cleanup_progress_test_user refuses the V1 placeholder student user",
+    );
+    expect(sql).toContain("00000000-0000-4000-8000-000000000001");
+    expect(sql).toContain("delete from learning_evidence where user_id = target_user");
+    expect(sql).toContain("delete from learning_tasks where user_id = target_user");
+    expect(sql).toMatch(
+      /delete from learning_evidence[\s\S]*delete from learning_tasks/,
+    );
+    expect(sql).toContain("session_replication_role");
+    expect(sql).toContain(
+      "revoke all on function cleanup_progress_test_user(uuid) from public",
+    );
+    expect(sql).toContain(
+      "revoke all on function cleanup_progress_test_user(uuid) from anon",
+    );
+    expect(sql).toContain(
+      "grant execute on function cleanup_progress_test_user(uuid) to service_role",
+    );
+    expect(sql).toContain("before update or delete on learning_evidence");
   });
 });
