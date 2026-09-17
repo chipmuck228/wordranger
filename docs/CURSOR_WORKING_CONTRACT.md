@@ -100,7 +100,7 @@ Snake `responseTimeMs` includes navigation overhead (`CORE_MEASUREMENT_CONCERN` 
 
 ## 3. LearningNeed / Scheduler boundaries
 
-Need generation and scheduling are separate. Scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY` v1).
+Need generation and scheduling are separate. Scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY`, currently v2; `SCHEDULER_POLICY_V1` remains available).
 
 Flow: Need Generator → lexeme-aware content capability facts → score → dedup by `lexemeId + targetSkill` → quotas / diversity → `LearningSessionPlan`.
 
@@ -110,6 +110,9 @@ Flow: Need Generator → lexeme-aware content capability facts → score → ded
 - Capability facts come from bulk `listLexemes()` + `listRelations()` once per plan. No per-lexeme `getRelations()` during planning. No Task Generator probing for feasibility.
 - `LearningNeed` is not a task. Downstream generates one task from the current need.
 - 再来一轮 / a new free-play session creates a **fresh** plan from the current `StudentLexemeModel`.
+- UNSEEN means unobserved (no evidence), not “the student does not know the word.”
+- `sourceIndex` is source-list order, not difficulty. Do not build a fake difficulty ladder from it.
+- Scheduler v2 defers healthy `STAGE_PROGRESS` on a skill that already has independent success until `nextReviewAt`. Failures/assisted/weakness results stay eligible. Do not invent `knownWords` or mark MASTERED from one multiple-choice probe.
 
 ---
 
@@ -322,6 +325,7 @@ When a durable rule changes, update the matching doc in the same change:
 
 - Architecture / pipeline → `docs/ARCHITECTURE.md`
 - Frozen Core → `docs/CORE_V1_BASELINE.md`
+- Scheduler policy versions → `docs/LEARNING_SCHEDULER.md` and `docs/DECISIONS.md`
 - Renderer / session protocol → `docs/GAME_RENDERER_PROTOCOL.md`
 - Tables / what may live in `game_sessions.state` → `docs/DATABASE.md`
 - Student-facing Daily Training flow only → `docs/DAILY_TRAINING_EXPERIENCE.md`

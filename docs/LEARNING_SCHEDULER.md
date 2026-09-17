@@ -57,7 +57,7 @@ V1 rules:
 
 | Reason | When |
 | --- | --- |
-| `NEW_WORD` | No model, or `masteryStage === UNSEEN`. Target skill is always `MEANING_RECOGNITION`. Ordered by `sourceIndex`, then `canonicalKey`. |
+| `NEW_WORD` | No model, or `masteryStage === UNSEEN`. Target skill is always `MEANING_RECOGNITION`. Ordered by `sourceIndex` (source-list order, **not** difficulty), then `canonicalKey`. |
 | `WEAKNESS` | Every unresolved weakness, mapped through `weakness-skill-map.ts`. `CONFUSION.relatedLexemeId` is preserved. |
 | `REVIEW_DUE` | `nextReviewAt !== null` and `nextReviewAt <= now`. Target skill from `selectReviewSkill()`. Future dates do not create this reason. `MASTERED` due items remain eligible. |
 | `STAGE_PROGRESS` | Evidence still missing for the next stage, via `selectStageProgressSkill()`. `MASTERED` has no normal stage-progress candidate. |
@@ -102,7 +102,7 @@ priority =
   - recencyPenalty
 ```
 
-All numeric weights live in `DEFAULT_SCHEDULER_POLICY` (`version: v1`). Semantic reason order is intended to emerge from `reasonWeights`:
+All numeric weights live in `DEFAULT_SCHEDULER_POLICY` (current production version: `v2`; frozen `SCHEDULER_POLICY_V1` keeps prior admission semantics). Semantic reason order is intended to emerge from `reasonWeights`:
 
 `WEAKNESS > FADING > USER_MARKED > REVIEW_DUE > STAGE_PROGRESS > NEW_WORD`
 
@@ -144,6 +144,16 @@ Diversity still uses the primary reason, because that is the session's explanati
 If enough review candidates exist, the plan includes at least `minReviewNeeds` of them, and at most `maxNewWords` new-introduction needs.
 
 If fewer review/progress candidates exist than requested slots, remaining slots may be filled with new-introduction needs, even above `maxNewWords`. Thousands of unseen lexemes must not dominate a session when review work exists.
+
+`sourceIndex` is PDF/source numbered order. It is not difficulty, CEFR, or grade. Do not treat a later index as a harder word.
+
+## Progressive placement (scheduler v2)
+
+UNSEEN means the system has no evidence yet. It does not mean the student does not know the word.
+
+A first independent success on a probe still goes through TaskEvaluator → Evidence → Core (`UNSEEN` → `EXPOSED`). Scheduler v2 then **omits** healthy `STAGE_PROGRESS` for that same skill until `nextReviewAt`, so the word does not immediately occupy another identical `MEANING_RECOGNITION` slot. Incorrect, assisted, and weakness-tagged results stay eligible.
+
+This is not mastery. One multiple-choice success does not set `MASTERED`. There is no hardcoded easy-word list.
 
 ## Diversity
 

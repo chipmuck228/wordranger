@@ -31,10 +31,17 @@ export interface SchedulerPolicy {
     maxSameSkillInRow: number;
     maxSameReasonInRow: number;
   };
+  progression: {
+    /**
+     * When true, STAGE_PROGRESS is omitted for a skill that already has a
+     * recent independent success, no newer failure/weakness, and a future
+     * nextReviewAt. UNSEEN / NEW_WORD admission is unchanged.
+     */
+    deferHealthyStageProgressUntilReviewDue: boolean;
+  };
 }
 
-export const DEFAULT_SCHEDULER_POLICY: SchedulerPolicy = {
-  version: "v1",
+const SCHEDULER_POLICY_V1_NUMBERS = {
   reasonWeights: {
     WEAKNESS: 0.9,
     FADING: 0.82,
@@ -72,6 +79,24 @@ export const DEFAULT_SCHEDULER_POLICY: SchedulerPolicy = {
     maxSameReasonInRow: 3,
   },
 };
+
+export const SCHEDULER_POLICY_V1: SchedulerPolicy = {
+  version: "v1",
+  ...SCHEDULER_POLICY_V1_NUMBERS,
+  progression: {
+    deferHealthyStageProgressUntilReviewDue: false,
+  },
+};
+
+export const SCHEDULER_POLICY_V2: SchedulerPolicy = {
+  version: "v2",
+  ...SCHEDULER_POLICY_V1_NUMBERS,
+  progression: {
+    deferHealthyStageProgressUntilReviewDue: true,
+  },
+};
+
+export const DEFAULT_SCHEDULER_POLICY = SCHEDULER_POLICY_V2;
 
 export const PRIMARY_REASON_PRECEDENCE: readonly LearningNeedReason[] = [
   "WEAKNESS",

@@ -99,6 +99,6 @@ describe("Scheduler quotas", () => {
     });
     expect(result.needs).toEqual([]);
     expect(result.trace.selectedCandidates).toEqual([]);
-    expect(result.schedulerPolicyVersion).toBe("v1");
+    expect(result.schedulerPolicyVersion).toBe("v2");
   });
 });

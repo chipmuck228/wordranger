@@ -213,6 +213,6 @@ describe("Priority scoring", () => {
         }),
       ],
     });
-    expect(result.schedulerPolicyVersion).toBe("v1");
+    expect(result.schedulerPolicyVersion).toBe("v2");
   });
 });

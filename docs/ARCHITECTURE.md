@@ -183,7 +183,7 @@ VocabularyRepository
 
 Session planning loads lexemes once and production-approved relations once, then builds the lexeme capability map locally. There is no per-lexeme `getRelations()` during planning.
 
-The scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY` v1). Scheduler output is still generated on demand; the generic game session persists a copy of the planned playable `LearningNeed`s as **game orchestration** so a cold start does not re-plan. That copy is not learning truth. See `docs/LEARNING_SCHEDULER.md`.
+The scheduler is read-only and policy-driven (`DEFAULT_SCHEDULER_POLICY`, currently v2). Scheduler output is still generated on demand; the generic game session persists a copy of the planned playable `LearningNeed`s as **game orchestration** so a cold start does not re-plan. That copy is not learning truth. See `docs/LEARNING_SCHEDULER.md`.
 
 `LearningNeed.lexemeId` remains the protocol later game selection will match against `GameCapability`. Phase 04 does not select games.
 

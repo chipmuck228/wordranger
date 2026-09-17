@@ -6,6 +6,8 @@ export type {
 } from "./learning-need-candidate";
 export {
   DEFAULT_SCHEDULER_POLICY,
+  SCHEDULER_POLICY_V1,
+  SCHEDULER_POLICY_V2,
   PRIMARY_REASON_PRECEDENCE,
   REVIEW_REASONS,
   isReviewReason,
@@ -26,6 +28,7 @@ export {
   type LearningContentCapability,
   type LexemeLearningCapability,
 } from "./learning-content-capability";
+export { shouldDeferHealthyStageProgress } from "./stage-progress-deferral";
 export { targetSkillForWeakness } from "./weakness-skill-map";
 export {
   weakerSkill,

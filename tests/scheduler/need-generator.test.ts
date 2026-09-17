@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DefaultLearningNeedGenerator } from "@/domain/scheduler";
+import { DefaultLearningNeedGenerator, SCHEDULER_POLICY_V1 } from "@/domain/scheduler";
 import {
   NOW,
   USER_ID,
@@ -56,6 +56,32 @@ describe("Learning Need Generator", () => {
       ),
     ).toBe(true);
     expect(candidates.some((item) => item.reason === "NEW_WORD")).toBe(false);
+  });
+
+  it("N2b: v2 defers healthy EXPOSED MEANING_RECOGNITION until review is due", () => {
+    const later = "2026-09-17T12:00:00.000Z";
+    const model = makeModel("ex", {
+      masteryStage: MasteryStage.EXPOSED,
+      lastSuccessAt: NOW,
+      nextReviewAt: later,
+    });
+    model.skills[VocabularySkill.MEANING_RECOGNITION].consecutiveIndependentSuccesses = 1;
+    model.skills[VocabularySkill.MEANING_RECOGNITION].lastIndependentSuccessAt = NOW;
+    const v2 = new DefaultLearningNeedGenerator().generateCandidates({
+      lexemes: [makeLexeme("ex")],
+      models: [model],
+      now: NOW,
+      createId: sequentialIdFactory("need-v2"),
+    });
+    expect(v2.some((item) => item.reason === "STAGE_PROGRESS")).toBe(false);
+    const v1 = new DefaultLearningNeedGenerator().generateCandidates({
+      lexemes: [makeLexeme("ex")],
+      models: [model],
+      now: NOW,
+      createId: sequentialIdFactory("need-v1"),
+      policy: SCHEDULER_POLICY_V1,
+    });
+    expect(v1.some((item) => item.reason === "STAGE_PROGRESS")).toBe(true);
   });
 
   it("N3: RECOGNIZED → stage progress toward SEMANTIC_CONNECTION", () => {

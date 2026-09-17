@@ -13,6 +13,7 @@ import {
   selectReviewSkill,
   selectStageProgressSkill,
 } from "./stage-skill-map";
+import { shouldDeferHealthyStageProgress } from "./stage-progress-deferral";
 import { targetSkillForWeakness } from "./weakness-skill-map";
 import type { SchedulerPolicy } from "./scheduler-policy";
 import { DEFAULT_SCHEDULER_POLICY } from "./scheduler-policy";
@@ -120,7 +121,10 @@ export class DefaultLearningNeedGenerator implements LearningNeedGenerator {
       }
 
       const stageSkill = selectStageProgressSkill(model);
-      if (stageSkill) {
+      if (
+        stageSkill &&
+        !shouldDeferHealthyStageProgress(model, stageSkill, input.now, policy)
+      ) {
         candidates.push(
           makeCandidate(input, policy, {
             lexemeId: model.lexemeId,

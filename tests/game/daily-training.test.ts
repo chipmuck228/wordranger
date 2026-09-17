@@ -289,6 +289,86 @@ describe("Daily Training controller", () => {
     }
   });
 
+  it("P2/P3/P9/P10: next Daily Training round admits new unseen words from updated models", async () => {
+    const world = createDailyTrainingWorld("daily-progress-user", {
+      requestedNeedCount: 4,
+    });
+    const started = await world.controller.start();
+    const firstRecord = await world.sessions.get(started.session.sessionId);
+    const firstLexemes = (firstRecord?.needs ?? []).map((need) => need.lexemeId);
+    expect(firstLexemes).toHaveLength(4);
+
+    let current = started;
+    const missLexemeId = firstLexemes[firstLexemes.length - 1];
+    for (let index = 0; index < 4; index += 1) {
+      const assigned = await world.tasks.getTaskForEvaluation(current.task.id);
+      expect(assigned).toBeTruthy();
+      const key = assigned!.task.answerKey;
+      const correct = current.task.lexemeId !== missLexemeId;
+      const intent =
+        current.task.responseContract.kind === "CHOICE"
+          ? {
+              kind: "CHOICE" as const,
+              optionId: correct
+                ? key.correctOptionIds[0]
+                : (current.task.responseContract.options.find(
+                    (option) => option.id !== key.correctOptionIds[0],
+                  )?.id ?? key.correctOptionIds[0]),
+            }
+          : {
+              kind: "TEXT_INPUT" as const,
+              value: correct ? (key.exactAcceptedTexts[0] ?? "word") : "zzzz",
+            };
+      const submitted = await world.controller.submit({
+        sessionId: current.session.sessionId,
+        taskId: current.task.id,
+        intent,
+        responseTimeMs: 400,
+      });
+      const payloadKeys = collectKeys(JSON.parse(JSON.stringify(submitted)));
+      for (const field of ANSWER_KEY_FIELDS) {
+        expect(payloadKeys.has(field), field).toBe(false);
+      }
+      const continued = await world.controller.continue(current.session.sessionId);
+      if (continued.completed) {
+        break;
+      }
+      current = {
+        session: continued.progress,
+        task: continued.task!,
+        rendererGameType: continued.rendererGameType!,
+      };
+    }
+
+    const evidence = world.learning.listEvidenceForUser(world.userId);
+    expect(evidence).toHaveLength(4);
+    expect(evidence.every((item) => item.gameId !== "DAILY_TRAINING")).toBe(true);
+    expect(new Set(evidence.map((item) => item.taskId)).size).toBe(4);
+
+    const second = await world.createController().start();
+    const secondKeys = collectKeys(JSON.parse(JSON.stringify(second)));
+    for (const field of ANSWER_KEY_FIELDS) {
+      expect(secondKeys.has(field), field).toBe(false);
+    }
+    expect(second.session.planId).not.toBe(started.session.planId);
+    const secondRecord = await world.sessions.get(second.session.sessionId);
+    const secondLexemes = (secondRecord?.needs ?? []).map((need) => need.lexemeId);
+    expect(secondLexemes.some((lexemeId) => !firstLexemes.includes(lexemeId))).toBe(
+      true,
+    );
+    expect(secondLexemes).toContain(missLexemeId);
+    const strong = firstLexemes.filter((lexemeId) => lexemeId !== missLexemeId);
+    for (const lexemeId of strong) {
+      expect(
+        secondRecord?.needs.some(
+          (need) =>
+            need.lexemeId === lexemeId &&
+            need.targetSkill === "MEANING_RECOGNITION",
+        ),
+      ).toBe(false);
+    }
+  });
+
   it("uses revision CAS and rejects stale writes", async () => {
     const world = createDailyTrainingWorld();
     const started = await world.controller.start();

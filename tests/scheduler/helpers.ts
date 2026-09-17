@@ -105,6 +105,7 @@ export function policyWith(
   overrides: Partial<SchedulerPolicy> & {
     session?: Partial<SchedulerPolicy["session"]>;
     diversity?: Partial<SchedulerPolicy["diversity"]>;
+    progression?: Partial<SchedulerPolicy["progression"]>;
   },
 ): SchedulerPolicy {
   return {
@@ -114,6 +115,10 @@ export function policyWith(
     diversity: {
       ...DEFAULT_SCHEDULER_POLICY.diversity,
       ...overrides.diversity,
+    },
+    progression: {
+      ...DEFAULT_SCHEDULER_POLICY.progression,
+      ...overrides.progression,
     },
   };
 }

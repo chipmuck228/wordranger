@@ -426,6 +426,18 @@ Submit passes `RANGER_TRIAL` / `WORD_BUBBLE` / `MATCHING` / `SNAKE`. Product cor
 
 Direct `/play/*` routes keep producing normal Evidence. Daily Training does not own a parallel weak-word or mastery store. One Learning Core, one `StudentLexemeModel`.
 
+## ADR-072 — UNSEEN means unobserved, not unknown
+
+**Status:** accepted
+
+`MasteryStage.UNSEEN` / missing `StudentLexemeModel` means the system has no evidence. It is not a claim that the student cannot recognize the word. First contact is a normal probe task, not a placement exam and not a client-side mastery shortcut.
+
+## ADR-073 — Scheduler v2 defers healthy STAGE_PROGRESS until review is due
+
+**Status:** accepted
+
+`DEFAULT_SCHEDULER_POLICY` is v2. `SCHEDULER_POLICY_V1` keeps the previous generator behavior. After an independent success, Core still promotes `UNSEEN` → `EXPOSED` and sets `nextReviewAt`. v2 omits healthy same-skill `STAGE_PROGRESS` until that review is due so a few early probes cannot block new-word admission. Incorrect, assisted, and weakness results are not deferred. `sourceIndex` remains source-list order, not difficulty. One multiple-choice success does not grant `MASTERED`.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.
