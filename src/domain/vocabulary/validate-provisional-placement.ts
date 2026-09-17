@@ -25,7 +25,8 @@ function isProductionSource(
 export function provisionalPlacementIssues(args: {
   definition: PlacementBandDefinition;
   records: readonly ProvisionalLexemePlacement[];
-  canonicalKeys: ReadonlySet<string>;
+  lexemeIds: ReadonlySet<string>;
+  canonicalKeys?: ReadonlySet<string>;
 }): ProvisionalPlacementIssue[] {
   const issues: ProvisionalPlacementIssue[] = [];
   const bandIds = new Set<string>();
@@ -88,7 +89,13 @@ export function provisionalPlacementIssues(args: {
       });
       continue;
     }
-    if (!args.canonicalKeys.has(record.lexemeId)) {
+    if (args.canonicalKeys?.has(record.lexemeId)) {
+      issues.push({
+        code: "PROVISIONAL_CANONICAL_KEY_AS_LEXEME_ID",
+        message: `Provisional placement lexemeId must be Lexeme.id, not canonicalKey ${record.lexemeId}`,
+        metadata: { lexemeId: record.lexemeId },
+      });
+    } else if (!args.lexemeIds.has(record.lexemeId)) {
       issues.push({
         code: "PROVISIONAL_UNKNOWN_LEXEME",
         message: `Provisional placement points at unknown lexeme ${record.lexemeId}`,
@@ -145,7 +152,7 @@ export function provisionalPlacementIssues(args: {
     }
   }
 
-  for (const lexemeId of args.canonicalKeys) {
+  for (const lexemeId of args.lexemeIds) {
     if (!assigned.has(lexemeId)) {
       issues.push({
         code: "PROVISIONAL_MISSING_LEXEME",

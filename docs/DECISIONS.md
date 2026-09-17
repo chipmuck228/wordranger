@@ -472,7 +472,7 @@ Phase 12 inspected bundled placement metadata and `word-placement.json` (zero ov
 
 **Status:** accepted
 
-`data/vocabulary/placement/` stores an explicit ordered band definition and one INFERRED assignment per canonical lexeme. The generator is deterministic (`wordranger-provisional-band-generator/v1`) and uses `sourceIndex` only as a stable sort key for a balanced round-robin partition. Those records are not grade, CEFR, difficulty, or curriculum truth. They must not be merged into production-authoritative `curriculumBand` and must not unlock Adaptive Placement. Canonical vocabulary and learner state stay untouched. Future curated overlays replace this layer by `lexemeId` without rewriting Evidence or `StudentLexemeModel`.
+`data/vocabulary/placement/` stores an explicit ordered band definition and one INFERRED assignment per canonical lexeme, keyed by real `Lexeme.id` (not `canonicalKey`). The generator is deterministic (`wordranger-provisional-band-generator/v1`) and uses `sourceIndex` only as a stable sort key for a balanced round-robin partition. Those records are not grade, CEFR, difficulty, or curriculum truth. They must not be merged into production-authoritative `curriculumBand` and must not unlock Adaptive Placement. Canonical vocabulary and learner state stay untouched. Future curated overlays replace this layer by `lexemeId` without rewriting Evidence or `StudentLexemeModel`.
 
 ## Additional notes
 

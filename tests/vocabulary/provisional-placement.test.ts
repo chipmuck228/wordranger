@@ -45,9 +45,11 @@ const committedFile = JSON.parse(
   ),
 );
 const identities = dataset.lexemes.map((lexeme) => ({
+  id: lexeme.id,
   canonicalKey: lexeme.canonicalKey,
   sourceIndex: lexeme.sourceIndex,
 }));
+const lexemeIds = new Set(identities.map((lexeme) => lexeme.id));
 const canonicalKeys = new Set(identities.map((lexeme) => lexeme.canonicalKey));
 
 const FROZEN_STUDENT_LEXEME_MODEL_KEYS = [
@@ -107,7 +109,7 @@ describe("Provisional vocabulary band generator", () => {
     );
     for (const lexeme of dataset.lexemes) {
       expect(
-        records.filter((record) => record.lexemeId === lexeme.canonicalKey),
+        records.filter((record) => record.lexemeId === lexeme.id),
       ).toHaveLength(1);
     }
   });
@@ -117,6 +119,7 @@ describe("Provisional vocabulary band generator", () => {
     const issues = provisionalPlacementIssues({
       definition,
       records: generated,
+      lexemeIds,
       canonicalKeys,
     });
     expect(issues.filter((issue) => issue.code === "PROVISIONAL_UNKNOWN_LEXEME")).toEqual(
@@ -125,6 +128,7 @@ describe("Provisional vocabulary band generator", () => {
     const committedIssues = provisionalPlacementIssues({
       definition,
       records: committedFile.records,
+      lexemeIds,
       canonicalKeys,
     });
     expect(
@@ -156,7 +160,7 @@ describe("Provisional vocabulary band generator", () => {
         ],
       },
       records: [],
-      canonicalKeys: new Set(),
+      lexemeIds: new Set(),
     });
     expect(
       duplicateOrder.some((issue) => issue.code === "PROVISIONAL_BAND_DUPLICATE_ORDER"),
@@ -167,7 +171,7 @@ describe("Provisional vocabulary band generator", () => {
         bands: [{ id: "BAND_1", order: Number.NaN }],
       },
       records: [],
-      canonicalKeys: new Set(),
+      lexemeIds: new Set(),
     });
     expect(
       missingOrder.some((issue) => issue.code === "PROVISIONAL_BAND_MISSING_ORDER"),
@@ -215,12 +219,13 @@ describe("Provisional vocabulary band generator", () => {
       definition,
       records: [
         {
-          lexemeId: dataset.lexemes[0].canonicalKey,
+          lexemeId: dataset.lexemes[0].id,
           provisionalBand: placementField("BAND_1", "CURATED", [
             "must-not-unlock-production",
           ]),
         },
       ],
+      lexemeIds,
       canonicalKeys,
     });
     expect(
@@ -230,7 +235,7 @@ describe("Provisional vocabulary band generator", () => {
       definition,
       records: [
         {
-          lexemeId: dataset.lexemes[0].canonicalKey,
+          lexemeId: dataset.lexemes[0].id,
           provisionalBand: {
             value: "BAND_1",
             source: "INFERRED",
@@ -238,6 +243,7 @@ describe("Provisional vocabulary band generator", () => {
           },
         },
       ],
+      lexemeIds,
       canonicalKeys,
     });
     expect(
@@ -247,12 +253,13 @@ describe("Provisional vocabulary band generator", () => {
       definition,
       records: [
         {
-          lexemeId: dataset.lexemes[0].canonicalKey,
+          lexemeId: dataset.lexemes[0].id,
           provisionalBand: placementField("GRADE_7", "INFERRED", [
             PROVISIONAL_PLACEMENT_GENERATOR_VERSION,
           ]),
         },
       ],
+      lexemeIds,
       canonicalKeys,
     });
     expect(
@@ -365,7 +372,7 @@ describe("Provisional vocabulary band generator", () => {
 
   it("B12: band counts are non-empty and reasonably distributed", () => {
     const records = generateProvisionalAssignments(definition, identities);
-    const qa = summarizeProvisionalPlacement(definition, records, canonicalKeys);
+    const qa = summarizeProvisionalPlacement(definition, records, lexemeIds);
     expect(qa.totalCanonicalLexemes).toBe(dataset.lexemes.length);
     expect(qa.assignedLexemes).toBe(dataset.lexemes.length);
     expect(qa.coverage).toBe(1);
@@ -380,12 +387,13 @@ describe("Provisional vocabulary band generator", () => {
     expect(max - min).toBeLessThanOrEqual(1);
   });
 
-  it("validation rejects missing canonical assignments and unknown lexemeIds", () => {
-    const one = dataset.lexemes[0].canonicalKey;
+  it("validation rejects missing assignments, unknown UUIDs, and canonicalKey as lexemeId", () => {
+    const one = dataset.lexemes[0].id;
     const missing = provisionalPlacementIssues({
       definition,
       records: [],
-      canonicalKeys: new Set([one]),
+      lexemeIds: new Set([one]),
+      canonicalKeys,
     });
     expect(missing.some((issue) => issue.code === "PROVISIONAL_MISSING_LEXEME")).toBe(
       true,
@@ -394,20 +402,39 @@ describe("Provisional vocabulary band generator", () => {
       definition,
       records: [
         {
-          lexemeId: "lex-does-not-exist",
+          lexemeId: "00000000-0000-5000-8000-000000000000",
           provisionalBand: placementField("BAND_1", "INFERRED", [
             PROVISIONAL_PLACEMENT_GENERATOR_VERSION,
           ]),
         },
       ],
+      lexemeIds,
       canonicalKeys,
     });
     expect(unknown.some((issue) => issue.code === "PROVISIONAL_UNKNOWN_LEXEME")).toBe(
       true,
     );
+    const asCanonicalKey = provisionalPlacementIssues({
+      definition,
+      records: [
+        {
+          lexemeId: dataset.lexemes[0].canonicalKey,
+          provisionalBand: placementField("BAND_1", "INFERRED", [
+            PROVISIONAL_PLACEMENT_GENERATOR_VERSION,
+          ]),
+        },
+      ],
+      lexemeIds,
+      canonicalKeys,
+    });
+    expect(
+      asCanonicalKey.some(
+        (issue) => issue.code === "PROVISIONAL_CANONICAL_KEY_AS_LEXEME_ID",
+      ),
+    ).toBe(true);
   });
 
-  it("provider maps canonical keys to lexeme UUIDs without changing production placement metadata", async () => {
+  it("provider reads Lexeme.id records without dual-identity mapping", async () => {
     const provider = new FileVocabularyPlacementProvider(dataset);
     const listed = await provider.listProvisionalPlacements();
     expect(listed).toHaveLength(dataset.lexemes.length);
@@ -415,10 +442,115 @@ describe("Provisional vocabulary band generator", () => {
     expect(ids.size).toBe(dataset.lexemes.length);
     for (const lexeme of dataset.lexemes) {
       expect(ids.has(lexeme.id)).toBe(true);
+      expect(ids.has(lexeme.canonicalKey)).toBe(false);
     }
     const production = await repository.listPlacementMetadata();
     expect(production.some((record) => "provisionalBand" in record)).toBe(false);
     const qa = await provider.summarizeProvisionalPlacement();
     expect(qa.coverage).toBe(1);
+    expect(qa.missingLexemeIds).toEqual([]);
+    expect(qa.unknownLexemeIds).toEqual([]);
+  });
+
+  it("I1: every provisional record lexemeId equals an existing Lexeme.id", () => {
+    const records = generateProvisionalAssignments(definition, identities);
+    const idSet = new Set(dataset.lexemes.map((lexeme) => lexeme.id));
+    for (const record of [...records, ...committedFile.records]) {
+      expect(idSet.has(record.lexemeId)).toBe(true);
+      expect(record.lexemeId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      );
+    }
+  });
+
+  it("I2: no provisional record uses canonicalKey as lexemeId", () => {
+    const keys = new Set(dataset.lexemes.map((lexeme) => lexeme.canonicalKey));
+    for (const record of [
+      ...generateProvisionalAssignments(definition, identities),
+      ...committedFile.records,
+    ]) {
+      expect(keys.has(record.lexemeId)).toBe(false);
+      expect(record.lexemeId).not.toMatch(/^lex-\d+/);
+    }
+  });
+
+  it("I3: actor / actress split lexemes each have distinct UUID placements", () => {
+    const actor = dataset.lexemes.find((item) => item.canonicalKey === "lex-0019-1");
+    const actress = dataset.lexemes.find((item) => item.canonicalKey === "lex-0019-2");
+    expect(actor && actress).toBeTruthy();
+    expect(actor!.id).not.toBe(actress!.id);
+    expect(actor!.canonicalKey).not.toBe(actress!.id);
+    const records = generateProvisionalAssignments(definition, identities);
+    const actorRow = records.find((record) => record.lexemeId === actor!.id);
+    const actressRow = records.find((record) => record.lexemeId === actress!.id);
+    expect(actorRow).toBeTruthy();
+    expect(actressRow).toBeTruthy();
+    expect(actorRow?.lexemeId).not.toBe(actressRow?.lexemeId);
+    expect(records.some((record) => record.lexemeId === actor!.canonicalKey)).toBe(
+      false,
+    );
+  });
+
+  it("I4/I5: coverage remains 1638/1638 and band counts remain 273 each", () => {
+    const qa = summarizeProvisionalPlacement(
+      definition,
+      generateProvisionalAssignments(definition, identities),
+      lexemeIds,
+    );
+    expect(qa.totalCanonicalLexemes).toBe(1638);
+    expect(qa.assignedLexemes).toBe(1638);
+    expect(qa.coverage).toBe(1);
+    expect(qa.bandCounts).toEqual({
+      BAND_1: 273,
+      BAND_2: 273,
+      BAND_3: 273,
+      BAND_4: 273,
+      BAND_5: 273,
+      BAND_6: 273,
+    });
+  });
+
+  it("I6: two generations remain deterministic", () => {
+    const first = serializeProvisionalWordPlacementFile(
+      buildProvisionalWordPlacementFile(definition, identities),
+    );
+    const second = serializeProvisionalWordPlacementFile(
+      buildProvisionalWordPlacementFile(definition, identities),
+    );
+    expect(first).toBe(second);
+  });
+
+  it("I7: production Adaptive Placement still returns PLACEMENT_DATA_BLOCKER", async () => {
+    const listed = await repository.listPlacementMetadata();
+    expect(
+      assessAdaptivePlacementReadiness(listed, dataset.lexemes.length).status,
+    ).toBe(ADAPTIVE_PLACEMENT_READINESS.PLACEMENT_DATA_BLOCKER);
+  });
+
+  it("I8: Scheduler and Daily Training remain unchanged", async () => {
+    const counted = new CountingVocabularyRepository(repository);
+    await planLearningSession({
+      userId: "identity-scheduler-user",
+      now: "2026-09-17T12:00:00.000Z",
+      requestedNeedCount: 8,
+      createId: sequentialIdFactory("idsch"),
+      random: new SeededRandomSource("identity"),
+      vocabulary: counted,
+      query: new InMemoryLearningStateQueryRepository(),
+    });
+    expect(counted.calls.listPlacementMetadata).toBe(0);
+    const trainingCounted = new CountingVocabularyRepository(repository);
+    await createInMemoryDailyTrainingRuntime({
+      userId: "identity-training-user",
+      vocabulary: trainingCounted,
+      now: () => "2026-09-17T12:00:00.000Z",
+      createSessionId: sequentialIdFactory("idsess"),
+      createId: sequentialIdFactory("idtid"),
+      createEvidenceId: sequentialIdFactory("idev"),
+      requestedNeedCount: 8,
+    })
+      .createController()
+      .start();
+    expect(trainingCounted.calls.listPlacementMetadata).toBe(0);
   });
 });

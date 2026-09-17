@@ -24,7 +24,7 @@ export function generateProvisionalAssignments(
     .map((lexeme, index) => {
       const band = bands[index % bands.length];
       const record: ProvisionalLexemePlacement = {
-        lexemeId: lexeme.canonicalKey,
+        lexemeId: lexeme.id,
         provisionalBand: {
           value: band.id,
           source: "INFERRED",
@@ -42,7 +42,7 @@ export function generateProvisionalAssignments(
 export function summarizeProvisionalPlacement(
   definition: PlacementBandDefinition,
   records: readonly ProvisionalLexemePlacement[],
-  canonicalKeys: ReadonlySet<string>,
+  lexemeIds: ReadonlySet<string>,
   generatorVersion = PROVISIONAL_PLACEMENT_GENERATOR_VERSION,
 ): ProvisionalPlacementQaReport {
   const seen = new Map<string, number>();
@@ -54,7 +54,7 @@ export function summarizeProvisionalPlacement(
 
   for (const record of records) {
     seen.set(record.lexemeId, (seen.get(record.lexemeId) ?? 0) + 1);
-    if (!canonicalKeys.has(record.lexemeId)) {
+    if (!lexemeIds.has(record.lexemeId)) {
       unknownLexemeIds.push(record.lexemeId);
       continue;
     }
@@ -67,18 +67,17 @@ export function summarizeProvisionalPlacement(
     .map(([lexemeId]) => lexemeId)
     .sort();
   const assigned = new Set(
-    [...seen.keys()].filter((lexemeId) => canonicalKeys.has(lexemeId)),
+    [...seen.keys()].filter((lexemeId) => lexemeIds.has(lexemeId)),
   );
-  const missingLexemeIds = [...canonicalKeys]
+  const missingLexemeIds = [...lexemeIds]
     .filter((lexemeId) => !assigned.has(lexemeId))
     .sort();
   const uniqueUnknown = [...new Set(unknownLexemeIds)].sort();
 
   return {
-    totalCanonicalLexemes: canonicalKeys.size,
+    totalCanonicalLexemes: lexemeIds.size,
     assignedLexemes: assigned.size,
-    coverage:
-      canonicalKeys.size === 0 ? 0 : assigned.size / canonicalKeys.size,
+    coverage: lexemeIds.size === 0 ? 0 : assigned.size / lexemeIds.size,
     bandCounts,
     duplicateLexemeIds,
     missingLexemeIds,
@@ -92,15 +91,13 @@ export function buildProvisionalWordPlacementFile(
   lexemes: readonly LexemeProvisionalIdentity[],
 ): ProvisionalWordPlacementFile {
   const records = generateProvisionalAssignments(definition, lexemes);
+  const lexemeIds = new Set(lexemes.map((lexeme) => lexeme.id));
   const canonicalKeys = new Set(lexemes.map((lexeme) => lexeme.canonicalKey));
-  const qa = summarizeProvisionalPlacement(
-    definition,
-    records,
-    canonicalKeys,
-  );
+  const qa = summarizeProvisionalPlacement(definition, records, lexemeIds);
   const issues = provisionalPlacementIssues({
     definition,
     records,
+    lexemeIds,
     canonicalKeys,
   });
   if (issues.length > 0 || qa.coverage !== 1) {

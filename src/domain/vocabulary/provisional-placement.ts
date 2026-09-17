@@ -72,6 +72,7 @@ export interface ProvisionalWordPlacementFile {
 }
 
 export interface LexemeProvisionalIdentity {
+  id: string;
   canonicalKey: string;
   sourceIndex: number;
 }

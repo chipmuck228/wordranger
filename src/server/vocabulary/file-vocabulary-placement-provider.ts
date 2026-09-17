@@ -54,27 +54,14 @@ export class FileVocabularyPlacementProvider
     definition = readProvisionalBandDefinition(),
     file = readProvisionalWordPlacementFile(),
   ) {
-    const byCanonical = new Map(
-      dataset.lexemes.map((lexeme) => [lexeme.canonicalKey, lexeme]),
-    );
-    const byId = new Map(dataset.lexemes.map((lexeme) => [lexeme.id, lexeme]));
-    const mapped: ProvisionalLexemePlacement[] = file.records.map((record) => {
-      const lexeme =
-        byCanonical.get(record.lexemeId) ?? byId.get(record.lexemeId);
-      return {
-        lexemeId: lexeme?.id ?? record.lexemeId,
-        provisionalBand: {
-          ...record.provisionalBand,
-          provenance: [...record.provisionalBand.provenance],
-        },
-      };
-    });
+    const lexemeIds = new Set(dataset.lexemes.map((lexeme) => lexeme.id));
     const canonicalKeys = new Set(
       dataset.lexemes.map((lexeme) => lexeme.canonicalKey),
     );
     const fileIssues = provisionalPlacementIssues({
       definition,
       records: file.records,
+      lexemeIds,
       canonicalKeys,
     });
     if (fileIssues.length > 0) {
@@ -91,13 +78,19 @@ export class FileVocabularyPlacementProvider
         order: band.order,
       })),
     };
-    this.placements = mapped.sort((left, right) =>
-      left.lexemeId.localeCompare(right.lexemeId),
-    );
+    this.placements = file.records
+      .map((record) => ({
+        lexemeId: record.lexemeId,
+        provisionalBand: {
+          ...record.provisionalBand,
+          provenance: [...record.provisionalBand.provenance],
+        },
+      }))
+      .sort((left, right) => left.lexemeId.localeCompare(right.lexemeId));
     this.qa = summarizeProvisionalPlacement(
       definition,
       file.records,
-      canonicalKeys,
+      lexemeIds,
     );
   }
 

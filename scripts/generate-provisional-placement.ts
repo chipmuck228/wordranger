@@ -24,11 +24,13 @@ function main() {
   const dataset = loadVocabularyDataset();
   const definition = readProvisionalBandDefinition();
   const identities = dataset.lexemes.map((lexeme) => ({
+    id: lexeme.id,
     canonicalKey: lexeme.canonicalKey,
     sourceIndex: lexeme.sourceIndex,
   }));
   const generated = buildProvisionalWordPlacementFile(definition, identities);
   const serialized = serializeProvisionalWordPlacementFile(generated);
+  const lexemeIds = new Set(dataset.lexemes.map((lexeme) => lexeme.id));
   const canonicalKeys = new Set(
     dataset.lexemes.map((lexeme) => lexeme.canonicalKey),
   );
@@ -38,6 +40,7 @@ function main() {
     const issues = provisionalPlacementIssues({
       definition,
       records: existing.records,
+      lexemeIds,
       canonicalKeys,
     });
     if (issues.length > 0) {
