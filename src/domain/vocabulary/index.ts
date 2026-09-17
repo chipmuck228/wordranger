@@ -47,6 +47,24 @@ export {
 export type { VocabularyRepository, GetRelationsOptions } from "./vocabulary-repository";
 export type { VocabularyPlacementProvider } from "./vocabulary-placement-provider";
 export type {
+  CuratedPlacementOverride,
+  EffectivePlacement,
+  PlacementReviewCoverage,
+} from "./curated-placement";
+export {
+  CURATED_PLACEMENT_STATUS,
+  CURATED_PLACEMENT_VERSION,
+  HUMAN_REVIEW_PROVENANCE,
+} from "./curated-placement";
+export {
+  mergeEffectivePlacements,
+  summarizePlacementReview,
+} from "./effective-placement";
+export {
+  curatedPlacementIssues,
+  type CuratedPlacementIssue,
+} from "./validate-curated-placement";
+export type {
   PlacementBand,
   PlacementBandDefinition,
   ProvisionalLexemePlacement,

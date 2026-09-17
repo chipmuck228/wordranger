@@ -474,6 +474,12 @@ Phase 12 inspected bundled placement metadata and `word-placement.json` (zero ov
 
 `data/vocabulary/placement/` stores an explicit ordered band definition and one INFERRED assignment per canonical lexeme, keyed by real `Lexeme.id` (not `canonicalKey`). The generator is deterministic (`wordranger-provisional-band-generator/v1`) and uses `sourceIndex` only as a stable sort key for a balanced round-robin partition. Those records are not grade, CEFR, difficulty, or curriculum truth. They must not be merged into production-authoritative `curriculumBand` and must not unlock Adaptive Placement. Canonical vocabulary and learner state stay untouched. Future curated overlays replace this layer by `lexemeId` without rewriting Evidence or `StudentLexemeModel`.
 
+## ADR-080 — Curated placement overrides are a separate review overlay
+
+**Status:** accepted
+
+Human review writes sparse CURATED records (`wordranger-human-review/v1`) to `data/vocabulary/placement/curated-word-placement.json`, keyed by `Lexeme.id`. The provisional artifact is never rewritten. Effective placement for admin/review tooling is curated override if present, otherwise the provisional suggestion. Agreeing with the provisional band still writes an explicit CURATED record so reviewed coverage is countable. This overlay is local/internal file tooling, not learner state. Scheduler v2 and Daily Training do not read it. Adaptive Placement stays `PLACEMENT_DATA_BLOCKER` until a later step treats these reviewed `BAND_*` values as production authority.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

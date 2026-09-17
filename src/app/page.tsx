@@ -81,6 +81,14 @@ export default function Home() {
             Open Learning Core Debug Lab
           </Link>
         </div>
+        <div>
+          <Link
+            href="/debug/vocabulary-placement"
+            className="text-muted-foreground text-xs underline-offset-4 hover:underline"
+          >
+            Open Vocabulary Placement Review
+          </Link>
+        </div>
       </section>
     </main>
   );

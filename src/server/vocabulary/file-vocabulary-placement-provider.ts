@@ -1,5 +1,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import {
+  mergeEffectivePlacements,
+  summarizePlacementReview,
+} from "@/domain/vocabulary/effective-placement";
+import type { CuratedPlacementOverride } from "@/domain/vocabulary/curated-placement";
+import type { EffectivePlacement } from "@/domain/vocabulary/curated-placement";
+import type { PlacementReviewCoverage } from "@/domain/vocabulary/curated-placement";
 import { summarizeProvisionalPlacement } from "@/domain/vocabulary/generate-provisional-placement";
 import type {
   PlacementBandDefinition,
@@ -9,6 +16,8 @@ import type {
 } from "@/domain/vocabulary/provisional-placement";
 import { provisionalPlacementIssues } from "@/domain/vocabulary/validate-provisional-placement";
 import type { VocabularyPlacementProvider } from "@/domain/vocabulary/vocabulary-placement-provider";
+import type { CuratedPlacementStore } from "./curated-placement-store";
+import { FileCuratedPlacementStore } from "./curated-placement-store";
 import {
   defaultVocabularyDataRoot,
   type VocabularyDataset,
@@ -48,20 +57,22 @@ export class FileVocabularyPlacementProvider
   private readonly definition: PlacementBandDefinition;
   private readonly placements: ProvisionalLexemePlacement[];
   private readonly qa: ProvisionalPlacementQaReport;
+  private readonly lexemeIds: Set<string>;
 
   constructor(
-    dataset: VocabularyDataset,
+    private readonly dataset: VocabularyDataset,
     definition = readProvisionalBandDefinition(),
     file = readProvisionalWordPlacementFile(),
+    private readonly curatedStore: CuratedPlacementStore = new FileCuratedPlacementStore(),
   ) {
-    const lexemeIds = new Set(dataset.lexemes.map((lexeme) => lexeme.id));
+    this.lexemeIds = new Set(dataset.lexemes.map((lexeme) => lexeme.id));
     const canonicalKeys = new Set(
       dataset.lexemes.map((lexeme) => lexeme.canonicalKey),
     );
     const fileIssues = provisionalPlacementIssues({
       definition,
       records: file.records,
-      lexemeIds,
+      lexemeIds: this.lexemeIds,
       canonicalKeys,
     });
     if (fileIssues.length > 0) {
@@ -90,7 +101,7 @@ export class FileVocabularyPlacementProvider
     this.qa = summarizeProvisionalPlacement(
       definition,
       file.records,
-      lexemeIds,
+      this.lexemeIds,
     );
   }
 
@@ -111,6 +122,18 @@ export class FileVocabularyPlacementProvider
     }));
   }
 
+  async listCuratedOverrides(): Promise<CuratedPlacementOverride[]> {
+    return this.curatedStore.list();
+  }
+
+  async listEffectivePlacements(): Promise<EffectivePlacement[]> {
+    const [provisional, curated] = await Promise.all([
+      this.listProvisionalPlacements(),
+      this.listCuratedOverrides(),
+    ]);
+    return mergeEffectivePlacements(provisional, curated);
+  }
+
   async summarizeProvisionalPlacement(): Promise<ProvisionalPlacementQaReport> {
     return {
       ...this.qa,
@@ -120,11 +143,34 @@ export class FileVocabularyPlacementProvider
       unknownLexemeIds: [...this.qa.unknownLexemeIds],
     };
   }
+
+  async summarizePlacementReview(): Promise<PlacementReviewCoverage> {
+    const curated = await this.listCuratedOverrides();
+    return summarizePlacementReview({
+      definition: this.definition,
+      totalLexemes: this.dataset.lexemes.length,
+      provisionalCount: this.placements.length,
+      curated,
+      lexemeIds: this.lexemeIds,
+    });
+  }
 }
 
-/** Server/domain read API for the future Step C review page. Not a student route. */
+export function bundledVocabularyPlacementProvider(
+  dataset: VocabularyDataset,
+  curatedStore?: CuratedPlacementStore,
+): FileVocabularyPlacementProvider {
+  return new FileVocabularyPlacementProvider(
+    dataset,
+    undefined,
+    undefined,
+    curatedStore,
+  );
+}
+
+/** Server/domain read API for the review page. Not a student route. */
 export function bundledProvisionalPlacementProvider(
   dataset: VocabularyDataset,
 ): FileVocabularyPlacementProvider {
-  return new FileVocabularyPlacementProvider(dataset);
+  return bundledVocabularyPlacementProvider(dataset);
 }
