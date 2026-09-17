@@ -10,6 +10,7 @@ import { createInMemoryRangerTrialRuntime } from "@/server/runtime/create-in-mem
 import type { InMemoryRangerTrialRuntime } from "@/server/runtime/create-in-memory-ranger-trial-runtime";
 import { createInMemoryWordBubbleRuntime } from "@/server/runtime/create-in-memory-word-bubble-runtime";
 import { createInMemoryMatchingRuntime } from "@/server/runtime/create-in-memory-matching-runtime";
+import { createInMemorySnakeRuntime } from "@/server/runtime/create-in-memory-snake-runtime";
 import type { InMemoryGameSessionStore } from "@/server/game-session/in-memory-game-session-store";
 import { LexemeRelationType } from "@/domain/vocabulary/lexeme-relation";
 import { sequentialIdFactory } from "../learning/helpers";
@@ -42,6 +43,32 @@ export function createRangerTrialWorld(userId = RANGER_USER) {
 
 export type RangerTrialWorld = ReturnType<typeof createRangerTrialWorld>;
 export type SharedRangerTrialRuntime = InMemoryRangerTrialRuntime;
+
+export function createSnakeWorld(
+  userId = "snake-test-user",
+  options?: { sessions?: InMemoryGameSessionStore },
+) {
+  const runtime = createInMemorySnakeRuntime({
+    userId,
+    now: () => RANGER_NOW,
+    createSessionId: sequentialIdFactory("ssess"),
+    createId: sequentialIdFactory("sid"),
+    createEvidenceId: sequentialIdFactory("sev"),
+    requestedNeedCount: 8,
+    sessions: options?.sessions,
+  });
+  return {
+    vocabulary: runtime.vocabulary,
+    learning: runtime.learning,
+    query: runtime.learningStateQuery,
+    tasks: runtime.tasks,
+    sessions: runtime.sessions,
+    controller: runtime.createController(),
+    userId,
+    createController: () => runtime.createController(),
+    runtime,
+  };
+}
 
 export function createMatchingWorld(
   userId = "matching-test-user",

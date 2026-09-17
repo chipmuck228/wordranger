@@ -12,7 +12,7 @@ A Game Renderer is a consumer of Core V1. It displays a `PublicLearningTask` and
 | TaskEvaluator | Correctness | Display |
 | Learning Core | `StudentLexemeModel` | Games |
 
-Ranger Trial (单词闯关), Word Bubble (单词泡泡), and Matching (连连看) are the three reference renderers. Later games should replace only rendering. They must keep the same submission path.
+Ranger Trial (单词闯关), Word Bubble (单词泡泡), Matching (连连看), and Snake (贪食蛇) are the four reference renderers. Later games should replace only rendering. They must keep the same submission path.
 
 ```text
                        ┌──────── Ranger Trial
@@ -23,8 +23,10 @@ LearningSessionPlan    │
  TaskGenerator         │
       ↓                │
 PublicLearningTask ────┼──────── Word Bubble
-                       │
-                       └──────── Matching
+                       ├──────── Matching
+                       └──────── Snake
+                                  ↓
+                         semantic event only
                                   ↓
                             StudentAction
                                   ↓
@@ -41,7 +43,7 @@ PublicLearningTask ────┼──────── Word Bubble
 
 ## PublicLearningTask-only rule
 
-Client-facing Ranger Trial, Word Bubble, and Matching components may receive `PublicLearningTask`.
+Client-facing Ranger Trial, Word Bubble, Matching, and Snake components may receive `PublicLearningTask`.
 
 They must never receive:
 
@@ -76,8 +78,9 @@ Interaction rendering follows `responseContract.kind` **and** the game's capabil
 | Ranger Trial (单词闯关) | `/play/ranger-trial` | `CHOICE` + `TEXT_INPUT` | option tap or typed submit |
 | Word Bubble (单词泡泡) | `/play/word-bubble` | `CHOICE` only (`MEANING_CHOICE`, `RELATION_CHOICE`, `CONFUSABLE_CHOICE`) | single tap |
 | Matching (连连看) | `/play/matching` | `CHOICE` only (`MEANING_CHOICE`, `RELATION_CHOICE`, `CONFUSABLE_CHOICE`) | composite: left target, then right candidate |
+| Snake (贪食蛇) | `/play/snake` | `CHOICE` only (`MEANING_CHOICE`, `RELATION_CHOICE`, `CONFUSABLE_CHOICE`) | real-time loop; option collision collapses to one CHOICE |
 
-Same semantic pipeline. Matching does not invent pair task types or a `PAIR` action. Multiple UI gestures can map to one `StudentAction`.
+Same semantic pipeline. Matching does not invent pair task types or a `PAIR` action. Multiple UI gestures can map to one `StudentAction`. Snake game ticks are not `StudentAction`s. Only collision with an option object emits `{ kind: "CHOICE", optionId }`.
 
 Matching V1 is left-first, then right. A candidate tap before the target shows “先点左边的词。” and emits nothing. Only after both gestures does the renderer emit `{ kind: "CHOICE", optionId }`. The left tap is visual interaction state, not grading data. `responseTimeMs` starts when the task is interactable and stops when the complete pair is submitted — not on the first left click.
 
@@ -85,7 +88,7 @@ Matching V1 is left-first, then right. A candidate tap before the target shows �
 
 ## GameCapability
 
-`RANGER_TRIAL_CAPABILITY`, `WORD_BUBBLE_CAPABILITY`, and `MATCHING_CAPABILITY` answer: can this renderer **display** this task?
+`RANGER_TRIAL_CAPABILITY`, `WORD_BUBBLE_CAPABILITY`, `MATCHING_CAPABILITY`, and `SNAKE_CAPABILITY` answer: can this renderer **display** this task?
 
 They do not answer what the student should practice (Scheduler) or whether the answer is correct (TaskEvaluator).
 
@@ -95,7 +98,7 @@ Game compatibility filtering happens **after** the Scheduler returns an ordered 
 
 ## Game Session Controller
 
-`LearningGameSessionController` is the single orchestration path. Ranger Trial, Word Bubble, and Matching are `LearningGameDefinition` + renderer adapters.
+`LearningGameSessionController` is the single orchestration path. Ranger Trial, Word Bubble, Matching, and Snake are `LearningGameDefinition` + renderer adapters.
 
 1. `planLearningSession()` once at session start (no per-task reschedule)
 2. Filter planned needs against the game's supported skills
@@ -117,7 +120,7 @@ Student-facing game actions compose a durable runtime. A cold start or a differe
 
 ```text
 browser
-  → Server Action (thin Ranger Trial, Word Bubble, or Matching wrapper)
+  → Server Action (thin Ranger Trial, Word Bubble, Matching, or Snake wrapper)
   → LearningGameSessionController
   → durable game_sessions (orchestration, `game_type` + revision CAS)
   → durable learning_tasks (assignment + AnswerKey)
@@ -125,7 +128,7 @@ browser
   → same submitTaskAction / TaskEvaluator / Learning Core
 ```
 
-`sessionId` may live in `sessionStorage` so refresh can call `resumeRangerTrialSession`, `resumeWordBubbleSession`, or `resumeMatchingSession`. The browser must not store the LearningNeed plan, AnswerKey, StudentLexemeModel, Evidence, bubble layout, or Matching partial selection.
+`sessionId` may live in `sessionStorage` so refresh can call `resumeRangerTrialSession`, `resumeWordBubbleSession`, `resumeMatchingSession`, or `resumeSnakeSession`. The browser must not store the LearningNeed plan, AnswerKey, StudentLexemeModel, Evidence, bubble layout, Matching partial selection, or Snake body/direction/ticks.
 
 Responsibilities:
 
@@ -140,7 +143,7 @@ Refresh does **not** re-run the Scheduler. The original planned needs are persis
 
 If Evidence write succeeds and session save fails, a retry maps `TASK_ALREADY_COMPLETED` / duplicate evidence into a one-time recovery onto `awaiting_continue`. Stats increment once per task via `lastCompletedTaskId`.
 
-Randomization is recreated from `scheduler:${gameType}:${sessionId}` and `task:${gameType}:${sessionId}:${needId}`. Word Bubble layout uses `bubble-layout:${taskId}` and is not persisted. Matching keeps public option order and does not persist card selection. The RandomSource object is not persisted.
+Randomization is recreated from `scheduler:${gameType}:${sessionId}` and `task:${gameType}:${sessionId}:${needId}`. Word Bubble layout uses `bubble-layout:${taskId}` and is not persisted. Matching keeps public option order and does not persist card selection. Snake rebuilds a deterministic board from `task.id` + `option.id`. The RandomSource object is not persisted.
 
 Production uses Supabase adapters for learner/task/session state. Bundled vocabulary JSON is immutable reference data. `RANGER_TRIAL_RUNTIME=memory` is an explicit local/e2e fixture; production must not silently fall back to in-memory Maps.
 
@@ -156,7 +159,9 @@ If continue wins the CAS claim (`phase → awaiting_action`, `currentTaskId = nu
 
 `revision` is not exposed on the public session DTO.
 
-Word Bubble does not persist bubble coordinates, velocity, or animation frames. Matching does not persist `selectedTarget` or a pre-submit `selectedOptionId`. Refresh may rebuild the visual layout or clear a partial pair. Learning/session progress remains intact.
+Word Bubble does not persist bubble coordinates, velocity, or animation frames. Matching does not persist `selectedTarget` or a pre-submit `selectedOptionId`. Snake does not persist body, direction, tick, or option coordinates. Refresh may rebuild the visual layout or reset the snake to its initial cell. Learning/session progress remains intact.
+
+Snake `responseTimeMs` includes navigation overhead (movement time until option collision). It is not directly comparable with Ranger Trial tap time. Core V1 still stores the field as-is. See ADR-063 and `GAME_INTERACTION_LATENCY_CONFOUND`.
 
 ## Feedback DTO
 
@@ -175,7 +180,7 @@ After evaluation, the browser receives:
 
 ## Why games never grade
 
-If a renderer had its own spelling tolerance or mastery shortcut, another renderer would teach a different language. Core V1 stays replaceable only if every game is a thin view over the same `PublicLearningTask` → `StudentAction` → `submitTaskAction` pipeline. Ranger Trial, Word Bubble, and Matching already share that path. One renderer interaction may contain 0, 1, 2, or many visual gestures; semantic submission remains one `StudentAction` → one `TaskEvaluation` → one terminal `LearningEvidence`.
+If a renderer had its own spelling tolerance or mastery shortcut, another renderer would teach a different language. Core V1 stays replaceable only if every game is a thin view over the same `PublicLearningTask` → `StudentAction` → `submitTaskAction` pipeline. Ranger Trial, Word Bubble, Matching, and Snake already share that path. One renderer interaction may contain 0, 1, 2, or many visual gestures or hundreds of game ticks; semantic submission remains one `StudentAction` → one `TaskEvaluation` → one terminal `LearningEvidence`.
 
 ## Auth (future work)
 

@@ -29,6 +29,12 @@ export default function Home() {
           连连看
         </Link>
         <Link
+          href="/play/snake"
+          className="text-base font-medium underline underline-offset-4"
+        >
+          贪食蛇
+        </Link>
+        <Link
           href="/debug/vocabulary"
           className="text-sm font-medium underline underline-offset-4"
         >

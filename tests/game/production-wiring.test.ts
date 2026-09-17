@@ -44,6 +44,18 @@ const matchingSelector = readFileSync(
   path.join(process.cwd(), "src/server/runtime/create-matching-runtime.ts"),
   "utf8",
 );
+const snakeActions = readFileSync(
+  path.join(process.cwd(), "src/app/play/snake/actions.ts"),
+  "utf8",
+);
+const snakeProduction = readFileSync(
+  path.join(process.cwd(), "src/server/runtime/create-supabase-snake-runtime.ts"),
+  "utf8",
+);
+const snakeSelector = readFileSync(
+  path.join(process.cwd(), "src/server/runtime/create-snake-runtime.ts"),
+  "utf8",
+);
 
 describe("Ranger Trial production wiring", () => {
   it("student-facing actions do not instantiate in-memory learning/task/session stores", () => {
@@ -110,5 +122,26 @@ describe("Matching production wiring", () => {
     expect(matchingProduction).not.toContain("InMemoryLearningRepository");
     expect(matchingSelector).toContain('RANGER_TRIAL_RUNTIME === "memory"');
     expect(matchingSelector).toContain("createSupabaseMatchingRuntime");
+  });
+});
+
+describe("Snake production wiring", () => {
+  it("student-facing actions use the generic runtime selector", () => {
+    expect(snakeActions).toContain("createSnakeRuntime");
+    expect(snakeActions).not.toContain("InMemoryLearningRepository");
+    expect(snakeActions).not.toContain("InMemoryLearningTaskRepository");
+    expect(snakeActions).not.toContain("InMemoryGameSessionStore");
+    expect(snakeActions).not.toContain("new SeededRandomSource");
+  });
+
+  it("Supabase factory reuses durable learning/task adapters and a typed session store", () => {
+    expect(snakeProduction).toContain("SupabaseLearningRepository");
+    expect(snakeProduction).toContain("SupabaseLearningTaskRepository");
+    expect(snakeProduction).toContain("SupabaseLearningStateQueryRepository");
+    expect(snakeProduction).toContain("SupabaseGameSessionStore");
+    expect(snakeProduction).toContain("SNAKE");
+    expect(snakeProduction).not.toContain("InMemoryLearningRepository");
+    expect(snakeSelector).toContain('RANGER_TRIAL_RUNTIME === "memory"');
+    expect(snakeSelector).toContain("createSupabaseSnakeRuntime");
   });
 });

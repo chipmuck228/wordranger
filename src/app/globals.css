@@ -190,9 +190,44 @@
   .word-bubble-pop,
   .word-bubble-shake,
   .matching-card-pop,
-  .matching-card-shake {
+  .matching-card-shake,
+  .snake-card-pop,
+  .snake-card-shake {
     animation: none !important;
   }
+}
+
+@keyframes snake-card-pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.015);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes snake-card-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+.snake-card-pop {
+  animation: snake-card-pop 420ms ease-out;
+}
+
+.snake-card-shake {
+  animation: snake-card-shake 420ms ease-in-out;
 }
 
 @keyframes matching-card-pop {

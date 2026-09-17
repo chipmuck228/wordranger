@@ -1,6 +1,6 @@
 # WordRanger Architecture
 
-WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 07 adds **Matching** (连连看) as the third Game Renderer. Ranger Trial (单词闯关) remains the CHOICE + TEXT_INPUT reference. Word Bubble (单词泡泡) remains the single-tap CHOICE renderer. There is still no student login.
+WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 08 adds **Snake** (贪食蛇) as the fourth Game Renderer. Ranger Trial remains the CHOICE + TEXT_INPUT reference. Word Bubble is single-tap CHOICE. Matching is composite two-gesture CHOICE. Snake is a real-time loop that collapses option collision into one CHOICE. There is still no student login.
 
 ## Formal layers
 
@@ -20,6 +20,7 @@ flowchart TD
   ranger[Ranger Trial]
   bubble[Word Bubble]
   matching[Matching]
+  snake[Snake]
   action[StudentAction]
   sessionCtl[Generic Game Session Controller]
   submit[submitTaskAction]
@@ -69,9 +70,11 @@ Task Assignment
         ↓
 PublicLearningTask
         ↓
-   ┌────┴────┐
-Ranger Trial  Word Bubble
-   └────┬────┘
+   ┌────┴────────────┐
+Ranger Trial  Word Bubble  Matching  Snake
+   └────┬────────────┘
+        ↓
+  semantic event only
         ↓
 StudentAction
         ↓
@@ -97,7 +100,7 @@ Responsibilities:
 - **LearningNeed** — stable contract passed downstream; not a task
 - **Task Generator** — which task should represent the need
 - **Task Assignment** — which user/session owns the generated task
-- **Game Renderer** — how the public task is presented; emits only student action intent. Ranger Trial: CHOICE + TEXT_INPUT. Word Bubble: CHOICE single-tap. Matching: CHOICE via two ephemeral UI gestures (left target, then right candidate). Renderer-local interaction state is ephemeral and is not learning truth.
+- **Game Renderer** — how the public task is presented; emits only student action intent. Ranger Trial: CHOICE + TEXT_INPUT. Word Bubble: CHOICE single-tap. Matching: CHOICE via two ephemeral UI gestures. Snake: real-time ticks stay renderer-local; only option collision is a semantic event. Renderer-local interaction state is ephemeral and is not learning truth.
 - **Game Session Controller** — generic `LearningGameSessionController` plans once, filters playable needs after scheduling, generates one assigned task at a time, calls `submitTaskAction`, returns a safe feedback DTO
 - **Submission Service** (`submitTaskAction`) — loads the server-side answer key, verifies ownership, then grades
 - **TaskEvaluator** — what the student action means
@@ -155,7 +158,7 @@ These three dimensions stay separate. A lexeme may be `MASTERED`, `FADING`, and 
 
 ## GameCapability
 
-Games describe what they can train (`supportedSkills`, prompt/answer modes, weakness types, difficulty range). The engine does not hard-code `SnakeGame`. Capabilities do not list lexemes. Ranger Trial publishes `RANGER_TRIAL_CAPABILITY`, Word Bubble publishes `WORD_BUBBLE_CAPABILITY`, and Matching publishes `MATCHING_CAPABILITY` for display feasibility only. Application orchestration may filter Scheduler needs against those skills after planning. That filter is not Scheduler policy.
+Games describe what they can train (`supportedSkills`, prompt/answer modes, weakness types, difficulty range). Capabilities do not list lexemes. Ranger Trial, Word Bubble, Matching, and Snake publish display capabilities only. Application orchestration may filter Scheduler needs against those skills after planning. That filter is not Scheduler policy.
 
 ## Scheduler
 
@@ -206,7 +209,7 @@ UI, API routes, and repositories contain no stage-transition rules. Those live i
 
 ```text
 browser
-  → Ranger Trial, Word Bubble, or Matching Server Action
+  → Ranger Trial, Word Bubble, Matching, or Snake Server Action
   → LearningGameSessionController
   → durable Game Session (`game_sessions.game_type`, revision CAS)
   → one authoritative session transition
@@ -218,13 +221,13 @@ browser
   → Learning Core
 ```
 
-Student-facing `/play/ranger-trial`, `/play/word-bubble`, and `/play/matching` production wiring share `SupabaseLearningRepository`, `SupabaseLearningStateQueryRepository`, `SupabaseLearningTaskRepository`, bundled vocabulary, and `game_sessions`. Each game uses a session store configured with `expectedUserId` + `expectedGameType`. Session writes are `INSERT` on create and revision CAS on update. There is no production in-memory Map for learning state, assigned tasks, or session orchestration.
+Student-facing `/play/ranger-trial`, `/play/word-bubble`, `/play/matching`, and `/play/snake` production wiring share `SupabaseLearningRepository`, `SupabaseLearningStateQueryRepository`, `SupabaseLearningTaskRepository`, bundled vocabulary, and `game_sessions`. Each game uses a session store configured with `expectedUserId` + `expectedGameType`. Session writes are `INSERT` on create and revision CAS on update. There is no production in-memory Map for learning state, assigned tasks, or session orchestration.
 
 Vocabulary on the student path is the bundled JSON dataset (`InMemoryVocabularyRepository` over git-versioned files). That is immutable reference data, not learner state.
 
-Debug Labs and unit tests may still use in-memory repositories. Explicit `RANGER_TRIAL_RUNTIME=memory` is a local/e2e fixture only (all three student games honor it). Missing Supabase config in production fails closed.
+Debug Labs and unit tests may still use in-memory repositories. Explicit `RANGER_TRIAL_RUNTIME=memory` is a local/e2e fixture only (all four student games honor it). Missing Supabase config in production fails closed.
 
 There is no auth; student pages use `V1_PLACEHOLDER_USER_ID` (a UUID placeholder). Auth/RLS is future work. Server actions must not accept `userId` from the browser.
 
-There is no global game selector in Phase 07. Home exposes 单词闯关, 单词泡泡, and 连连看 as explicit launch options.
+There is no global game selector in Phase 08. Home exposes 单词闯关, 单词泡泡, 连连看, and 贪食蛇 as explicit launch options.
 

@@ -8,6 +8,7 @@ import {
   collectKeys,
   createMatchingWorld,
   createRangerTrialWorld,
+  createSnakeWorld,
   createWordBubbleWorld,
 } from "./helpers";
 
@@ -71,8 +72,12 @@ describe("G4 client payload contains no AnswerKey", () => {
     expect(submitted.feedback.message.length).toBeGreaterThan(0);
   });
 
-  it("Word Bubble and Matching start/submit payloads stay AnswerKey-free", async () => {
-    for (const world of [createWordBubbleWorld(), createMatchingWorld()]) {
+  it("Word Bubble, Matching, and Snake start/submit payloads stay AnswerKey-free", async () => {
+    for (const world of [
+      createWordBubbleWorld(),
+      createMatchingWorld(),
+      createSnakeWorld(),
+    ]) {
       const started = await world.controller.start();
       const startKeys = collectKeys(JSON.parse(JSON.stringify(started)));
       for (const field of ANSWER_KEY_FIELDS) {

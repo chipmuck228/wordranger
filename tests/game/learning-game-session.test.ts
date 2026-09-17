@@ -4,6 +4,8 @@ import {
   MATCHING_GAME_TYPE,
   RANGER_TRIAL_GAME_ID,
   RANGER_TRIAL_GAME_TYPE,
+  SNAKE_GAME_ID,
+  SNAKE_GAME_TYPE,
   WORD_BUBBLE_GAME_ID,
   WORD_BUBBLE_GAME_TYPE,
 } from "@/server/auth/v1-user";
@@ -12,26 +14,31 @@ import { InMemoryGameSessionStore } from "@/server/game-session/in-memory-game-s
 import { RANGER_TRIAL_GAME_DEFINITION } from "@/server/game-session/ranger-trial-capability";
 import { WORD_BUBBLE_GAME_DEFINITION } from "@/server/game-session/word-bubble-capability";
 import { MATCHING_GAME_DEFINITION } from "@/server/game-session/matching-capability";
+import { SNAKE_GAME_DEFINITION } from "@/server/game-session/snake-capability";
 import { GameSessionError } from "@/server/game-session/ranger-trial-errors";
 import {
   createMatchingWorld,
   createRangerTrialWorld,
+  createSnakeWorld,
   createWordBubbleWorld,
 } from "./helpers";
 
 describe("generic learning game session controller", () => {
-  it("persists Ranger Trial, Word Bubble, and Matching with distinct game types and ids", async () => {
+  it("persists Ranger Trial, Word Bubble, Matching, and Snake with distinct game types and ids", async () => {
     const ranger = createRangerTrialWorld();
     const bubble = createWordBubbleWorld();
     const matching = createMatchingWorld();
+    const snake = createSnakeWorld();
     const rangerStarted = await ranger.controller.start();
     const bubbleStarted = await bubble.controller.start();
     const matchingStarted = await matching.controller.start();
+    const snakeStarted = await snake.controller.start();
     expect(rangerStarted.task.responseContract.kind === "CHOICE" || rangerStarted.task.responseContract.kind === "TEXT_INPUT").toBe(
       true,
     );
     expect(bubbleStarted.task.responseContract.kind).toBe("CHOICE");
     expect(matchingStarted.task.responseContract.kind).toBe("CHOICE");
+    expect(snakeStarted.task.responseContract.kind).toBe("CHOICE");
 
     await ranger.controller.submit({
       sessionId: rangerStarted.session.sessionId,
@@ -69,6 +76,18 @@ describe("generic learning game session controller", () => {
       },
       responseTimeMs: 300,
     });
+    await snake.controller.submit({
+      sessionId: snakeStarted.session.sessionId,
+      taskId: snakeStarted.task.id,
+      intent: {
+        kind: "CHOICE",
+        optionId:
+          snakeStarted.task.responseContract.kind === "CHOICE"
+            ? snakeStarted.task.responseContract.options[0].id
+            : "missing",
+      },
+      responseTimeMs: 300,
+    });
 
     expect(ranger.learning.listEvidenceForUser(ranger.userId)[0].gameId).toBe(
       RANGER_TRIAL_GAME_ID,
@@ -78,6 +97,9 @@ describe("generic learning game session controller", () => {
     );
     expect(matching.learning.listEvidenceForUser(matching.userId)[0].gameId).toBe(
       MATCHING_GAME_ID,
+    );
+    expect(snake.learning.listEvidenceForUser(snake.userId)[0].gameId).toBe(
+      SNAKE_GAME_ID,
     );
   });
 
@@ -118,6 +140,16 @@ describe("generic learning game session controller", () => {
       userId: rangerWorld.userId,
     });
     await expect(matchingController.resume(started.session.sessionId)).rejects.toMatchObject({
+      code: "SESSION_NOT_FOUND",
+    });
+    const snakeStore = new InMemoryGameSessionStore(SNAKE_GAME_TYPE, shared);
+    const snakeController = new LearningGameSessionController({
+      ...rangerWorld,
+      definition: SNAKE_GAME_DEFINITION,
+      sessions: snakeStore,
+      userId: rangerWorld.userId,
+    });
+    await expect(snakeController.resume(started.session.sessionId)).rejects.toMatchObject({
       code: "SESSION_NOT_FOUND",
     });
   });

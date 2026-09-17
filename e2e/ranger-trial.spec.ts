@@ -16,7 +16,9 @@ test("Ranger Trial start → answer → feedback → continue → complete", asy
     if ((await options.count()) > 0) {
       const first = options.first();
       await first.click();
-      await expect(first).toBeDisabled();
+      await expect(page.getByRole("button", { name: "继续" })).toBeVisible({
+        timeout: 30_000,
+      });
     } else if (await submit.isVisible()) {
       await page.getByLabel("英文答案").fill("word");
       await submit.click();

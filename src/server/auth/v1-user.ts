@@ -16,4 +16,7 @@ export const WORD_BUBBLE_GAME_TYPE = "WORD_BUBBLE";
 export const MATCHING_GAME_ID = "MATCHING";
 export const MATCHING_GAME_TYPE = "MATCHING";
 
+export const SNAKE_GAME_ID = "SNAKE";
+export const SNAKE_GAME_TYPE = "SNAKE";
+
 export const GAME_SESSION_STATE_VERSION = "v1";

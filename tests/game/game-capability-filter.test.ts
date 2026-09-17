@@ -7,6 +7,7 @@ import {
 import { RANGER_TRIAL_GAME_DEFINITION } from "@/server/game-session/ranger-trial-capability";
 import { WORD_BUBBLE_GAME_DEFINITION } from "@/server/game-session/word-bubble-capability";
 import { MATCHING_GAME_DEFINITION } from "@/server/game-session/matching-capability";
+import { SNAKE_GAME_DEFINITION } from "@/server/game-session/snake-capability";
 import { GameSessionError } from "@/server/game-session/ranger-trial-errors";
 import { makeNeed } from "../tasks/helpers";
 
@@ -41,6 +42,7 @@ describe("game capability filtering", () => {
   it.each([
     ["Word Bubble", WORD_BUBBLE_GAME_DEFINITION],
     ["Matching", MATCHING_GAME_DEFINITION],
+    ["Snake", SNAKE_GAME_DEFINITION],
   ] as const)("%s retains only compatible needs without reordering", (_name, definition) => {
     const { playable, excluded } = filterPlayableNeeds(needs, definition);
     expect(playable.map((need) => need.id)).toEqual([

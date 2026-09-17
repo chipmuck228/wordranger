@@ -21,6 +21,7 @@ describe("G5 renderer architecture boundary", () => {
       join(process.cwd(), "src/components/game/ranger-trial"),
       join(process.cwd(), "src/components/game/word-bubble"),
       join(process.cwd(), "src/components/game/matching"),
+      join(process.cwd(), "src/components/game/snake"),
       join(process.cwd(), "src/components/game/shared"),
     ];
     const forbidden = [
@@ -46,5 +47,18 @@ describe("G5 renderer architecture boundary", () => {
         }
       }
     }
+  });
+
+  it("snake-engine stays free of learning and server imports", () => {
+    const engine = readFileSync(
+      join(process.cwd(), "src/components/game/snake/snake-engine.ts"),
+      "utf8",
+    );
+    expect(engine).not.toMatch(/@\/domain\/learning/);
+    expect(engine).not.toMatch(/@\/server\//);
+    expect(engine).not.toMatch(/@supabase/);
+    expect(engine).not.toMatch(/next\//);
+    expect(engine).not.toMatch(/StudentLexemeModel/);
+    expect(engine).not.toMatch(/submitTaskAction/);
   });
 });

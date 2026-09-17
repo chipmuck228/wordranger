@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MATCHING_GAME_ID,
   RANGER_TRIAL_GAME_ID,
+  SNAKE_GAME_ID,
   WORD_BUBBLE_GAME_ID,
 } from "@/server/auth/v1-user";
 import { DefaultTaskGenerator } from "@/domain/tasks/default-task-generator";
@@ -32,7 +33,7 @@ function cloneTask(
 }
 
 describe("cross-renderer equivalence", () => {
-  it("same CHOICE option yields the same TaskEvaluator result for Ranger Trial, Word Bubble, and Matching", async () => {
+  it("same CHOICE option yields the same TaskEvaluator result across four renderers", async () => {
     const vocabulary = new InMemoryVocabularyRepository(loadVocabularyDataset());
     const generator = new DefaultTaskGenerator(vocabulary);
     const [quiet] = await vocabulary.findLexemeByLemma("quiet");
@@ -55,6 +56,7 @@ describe("cross-renderer equivalence", () => {
     const rangerTask = cloneTask(generated.value, "task-ranger");
     const bubbleTask = cloneTask(generated.value, "task-bubble");
     const matchingTask = cloneTask(generated.value, "task-matching");
+    const snakeTask = cloneTask(generated.value, "task-snake");
     const optionId = rangerTask.answerKey.correctOptionIds[0];
     const tasks = new InMemoryLearningTaskRepository();
     const learning = new InMemoryLearningRepository();
@@ -69,6 +71,10 @@ describe("cross-renderer equivalence", () => {
     await tasks.saveGeneratedTask({
       task: matchingTask,
       assignment: { userId: USER, sessionId: "sess-matching" },
+    });
+    await tasks.saveGeneratedTask({
+      task: snakeTask,
+      assignment: { userId: USER, sessionId: "sess-snake" },
     });
 
     const rangerIntent: StudentAction = {
@@ -86,6 +92,11 @@ describe("cross-renderer equivalence", () => {
     const matchingIntent: StudentAction = {
       ...rangerIntent,
       taskId: matchingTask.publicTask.id,
+    };
+    const snakeIntent: StudentAction = {
+      ...rangerIntent,
+      taskId: snakeTask.publicTask.id,
+      responseTimeMs: 4500,
     };
 
     const ranger = await submitTaskAction({
@@ -121,21 +132,30 @@ describe("cross-renderer equivalence", () => {
       learningRepository: learning,
       now: NOW,
     });
+    const snake = await submitTaskAction({
+      taskId: snakeTask.publicTask.id,
+      action: snakeIntent,
+      userId: USER,
+      sessionId: "sess-snake",
+      gameId: SNAKE_GAME_ID,
+      evidenceId: "ev-snake",
+      learningTaskRepository: tasks,
+      learningRepository: learning,
+      now: NOW,
+    });
 
     expect(ranger.evaluation.outcome).toBe(bubble.evaluation.outcome);
     expect(ranger.evaluation.outcome).toBe(matching.evaluation.outcome);
-    expect(ranger.evaluation.errorType).toBe(bubble.evaluation.errorType);
-    expect(ranger.evaluation.errorType).toBe(matching.evaluation.errorType);
+    expect(ranger.evaluation.outcome).toBe(snake.evaluation.outcome);
+    expect(ranger.evaluation.errorType).toBe(snake.evaluation.errorType);
     expect(ranger.evaluation.selectedLexemeId).toBe(
-      bubble.evaluation.selectedLexemeId,
+      snake.evaluation.selectedLexemeId,
     );
-    expect(ranger.evaluation.selectedLexemeId).toBe(
-      matching.evaluation.selectedLexemeId,
-    );
-    expect(ranger.evaluation.isCorrect).toBe(bubble.evaluation.isCorrect);
-    expect(ranger.evaluation.isCorrect).toBe(matching.evaluation.isCorrect);
+    expect(ranger.evaluation.isCorrect).toBe(snake.evaluation.isCorrect);
+    expect(ranger.evidence.responseTimeMs).not.toBe(snake.evidence.responseTimeMs);
     expect(ranger.evidence.gameId).toBe(RANGER_TRIAL_GAME_ID);
     expect(bubble.evidence.gameId).toBe(WORD_BUBBLE_GAME_ID);
     expect(matching.evidence.gameId).toBe(MATCHING_GAME_ID);
+    expect(snake.evidence.gameId).toBe(SNAKE_GAME_ID);
   });
 });

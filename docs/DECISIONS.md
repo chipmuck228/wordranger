@@ -348,6 +348,36 @@ The left target is presentation of the existing public prompt. The selected righ
 
 A renderer may use 0, 1, 2, or many visual gestures. Semantic submission remains one `StudentAction` unless the underlying task protocol explicitly defines otherwise. Word Bubble is one tap → one action. Matching is two taps → one action. Core V1 does not count clicks.
 
+## ADR-059 — Real-time game loops remain renderer-local
+
+**Status:** accepted
+
+Snake ticks, direction changes, wrap-around, and self-collision handling live in `snake-engine.ts`. They are not learning events. The Learning Core never sees a game loop.
+
+## ADR-060 — Only semantic collision emits StudentAction
+
+**Status:** accepted
+
+Arrow keys, WASD, screen buttons, ticks, and empty-cell movement emit nothing. The first option-object collision emits `{ kind: "CHOICE", optionId }` and locks further collisions. Wall wrap and self-overlap create no Evidence.
+
+## ADR-061 — Snake V1 preserves one-task-one-terminal-evidence
+
+**Status:** accepted
+
+One `PublicLearningTask` maps to one board and one option collision. After feedback, Continue loads a new task and a new board. Do not keep a multi-question continuous snake world in V1.
+
+## ADR-062 — Snake board state is ephemeral and not persisted
+
+**Status:** accepted
+
+`game_sessions` stores orchestration only. Snake body, direction, pending turn, tick count, option coordinates, and pause are rebuilt from `task.id` on refresh. The current `PublicLearningTask` remains.
+
+## ADR-063 — Snake responseTimeMs includes interaction overhead and is not directly cross-renderer comparable
+
+**Status:** accepted
+
+Snake starts the timer when the task is interactable and stops at option collision. Navigation time is included. Ranger Trial tap time and Snake path time are not the same measurement. Core V1 still stores `responseTimeMs` and may emit `SLOW_RESPONSE` from `detect-weaknesses` using `slowResponseFallbackMs` (8000) or 1.8× the median of prior successful samples. This is `GAME_INTERACTION_LATENCY_CONFOUND` / `CORE_MEASUREMENT_CONCERN`. Do not add Snake-specific scoring or change Core thresholds in Phase 08.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.
