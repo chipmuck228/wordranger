@@ -41,6 +41,16 @@ test("Ranger Trial start → answer → feedback → continue → complete", asy
   await expect(page.getByText("完成", { exact: true })).toBeVisible();
 });
 
+test("Ranger Trial settings are visible without auth", async ({ page }) => {
+  await page.goto("/play/ranger-trial");
+  await page.getByRole("button", { name: "设置" }).click();
+  await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
+  await expect(page.getByText(/目前对所有人开放/)).toBeVisible();
+  await page.getByRole("switch", { name: "界面动画" }).click();
+  await page.getByRole("button", { name: "关闭" }).click();
+  await expect(page.getByRole("button", { name: "开始闯关" })).toBeVisible();
+});
+
 test("Ranger Trial refresh resumes the durable session", async ({ page }) => {
   await page.goto("/play/ranger-trial");
   await page.getByRole("button", { name: "开始闯关" }).click();

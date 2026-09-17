@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ChoiceTaskRenderer } from "@/components/game/ranger-trial/ChoiceTaskRenderer";
+import { TaskFeedback } from "@/components/game/ranger-trial/TaskFeedback";
 import { TextInputTaskRenderer } from "@/components/game/ranger-trial/TextInputTaskRenderer";
 import { formatTaskPrompt } from "@/components/game/ranger-trial/task-prompt-copy";
 import { LexemeRelationType } from "@/domain/vocabulary/lexeme-relation";
@@ -97,5 +98,32 @@ describe("Ranger Trial renderer", () => {
     });
     expect(formatted.instruction).toBe("选择与 quiet 构成反义关系的单词");
     expect(formatted.headline).toBe("quiet");
+  });
+
+  it("R9: feedback is explicit for correct and incorrect", () => {
+    const { rerender } = render(
+      <TaskFeedback
+        feedback={{
+          status: "CORRECT",
+          message: "答对了！",
+          continueAvailable: true,
+        }}
+        onContinue={() => undefined}
+      />,
+    );
+    expect(screen.getByText("答对了")).toBeTruthy();
+    expect(screen.getByText("答对了！")).toBeTruthy();
+    rerender(
+      <TaskFeedback
+        feedback={{
+          status: "INCORRECT",
+          message: "正确答案：quiet",
+          continueAvailable: true,
+        }}
+        onContinue={() => undefined}
+      />,
+    );
+    expect(screen.getByText("再看看")).toBeTruthy();
+    expect(screen.getByText("正确答案：quiet")).toBeTruthy();
   });
 });

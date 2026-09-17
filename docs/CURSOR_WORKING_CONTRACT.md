@@ -180,7 +180,7 @@ Current reference renderers:
 
 | Renderer | Route | Contracts | Interaction |
 | --- | --- | --- | --- |
-| Ranger Trial | `/play/ranger-trial` | `CHOICE` + `TEXT_INPUT` | option tap or typed submit |
+| Ranger Trial | `/play/ranger-trial` | `CHOICE` + `TEXT_INPUT` | option tap or typed submit. Free-practice UI pilot is presentation-only (light, mobile-first, explicit feedback, subtle motion). Settings are visible to everyone for now and later admin-only; they stay in `localStorage` and must not write Evidence, `StudentLexemeModel`, or Scheduler input. Daily Training may reuse Ranger Trial task renderers without the free-practice chrome. |
 | Word Bubble | `/play/word-bubble` | `CHOICE` only | single tap |
 | Matching | `/play/matching` | `CHOICE` only | left target, then right candidate |
 | Snake | `/play/snake` | `CHOICE` only | real-time loop; only option collision is semantic |

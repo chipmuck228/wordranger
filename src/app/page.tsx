@@ -26,9 +26,10 @@ export default function Home() {
         <div className="flex flex-col gap-2">
           <Link
             href="/play/ranger-trial"
-            className="text-muted-foreground text-sm underline-offset-4 hover:underline"
+            className="bg-card text-foreground flex min-h-12 items-center justify-between rounded-2xl px-4 py-3 text-sm shadow-sm ring-1 ring-black/5"
           >
-            单词闯关
+            <span>单词闯关</span>
+            <span className="text-muted-foreground text-xs">点选 / 输入</span>
           </Link>
           <Link
             href="/play/word-bubble"

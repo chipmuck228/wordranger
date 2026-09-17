@@ -284,3 +284,42 @@
   );
   opacity: 0.9;
 }
+
+.ranger-trial-pilot-root {
+  background:
+    radial-gradient(120% 80% at 50% -10%, oklch(0.97 0.02 85 / 0.9), transparent 55%),
+    oklch(0.985 0.008 90);
+}
+
+@keyframes ranger-feedback-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ranger-feedback-in {
+  animation: ranger-feedback-in 180ms ease-out;
+}
+
+.ranger-progress-fill {
+  transition: width 200ms ease-out;
+}
+
+.ranger-trial-pilot[data-motion="off"] .ranger-feedback-in,
+.ranger-trial-pilot[data-motion="off"] .ranger-progress-fill {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ranger-feedback-in,
+  .ranger-progress-fill {
+    animation: none !important;
+    transition: none !important;
+  }
+}

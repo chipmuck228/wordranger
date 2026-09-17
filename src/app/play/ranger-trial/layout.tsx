@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: "单词闯关 · WordRanger",
-  description: "根据你目前的学习情况练习单词",
+  description: "自由练习：点选或输入，大约 8 题",
 };
 
 export default function RangerTrialLayout({
@@ -12,6 +12,6 @@ export default function RangerTrialLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-background min-h-full">{children}</div>
+    <div className="ranger-trial-pilot-root min-h-dvh">{children}</div>
   );
 }

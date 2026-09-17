@@ -173,6 +173,19 @@ Word Bubble does not persist bubble coordinates, velocity, or animation frames. 
 
 Snake `responseTimeMs` includes navigation overhead (movement time until option collision). It is not directly comparable with Ranger Trial tap time. Core V1 still stores the field as-is. See ADR-063 and `GAME_INTERACTION_LATENCY_CONFOUND`.
 
+## UI Pilot (Ranger Trial free practice)
+
+`/play/ranger-trial` is the current UI pilot for Free Practice. Presentation only:
+
+- Choice + typing
+- Finite round (~8 tasks from `requestedNeedCount`)
+- Explicit correct / incorrect feedback
+- Subtle, functional motion
+- Mobile-first layout
+- Settings are visible to everyone for now and will later be admin-only
+
+Settings live in `localStorage`. They are not learner state, not Evidence, and not Scheduler input. They must not change grading or Adaptive Placement.
+
 ## Feedback DTO
 
 After evaluation, the browser receives:

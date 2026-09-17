@@ -40,12 +40,12 @@ export function TextInputTaskRenderer({
           autoCapitalize="off"
           spellCheck={false}
           aria-label="英文答案"
-          className="h-12 text-center text-lg"
+          className="h-14 rounded-2xl text-center text-lg shadow-sm"
         />
         <Button
           type="submit"
           disabled={!canSubmit}
-          className="h-12 w-full text-base"
+          className="h-12 w-full rounded-2xl text-base"
         >
           提交
         </Button>

@@ -486,6 +486,12 @@ Human review writes sparse CURATED records (`wordranger-human-review/v1`) keyed 
 
 `vocabulary_placement_reviews` stores internal/admin CURATED overrides (`lexeme_id` → `lexemes.id`). RLS is on; anon/authenticated cannot mutate the table. Browser clients submit only `lexemeId` / `bandId` / optional `reviewNote` through a server action. The store requires `SUPABASE_SERVICE_ROLE_KEY` and must not fall back to the anon key or the file adapter. `PLACEMENT_REVIEW_STORE=file` remains an explicit local/internal choice. Playwright e2e uses the file adapter plus the write gate so default e2e never writes a real Supabase project. These reviewed `BAND_*` values still do not unlock Adaptive Placement.
 
+## ADR-082 — Ranger Trial UI pilot is presentation-only
+
+**Status:** accepted
+
+Free-practice `/play/ranger-trial` may have a distinct light, mobile-first shell, explicit feedback, subtle motion, and a Settings panel. Settings are currently visible to everyone and are intended to become admin-only later. They persist only in `localStorage` and must not write Evidence, `StudentLexemeModel`, or Scheduler input. Round length remains the existing ~8-need Free Practice plan. Daily Training may reuse Ranger Trial task renderers without adopting the free-practice chrome.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

@@ -1,11 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { RangerTrial } from "@/components/game/ranger-trial/RangerTrial";
 import { RangerTrialComplete } from "@/components/game/ranger-trial/RangerTrialComplete";
+import { RangerTrialSettingsPanel } from "@/components/game/ranger-trial/RangerTrialSettingsPanel";
 import { TaskFeedback } from "@/components/game/ranger-trial/TaskFeedback";
+import { TaskProgress } from "@/components/game/ranger-trial/TaskProgress";
+import {
+  DEFAULT_RANGER_TRIAL_UI_SETTINGS,
+  RANGER_TRIAL_ROUND_SIZE,
+  getRangerTrialSettingsSnapshot,
+  saveRangerTrialSettings,
+  subscribeRangerTrialSettings,
+  type RangerTrialUiSettings,
+} from "@/components/game/ranger-trial/ranger-trial-settings";
 import { GameSessionErrorPanel } from "@/components/game/shared/GameSessionErrorPanel";
 import { withClientGameTimeout } from "@/components/game/shared/bounded-game-operation";
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
@@ -33,7 +43,8 @@ type Screen =
   | "feedback"
   | "continuing"
   | "complete"
-  | "error";
+  | "error"
+  | "settings";
 
 const LOADING_COPY: Partial<Record<Screen, string>> = {
   loading: "正在安排这一轮单词…",
@@ -43,6 +54,7 @@ const LOADING_COPY: Partial<Record<Screen, string>> = {
 
 export function RangerTrialPlayClient() {
   const [screen, setScreen] = useState<Screen>("start");
+  const [returnScreen, setReturnScreen] = useState<Screen>("start");
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<RangerTrialPublicSession | null>(null);
   const [task, setTask] = useState<PublicLearningTask | null>(null);
@@ -52,6 +64,11 @@ export function RangerTrialPlayClient() {
     correct: 0,
     incorrect: 0,
   });
+  const settings = useSyncExternalStore(
+    subscribeRangerTrialSettings,
+    getRangerTrialSettingsSnapshot,
+    () => DEFAULT_RANGER_TRIAL_UI_SETTINGS,
+  );
   const startedAt = useRef<number>(0);
   const requestId = useRef(0);
   const [errorSource, setErrorSource] = useState<"start" | "play">("start");
@@ -96,16 +113,23 @@ export function RangerTrialPlayClient() {
   }, []);
 
   useEffect(() => {
-    if (screen === "playing") {
-      startedAt.current = performance.now();
-    }
-  }, [screen, task?.id]);
+    startedAt.current = performance.now();
+  }, [task?.id]);
 
   function backToStart(): void {
     requestId.current += 1;
     sessionStorage.removeItem(SESSION_KEY);
     setError(null);
     setScreen("start");
+  }
+
+  function openSettings(): void {
+    setReturnScreen(screen);
+    setScreen("settings");
+  }
+
+  function updateSettings(next: RangerTrialUiSettings): void {
+    saveRangerTrialSettings(next);
   }
 
   async function start(): Promise<void> {
@@ -228,81 +252,109 @@ export function RangerTrialPlayClient() {
   }
 
   const busy = screen === "loading" || screen === "submitting" || screen === "continuing";
+  const canOpenSettings =
+    screen === "start" ||
+    screen === "playing" ||
+    screen === "feedback" ||
+    screen === "complete";
 
   return (
     <main
       lang="zh-CN"
-      className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center gap-8 px-5 py-10"
+      data-motion={settings.motionEnabled ? "on" : "off"}
+      className="ranger-trial-pilot mx-auto flex min-h-dvh w-full max-w-md flex-col gap-6 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
     >
-      {screen === "start" ? (
-        <div className="flex flex-col gap-8 text-center">
-          <div className="space-y-3">
-            <p className="text-muted-foreground text-sm">WordRanger</p>
-            <h1 className="text-4xl font-semibold tracking-tight">单词闯关</h1>
-            <p className="text-muted-foreground text-base leading-relaxed">
-              系统会根据你目前的学习情况安排这一轮单词。
-            </p>
-          </div>
+      <header className="flex items-center justify-between gap-3">
+        <p className="text-muted-foreground text-sm">自由练习</p>
+        {canOpenSettings ? (
           <Button
             type="button"
-            className="h-12 w-full text-base"
-            onClick={() => void start()}
+            variant="ghost"
+            className="h-9 px-3 text-sm"
+            onClick={openSettings}
           >
-            开始闯关
+            设置
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+      </header>
 
-      {busy ? (
-        <p className="text-muted-foreground text-center" role="status">
-          {LOADING_COPY[screen]}
-        </p>
-      ) : null}
+      <div className="flex flex-1 flex-col justify-center">
+        {screen === "start" ? (
+          <div className="flex flex-col gap-8 text-center">
+            <div className="space-y-3">
+              <p className="text-muted-foreground text-sm">WordRanger</p>
+              <h1 className="text-4xl font-semibold tracking-tight">单词闯关</h1>
+              <p className="text-muted-foreground text-base leading-relaxed">
+                大约 {RANGER_TRIAL_ROUND_SIZE} 题。点选意思，或输入单词。
+              </p>
+            </div>
+            <Button
+              type="button"
+              className="h-14 w-full rounded-2xl text-base"
+              onClick={() => void start()}
+            >
+              开始闯关
+            </Button>
+          </div>
+        ) : null}
 
-      {screen === "playing" || screen === "submitting" ? (
-        task && session ? (
-          <RangerTrial
-            task={task}
-            current={session.current}
-            total={session.total}
-            disabled={screen === "submitting" || busy}
-            onAction={(intent) => void onAction(intent)}
+        {busy ? (
+          <p className="text-muted-foreground text-center" role="status">
+            {LOADING_COPY[screen]}
+          </p>
+        ) : null}
+
+        {screen === "playing" || screen === "submitting" ? (
+          task && session ? (
+            <RangerTrial
+              task={task}
+              current={session.current}
+              total={session.total}
+              disabled={screen === "submitting" || busy}
+              onAction={(intent) => void onAction(intent)}
+            />
+          ) : null
+        ) : null}
+
+        {screen === "feedback" && feedback ? (
+          <div className="flex flex-col gap-8">
+            {session ? (
+              <TaskProgress current={session.current} total={session.total} />
+            ) : null}
+            <TaskFeedback
+              feedback={feedback}
+              onContinue={() => void onContinue()}
+              disabled={busy}
+            />
+          </div>
+        ) : null}
+
+        {screen === "complete" ? (
+          <RangerTrialComplete stats={stats} onPlayAgain={playAgain} />
+        ) : null}
+
+        {screen === "error" && error ? (
+          <GameSessionErrorPanel
+            message={error}
+            onRetry={
+              errorSource === "start" ? () => void start() : undefined
+            }
+            onBack={backToStart}
           />
-        ) : null
-      ) : null}
+        ) : null}
 
-      {screen === "feedback" && feedback ? (
-        <div className="flex flex-col gap-8">
-          {session ? (
-            <p className="text-muted-foreground text-sm">
-              闯关进度 {session.current} / {session.total}
-            </p>
-          ) : null}
-          <TaskFeedback
-            feedback={feedback}
-            onContinue={() => void onContinue()}
-            disabled={busy}
+        {screen === "settings" ? (
+          <RangerTrialSettingsPanel
+            settings={settings}
+            onChange={updateSettings}
+            onClose={() => setScreen(returnScreen === "settings" ? "start" : returnScreen)}
           />
-        </div>
-      ) : null}
-
-      {screen === "complete" ? (
-        <RangerTrialComplete stats={stats} onPlayAgain={playAgain} />
-      ) : null}
-
-      {screen === "error" && error ? (
-        <GameSessionErrorPanel
-          message={error}
-          onRetry={
-            errorSource === "start" ? () => void start() : undefined
-          }
-          onBack={backToStart}
-        />
-      ) : null}
+        ) : null}
+      </div>
 
       <Link
         href="/"
-        className="text-muted-foreground text-center text-sm underline-offset-4 hover:underline"
+        className="text-muted-foreground py-2 text-center text-sm underline-offset-4 hover:underline"
       >
         返回首页
       </Link>
