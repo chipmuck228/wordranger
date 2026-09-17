@@ -46,12 +46,29 @@ export type {
   TaskCompilationResult,
 } from "./compilation/types";
 
+export {
+  ExecutionErrorCode,
+  abortExperienceRun,
+  applyExperienceCommand,
+  createExperienceRun,
+  issueCurrentStep,
+  recordTaskCompletion,
+  validateExperienceRun,
+} from "./execution";
+export type {
+  ExperienceRun,
+  ExperienceRunCommand,
+  ExperienceRunResult,
+  FrozenTaskCompletionReceipt,
+} from "./execution";
+
 export { mealSkeleton } from "./fixtures/meal/skeleton";
 export { MEAL_FRAMES } from "./fixtures/meal/contexts";
 export {
   createMealBuildPlan,
   createMealStrengthenPlan,
 } from "./fixtures/meal/plans";
+export { createSafeLexicalRecallPlan } from "./fixtures/execution/safe-lexical-recall";
 
 export { schoolChallengeSkeleton } from "./fixtures/school-challenge/skeleton";
 export { SCHOOL_FRAMES } from "./fixtures/school-challenge/contexts";

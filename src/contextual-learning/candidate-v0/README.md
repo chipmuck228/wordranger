@@ -110,6 +110,36 @@ npx tsc --noEmit
 npm run lint
 ```
 
+## Experience Execution Protocol Candidate V0
+
+`execution/` is a domain-only sequencer. It is not a production runtime.
+
+```text
+validated LearningExperiencePlan
+  → ExperienceRun(READY)
+  → issue current step via compileExperienceStep
+  → TASK_ISSUED + PublicLearningTask
+  → FrozenTaskCompletionReceipt { taskId, completedAt }
+  → next READY step, or COMPLETED
+```
+
+It manages plan order and issued-task identity only.
+
+It does **not**:
+
+- grade
+- call `DefaultTaskEvaluator` / `evidence-factory` / `processEvidence`
+- update `StudentLexemeModel`
+- interpret `INDEPENDENT_CORRECT` / scores / mastery
+- skip an unsupported step
+- downgrade a blocked step into `MEANING_CHOICE`
+
+If the current step has no semantic projection (Meal IDENTIFY, School `CLAIM_CHOICE`, Borrow `RELATION_CHOICE`), the run becomes `BLOCKED` and keeps the original compiler code. The next step is never compiled.
+
+Today only the lexical-recall whitelist can reach `TASK_ISSUED` / `COMPLETED`. A one-step safe recall fixture exists to test sequencing. It does **not** mean a full Meal / School / Borrow experience can run.
+
+There is no persistence, UI, scheduler hook, or `submitTaskAction` integration.
+
 Validators live next to the types. Fixtures are deterministic data, not a planner.
 
 ## When Candidate V1 may be discussed
