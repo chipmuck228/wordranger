@@ -11,6 +11,7 @@ npm test
 npm run test:progress
 npm run lint
 npm run import:vocabulary -- --dry-run
+npm run generate:provisional-placement
 ```
 
 Open [http://localhost:3000](http://localhost:3000).

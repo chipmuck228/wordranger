@@ -45,6 +45,29 @@ export {
   type AdaptivePlacementReadinessStatus,
 } from "./adaptive-placement-readiness";
 export type { VocabularyRepository, GetRelationsOptions } from "./vocabulary-repository";
+export type { VocabularyPlacementProvider } from "./vocabulary-placement-provider";
+export type {
+  PlacementBand,
+  PlacementBandDefinition,
+  ProvisionalLexemePlacement,
+  ProvisionalPlacementBandId,
+  ProvisionalPlacementQaReport,
+} from "./provisional-placement";
+export {
+  PROVISIONAL_BAND_STRATEGY_ID,
+  PROVISIONAL_PLACEMENT_BAND_IDS,
+  PROVISIONAL_PLACEMENT_GENERATOR_VERSION,
+  PROVISIONAL_PLACEMENT_VERSION,
+  orderedPlacementBands,
+} from "./provisional-placement";
+export {
+  generateProvisionalAssignments,
+  summarizeProvisionalPlacement,
+} from "./generate-provisional-placement";
+export {
+  provisionalPlacementIssues,
+  type ProvisionalPlacementIssue,
+} from "./validate-provisional-placement";
 export {
   DEFAULT_VOCABULARY_CONTENT_POLICY,
   type VocabularyContentPolicy,

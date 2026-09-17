@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:progress": "RUN_SUPABASE_PROGRESS=1 vitest run tests/persistence/daily-training-supabase-progress.test.ts",
-    "import:vocabulary": "tsx scripts/import-vocabulary.ts"
+    "import:vocabulary": "tsx scripts/import-vocabulary.ts",
+    "generate:provisional-placement": "tsx scripts/generate-provisional-placement.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

@@ -466,7 +466,13 @@ Rule-inferred fields such as `functionWord` are labeled `INFERRED` and are not p
 
 **Status:** accepted
 
-Phase 12 inspected bundled placement metadata and `word-placement.json` (zero overlay records). No `CURATED` or `EXTERNAL_REFERENCE` `curriculumBand` / `gradeBand` / `difficultyBand` / `frequencyBand` exists. Adaptive placement is therefore `PLACEMENT_DATA_BLOCKER`: Scheduler v2 and Daily Training must not jump, skip, or re-rank NEW_WORD by `sourceIndex`, A–Z section, PDF `starred`, or inferred `functionWord`. `assessAdaptivePlacementReadiness()` is the design gate. Placement still must not fabricate Evidence or mark untested lexemes `MASTERED` if a later overlay unlocks it.
+Phase 12 inspected bundled placement metadata and `word-placement.json` (zero overlay records). No `CURATED` or `EXTERNAL_REFERENCE` `curriculumBand` / `gradeBand` / `difficultyBand` / `frequencyBand` exists. Adaptive placement is therefore `PLACEMENT_DATA_BLOCKER`: Scheduler v2 and Daily Training must not jump, skip, or re-rank NEW_WORD by `sourceIndex`, A–Z section, PDF `starred`, or inferred `functionWord`. `assessAdaptivePlacementReadiness()` is the design gate. Placement still must not fabricate Evidence or mark untested lexemes `MASTERED` if a later overlay unlocks it. Neutral provisional `BAND_*` scaffolding does not change this gate.
+
+## ADR-079 — Provisional placement bands are review scaffolding
+
+**Status:** accepted
+
+`data/vocabulary/placement/` stores an explicit ordered band definition and one INFERRED assignment per canonical lexeme. The generator is deterministic (`wordranger-provisional-band-generator/v1`) and uses `sourceIndex` only as a stable sort key for a balanced round-robin partition. Those records are not grade, CEFR, difficulty, or curriculum truth. They must not be merged into production-authoritative `curriculumBand` and must not unlock Adaptive Placement. Canonical vocabulary and learner state stay untouched. Future curated overlays replace this layer by `lexemeId` without rewriting Evidence or `StudentLexemeModel`.
 
 ## Additional notes
 

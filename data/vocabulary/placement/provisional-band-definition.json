@@ -1,0 +1,12 @@
+{
+  "version": "provisional-v1",
+  "description": "Neutral review buckets for internal inspection. Not grade, CEFR, frequency, pedagogical difficulty, or mastery. Consumers must use explicit order; never infer order by sorting IDs.",
+  "bands": [
+    { "id": "BAND_1", "order": 10 },
+    { "id": "BAND_2", "order": 20 },
+    { "id": "BAND_3", "order": 30 },
+    { "id": "BAND_4", "order": 40 },
+    { "id": "BAND_5", "order": 50 },
+    { "id": "BAND_6", "order": 60 }
+  ]
+}
