@@ -24,6 +24,8 @@ export default defineConfig({
       ...process.env,
       RANGER_TRIAL_RUNTIME: "memory",
       GAME_RUNTIME: "memory",
+      PLACEMENT_REVIEW_STORE: "file",
+      PLACEMENT_REVIEW_WRITE_ENABLED: "1",
     },
   },
 });

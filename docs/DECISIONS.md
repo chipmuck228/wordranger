@@ -478,7 +478,13 @@ Phase 12 inspected bundled placement metadata and `word-placement.json` (zero ov
 
 **Status:** accepted
 
-Human review writes sparse CURATED records (`wordranger-human-review/v1`) to `data/vocabulary/placement/curated-word-placement.json`, keyed by `Lexeme.id`. The provisional artifact is never rewritten. Effective placement for admin/review tooling is curated override if present, otherwise the provisional suggestion. Agreeing with the provisional band still writes an explicit CURATED record so reviewed coverage is countable. This overlay is local/internal file tooling, not learner state and not production-deployment persistence. Writes go through `CuratedPlacementStore`; a later production store can implement the same interface. The `/debug/vocabulary-placement` UI is not student navigation. Scheduler v2 and Daily Training do not read it. Adaptive Placement stays `PLACEMENT_DATA_BLOCKER` until a later step treats these reviewed `BAND_*` values as production authority.
+Human review writes sparse CURATED records (`wordranger-human-review/v1`) keyed by `Lexeme.id`. The provisional artifact is never rewritten. Effective placement for admin/review tooling is curated override if present, otherwise the provisional suggestion. Agreeing with the provisional band still writes an explicit CURATED record so reviewed coverage is countable. `CuratedPlacementStore` is the stable persistence boundary. The file adapter is local/internal only. Deployed persistence is `vocabulary_placement_reviews` via `SupabaseCuratedPlacementStore` and the service role. The `/debug/vocabulary-placement` UI is not student navigation and hiding it is not authorization; writes require `PLACEMENT_REVIEW_WRITE_ENABLED=1`. Scheduler v2 and Daily Training do not read it. Adaptive Placement stays `PLACEMENT_DATA_BLOCKER` until a later step treats these reviewed `BAND_*` values as production authority.
+
+## ADR-081 — Curated placement reviews persist in Supabase
+
+**Status:** accepted
+
+`vocabulary_placement_reviews` stores internal/admin CURATED overrides (`lexeme_id` → `lexemes.id`). RLS is on; anon/authenticated cannot mutate the table. Browser clients submit only `lexemeId` / `bandId` / optional `reviewNote` through a server action. The store requires `SUPABASE_SERVICE_ROLE_KEY` and must not fall back to the anon key or the file adapter. `PLACEMENT_REVIEW_STORE=file` remains an explicit local/internal choice. Playwright e2e uses the file adapter plus the write gate so default e2e never writes a real Supabase project. These reviewed `BAND_*` values still do not unlock Adaptive Placement.
 
 ## Additional notes
 

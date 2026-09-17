@@ -55,6 +55,7 @@ export {
   CURATED_PLACEMENT_STATUS,
   CURATED_PLACEMENT_VERSION,
   HUMAN_REVIEW_PROVENANCE,
+  cloneCuratedOverride,
 } from "./curated-placement";
 export {
   mergeEffectivePlacements,

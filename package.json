@@ -14,6 +14,8 @@
     "test:e2e": "playwright test",
     "test:progress": "RUN_SUPABASE_PROGRESS=1 vitest run tests/persistence/daily-training-supabase-progress.test.ts",
     "import:vocabulary": "tsx scripts/import-vocabulary.ts",
+    "import:curated-placement": "tsx scripts/import-curated-placement.ts",
+    "export:curated-placement": "tsx scripts/export-curated-placement.ts",
     "generate:provisional-placement": "tsx scripts/generate-provisional-placement.ts"
   },
   "dependencies": {

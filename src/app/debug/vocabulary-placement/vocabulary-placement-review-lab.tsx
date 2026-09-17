@@ -179,7 +179,18 @@ export function VocabularyPlacementReviewLab({
         <p className="text-muted-foreground text-sm">
           Internal review of provisional BAND_1–BAND_6 suggestions. Saving writes a
           CURATED override without changing learner state or production scheduling.
+          This page is not authorization; writes need PLACEMENT_REVIEW_WRITE_ENABLED=1.
         </p>
+        {snapshot.loadError ? (
+          <p className="text-destructive mt-2 text-sm" data-testid="review-load-error">
+            {snapshot.loadError}
+          </p>
+        ) : null}
+        {snapshot.runtime && !snapshot.runtime.placementReviewWritesEnabled ? (
+          <p className="text-muted-foreground mt-2 text-sm" data-testid="review-writes-disabled">
+            Review writes are disabled. Read-only inspection is available.
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

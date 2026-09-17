@@ -7,6 +7,7 @@ import type { CuratedPlacementOverride } from "@/domain/vocabulary/curated-place
 import type { PlacementBandDefinition } from "@/domain/vocabulary/provisional-placement";
 import type { CuratedPlacementStore } from "./curated-placement-store";
 import { CuratedPlacementWriteError } from "./curated-placement-store";
+import { CuratedPlacementConfigError } from "./placement-review-config";
 import type { VocabularyDataset } from "./load-vocabulary-dataset";
 
 export type SaveCuratedPlacementResult =
@@ -47,6 +48,13 @@ export async function saveCuratedPlacementReview(args: {
       return {
         ok: false,
         code: "CURATED_PLACEMENT_WRITE_UNAVAILABLE",
+        message: error.message,
+      };
+    }
+    if (error instanceof CuratedPlacementConfigError) {
+      return {
+        ok: false,
+        code: error.code,
         message: error.message,
       };
     }

@@ -153,9 +153,22 @@ These buckets are **not** grade, CEFR, frequency, pedagogical difficulty, or mas
 
 Provenance is `INFERRED` with `wordranger-provisional-band-generator/v1`. Records are **not** written onto production `curriculumBand` / `gradeBand` / `difficultyBand` / `frequencyBand`, so they cannot satisfy `assessAdaptivePlacementReadiness()`.
 
-Human review stores **CURATED** overrides in `curated-word-placement.json` without rewriting the provisional file. Effective placement is curated override if present, else the provisional suggestion. Agreeing with the provisional band still writes an explicit CURATED record. Scheduler and Daily Training still do not consume this layer. Production Adaptive Placement remains `PLACEMENT_DATA_BLOCKER` until a later step decides these human-reviewed `BAND_*` values are sufficient production authority.
+Human review stores **CURATED** overrides without rewriting the provisional file. Effective placement is curated override if present, else the provisional suggestion. Agreeing with the provisional band still writes an explicit CURATED record. Scheduler and Daily Training still do not consume this layer. Production Adaptive Placement remains `PLACEMENT_DATA_BLOCKER` until a later step decides these human-reviewed `BAND_*` values are sufficient production authority.
 
-Internal review UI: `/debug/vocabulary-placement`. This is local/internal tooling, not a student route, and must not appear in student navigation. File-backed curated writes are allowed for local/internal tooling via `CuratedPlacementStore`; they are **not** production-deployment persistence. A read-only deploy filesystem may return `CURATED_PLACEMENT_WRITE_UNAVAILABLE`. Later production review persistence can swap behind the same `CuratedPlacementStore` interface; do not treat the bundled JSON file as the deployed write store.
+Persistence boundary: `CuratedPlacementStore`.
+
+| Adapter | Role |
+| --- | --- |
+| `FileCuratedPlacementStore` | Explicit local/internal adapter (`PLACEMENT_REVIEW_STORE=file`). Bootstrap/export file: `curated-word-placement.json`. |
+| `SupabaseCuratedPlacementStore` | Deployed persistence (`vocabulary_placement_reviews`). Default when `PLACEMENT_REVIEW_STORE` is unset or `supabase`. Requires `SUPABASE_SERVICE_ROLE_KEY`; never falls back to the anon key or the file store. |
+
+Internal review UI: `/debug/vocabulary-placement`. This is local/internal tooling, not a student route, and must not appear in student navigation. **Hiding the route is not authorization.** Until real admin auth exists, saves require `PLACEMENT_REVIEW_WRITE_ENABLED=1`. Default is disabled. Read-only rendering may still load. A missing service role fails as `CURATED_PLACEMENT_SUPABASE_NOT_CONFIGURED`. A read-only deploy filesystem used with the file adapter may return `CURATED_PLACEMENT_WRITE_UNAVAILABLE`.
+
+Import/export:
+
+- `npm run import:curated-placement -- --dry-run` validates `curated-word-placement.json` (works with zero records)
+- `npm run import:curated-placement -- --apply` idempotent upserts into Supabase (service role required)
+- `npm run export:curated-placement` writes a deterministic JSON export from Supabase
 
 ---
 

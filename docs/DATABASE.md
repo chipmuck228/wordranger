@@ -30,7 +30,26 @@ Word-graph edges. Constraints: `from_lexeme_id <> to_lexeme_id`, `confidence` in
 
 One row per lexeme. `game_tags` describe present data capabilities, not which game to play. Confidence columns are nullable with a `0..1` check.
 
-Placement metadata is **not** a learner table. It is derived from source/canonical facts (PDF section, starred marker, normalized POS) with optional curated overlay JSON. Do not add `functionWord`, CEFR, or difficulty onto `student_lexeme_models`, `learning_evidence`, `learning_tasks`, or `game_sessions`.
+Placement metadata is **not** a learner table. It is derived from source/canonical facts (PDF section, starred marker, normalized POS) with optional overlay JSON. Human-reviewed `BAND_*` overrides persist in `vocabulary_placement_reviews`. Do not add `functionWord`, CEFR, or difficulty onto `student_lexeme_models`, `learning_evidence`, `learning_tasks`, or `game_sessions`.
+
+### `vocabulary_placement_reviews`
+
+Sparse CURATED placement overrides for internal review. Not learner progress.
+
+| Column | Role |
+| --- | --- |
+| `lexeme_id` | PK and FK → `lexemes(id)` |
+| `band_id` | Reviewed band. Domain/server validates against `PlacementBandDefinition`; the table does not freeze `BAND_1`…`BAND_6` in a CHECK |
+| `status` | CHECK `REVIEWED` |
+| `source` | CHECK `CURATED` |
+| `provenance` | JSON array, must be non-empty |
+| `review_note` | Optional |
+| `reviewed_at` | Server time |
+| `updated_at` | Row update time |
+
+Writes go Browser → server action → `CuratedPlacementStore` → service-role Supabase. RLS is enabled with **no** anon/authenticated policies. `anon` and `authenticated` are revoked. Service role only.
+
+`data/vocabulary/placement/curated-word-placement.json` remains a bootstrap/export artifact. It is not the deployed write target. Import: `npm run import:curated-placement -- --dry-run` (default) and `--apply` (opt-in, service role required). Export: `npm run export:curated-placement`.
 
 ## Learning tasks
 
@@ -62,6 +81,7 @@ Live progress tests may call `cleanup_progress_test_user(target_user uuid)` to d
 - `lexemes`: `lemma`, `source_entry_id`, `source_index`, unique `canonical_key`
 - `student_lexeme_models`: `user_id`, `lexeme_id`, `next_review_at`, `mastery_stage`, unique `(user_id, lexeme_id)`
 - `learning_evidence`: `(user_id, lexeme_id, occurred_at)`, `session_id`, `skill`, `outcome`
+- `vocabulary_placement_reviews`: PK `lexeme_id`, `band_id`, `reviewed_at`
 
 ## Consistency strategy
 
@@ -105,6 +125,8 @@ Honest limitation: V1 does **not** fake atomicity. A later `process_evidence` Po
 
 V1 uses trusted server actions + the placeholder user. Do not treat RLS as solved.
 
+`vocabulary_placement_reviews` enables RLS immediately and grants only `service_role`. That is an admin/reference lock, not student auth. Hiding `/debug/vocabulary-placement` is not authorization; review writes also require `PLACEMENT_REVIEW_WRITE_ENABLED=1`.
+
 Cleanup/TTL is future work. A failed session save after `learning_tasks` insert can leave an orphan assigned task; do not delete it.
 
 ## Phase 04 persistence
@@ -128,3 +150,4 @@ There is no student auth context yet. Current V1 uses trusted server actions and
 - students insert their own evidence and read their own snapshots
 - no one updates evidence
 - service role is server-only
+- `vocabulary_placement_reviews` stays service-role-only; do not add `using (true)` policies

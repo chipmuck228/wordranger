@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   CURATED_PLACEMENT_VERSION,
+  cloneCuratedOverride,
   serializeCuratedWordPlacementFile,
   type CuratedPlacementOverride,
   type CuratedWordPlacementFile,
@@ -20,22 +21,22 @@ export class InMemoryCuratedPlacementStore implements CuratedPlacementStore {
 
   constructor(seed: readonly CuratedPlacementOverride[] = []) {
     for (const record of seed) {
-      this.records.set(record.lexemeId, cloneOverride(record));
+      this.records.set(record.lexemeId, cloneCuratedOverride(record));
     }
   }
 
   async list(): Promise<CuratedPlacementOverride[]> {
     return [...this.records.values()]
-      .map(cloneOverride)
+      .map(cloneCuratedOverride)
       .sort((left, right) => left.lexemeId.localeCompare(right.lexemeId));
   }
 
   async upsert(
     record: CuratedPlacementOverride,
   ): Promise<CuratedPlacementOverride> {
-    const stored = cloneOverride(record);
+    const stored = cloneCuratedOverride(record);
     this.records.set(stored.lexemeId, stored);
-    return cloneOverride(stored);
+    return cloneCuratedOverride(stored);
   }
 }
 
@@ -54,7 +55,7 @@ export class FileCuratedPlacementStore implements CuratedPlacementStore {
   ) {}
 
   async list(): Promise<CuratedPlacementOverride[]> {
-    return this.readFile().records.map(cloneOverride);
+    return this.readFile().records.map(cloneCuratedOverride);
   }
 
   async upsert(
@@ -64,10 +65,10 @@ export class FileCuratedPlacementStore implements CuratedPlacementStore {
     const next = file.records.filter(
       (existing) => existing.lexemeId !== record.lexemeId,
     );
-    next.push(cloneOverride(record));
+    next.push(cloneCuratedOverride(record));
     next.sort((left, right) => left.lexemeId.localeCompare(right.lexemeId));
     this.writeFile({ version: CURATED_PLACEMENT_VERSION, records: next });
-    return cloneOverride(record);
+    return cloneCuratedOverride(record);
   }
 
   private readFile(): CuratedWordPlacementFile {
@@ -98,7 +99,7 @@ export class FileCuratedPlacementStore implements CuratedPlacementStore {
     }
     return {
       version: parsed.version ?? CURATED_PLACEMENT_VERSION,
-      records: records.map(cloneOverride),
+      records: records.map(cloneCuratedOverride),
     };
   }
 
@@ -128,19 +129,3 @@ export class CuratedPlacementWriteError extends Error {
   }
 }
 
-function cloneOverride(
-  record: CuratedPlacementOverride,
-): CuratedPlacementOverride {
-  const cloned: CuratedPlacementOverride = {
-    lexemeId: record.lexemeId,
-    bandId: record.bandId,
-    status: record.status,
-    source: "CURATED",
-    provenance: [...record.provenance],
-    reviewedAt: record.reviewedAt,
-  };
-  if (record.reviewNote !== undefined) {
-    cloned.reviewNote = record.reviewNote;
-  }
-  return cloned;
-}

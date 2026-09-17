@@ -2,6 +2,7 @@ import type { PlacementBand } from "@/domain/vocabulary/provisional-placement";
 import type { PlacementReviewCoverage } from "@/domain/vocabulary/curated-placement";
 import type { EffectivePlacementOrigin } from "@/domain/vocabulary/curated-placement";
 import type { VocabularyPlacementProvider } from "@/domain/vocabulary/vocabulary-placement-provider";
+import type { PlacementReviewRuntimeDiagnostics } from "./placement-review-config";
 import type { VocabularyDataset } from "./load-vocabulary-dataset";
 
 export interface PlacementReviewRow {
@@ -27,6 +28,8 @@ export interface PlacementReviewSnapshot {
   coverage: PlacementReviewCoverage;
   bands: PlacementBand[];
   rows: PlacementReviewRow[];
+  runtime?: PlacementReviewRuntimeDiagnostics;
+  loadError?: string;
 }
 
 export type PlacementReviewStatusFilter = "all" | "reviewed" | "unreviewed";

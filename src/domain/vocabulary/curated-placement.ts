@@ -43,6 +43,23 @@ export interface PlacementReviewCoverage {
   reviewedBandCounts: Record<string, number>;
 }
 
+export function cloneCuratedOverride(
+  record: CuratedPlacementOverride,
+): CuratedPlacementOverride {
+  const cloned: CuratedPlacementOverride = {
+    lexemeId: record.lexemeId,
+    bandId: record.bandId,
+    status: record.status,
+    source: "CURATED",
+    provenance: [...record.provenance],
+    reviewedAt: record.reviewedAt,
+  };
+  if (record.reviewNote !== undefined) {
+    cloned.reviewNote = record.reviewNote;
+  }
+  return cloned;
+}
+
 export function serializeCuratedWordPlacementFile(
   file: CuratedWordPlacementFile,
 ): string {

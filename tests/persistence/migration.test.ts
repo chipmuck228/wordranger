@@ -9,6 +9,7 @@ const sql = [
   "supabase/migrations/202609170002_game_sessions_revision.sql",
   "supabase/migrations/202609170003_learning_evidence_session_correlation.sql",
   "supabase/migrations/202609170004_cleanup_progress_test_user.sql",
+  "supabase/migrations/202609170005_vocabulary_placement_reviews.sql",
 ]
   .map((file) => readFileSync(path.join(process.cwd(), file), "utf8"))
   .join("\n");
@@ -90,5 +91,20 @@ describe("Schema", () => {
       "grant execute on function cleanup_progress_test_user(uuid) to service_role",
     );
     expect(sql).toContain("before update or delete on learning_evidence");
+  });
+
+  it("adds vocabulary_placement_reviews as service-role reference data keyed by lexemes.id", () => {
+    expect(sql).toContain("create table if not exists vocabulary_placement_reviews");
+    expect(sql).toMatch(/lexeme_id uuid primary key references lexemes \(id\)/);
+    expect(sql).toContain("enable row level security");
+    expect(sql).toContain(
+      "revoke all on table vocabulary_placement_reviews from anon",
+    );
+    expect(sql).toContain(
+      "grant select, insert, update on table vocabulary_placement_reviews to service_role",
+    );
+    expect(sql).not.toMatch(
+      /create policy[\s\S]*vocabulary_placement_reviews/,
+    );
   });
 });
