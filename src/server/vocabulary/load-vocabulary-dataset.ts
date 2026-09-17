@@ -107,7 +107,7 @@ interface OverlayFile {
 interface OverlayFileRecord {
   lexemeId: string;
   alphabeticalSection?: OverlayField;
-  coreFoundation?: OverlayField;
+  starred?: OverlayField;
   functionWord?: OverlayField;
   curriculumBand?: OverlayField;
   gradeBand?: OverlayField;

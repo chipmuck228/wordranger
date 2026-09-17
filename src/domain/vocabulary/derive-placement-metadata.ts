@@ -35,7 +35,7 @@ export function deriveOnePlacementRecord(
 ): VocabularyPlacementMetadata {
   const record: VocabularyPlacementMetadata = {
     lexemeId: lexeme.id,
-    coreFoundation: placementField(lexeme.starred, "SOURCE", ["pdf.starred"]),
+    starred: placementField(lexeme.starred, "SOURCE", ["pdf.starred"]),
   };
 
   if (sourceSection) {

@@ -20,7 +20,7 @@ export type PlacementMetadataSource =
 
 export const PLACEMENT_FIELD_NAMES = [
   "alphabeticalSection",
-  "coreFoundation",
+  "starred",
   "functionWord",
   "curriculumBand",
   "gradeBand",
@@ -50,6 +50,10 @@ export const CONTENT_WORD_POS = [
 ] as const;
 
 export const FUNCTION_WORD_POS_RULE_ID = "function-word-pos-rule/v1";
+/**
+ * Heuristic marker for rule-inferred `functionWord`, not an empirically
+ * calibrated accuracy or production placement weight.
+ */
 export const FUNCTION_WORD_RULE_CONFIDENCE = 0.8;
 
 /**
@@ -75,7 +79,11 @@ export interface PlacementField<T> {
 export interface VocabularyPlacementMetadata {
   lexemeId: string;
   alphabeticalSection?: PlacementField<string>;
-  coreFoundation?: PlacementField<boolean>;
+  /**
+   * PDF starred marker copied from `Lexeme.starred`. Not curriculum
+   * foundation, difficulty, frequency, CEFR, or “must know first”.
+   */
+  starred?: PlacementField<boolean>;
   functionWord?: PlacementField<boolean>;
   curriculumBand?: PlacementField<string>;
   gradeBand?: PlacementField<string>;

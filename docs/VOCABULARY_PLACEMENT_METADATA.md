@@ -15,7 +15,7 @@ All placement records are keyed by **`lexemeId`** (canonical trainable unit), ne
 | Field | Value | Provenance | Classification | Notes |
 | --- | --- | --- | --- | --- |
 | `alphabeticalSection` | PDF letter `A`–`Z` | `SOURCE` / `pdf.section` | SOURCE_FACT | Alphabetical grouping of the printed list. **Not** a grade, unit, or semester. |
-| `coreFoundation` | PDF starred marker | `SOURCE` / `pdf.starred` | SOURCE_FACT | The source marks some entries with a star. That is **not** CEFR, frequency rank, or a reviewed “must-know first” curriculum. |
+| `starred` | PDF starred marker (`Lexeme.starred`) | `SOURCE` / `pdf.starred` | SOURCE_FACT | The printed star, not curriculum foundation, difficulty, frequency, CEFR, or “must know first”. |
 | `functionWord` | `true` / `false` when POS is classifiable | `INFERRED` / `canonical.partsOfSpeech` + `function-word-pos-rule/v1` | ENRICHED (rule) | Closed-class POS only. Absent when POS is empty, adverb-only, numeral, interjection, abbreviation, or linking verb. **Not** a skip-training flag and **not** mastery. |
 
 `sourceIndex` remains on `Lexeme` as PDF numbered order. It is **not** a placement field and is **not** difficulty.
@@ -28,7 +28,7 @@ Deterministic over canonical `partsOfSpeech` (normalized from `sourcePosRaw`, no
 - `false` if every POS is `noun`, `adjective`, `verb`, `verb_transitive`, or `verb_intransitive`
 - **absent** otherwise (do not guess)
 
-Confidence is `0.8` when present. Source is always `INFERRED`.
+Confidence is `0.8` when present. That number is a **heuristic label** (`FUNCTION_WORD_RULE_CONFIDENCE`), not an empirically calibrated accuracy. Source is always `INFERRED`. It must not be used as a production placement weight.
 
 ### Other existing vocabulary fields (not placement authority)
 
@@ -52,7 +52,7 @@ There is **no** textbook unit, grade/semester, CEFR, frequency rank, or pedagogi
 - Pedagogical difficulty bands
 - A true curriculum sequence (A–Z and `sourceIndex` are print order)
 
-Optional overlay file `data/vocabulary/enrichment/word-placement.json` exists as a future extension point. It currently has **zero** curated/external records.
+Optional overlay file `data/vocabulary/enrichment/word-placement.json` exists as a future extension point. It currently has **zero** curated/external records. Overlay field names match the schema (`starred`, not a semantic `coreFoundation`).
 
 ---
 

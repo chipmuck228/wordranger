@@ -75,6 +75,7 @@ describe("Vocabulary placement metadata", () => {
     expect(listed.length).toBe(dataset.lexemes.length);
     for (const record of listed) {
       expect(record).not.toHaveProperty("sourceIndex");
+      expect(record).not.toHaveProperty("coreFoundation");
       expect(record.difficultyBand).toBeUndefined();
       expect(record).not.toHaveProperty("difficulty");
     }
@@ -83,7 +84,7 @@ describe("Vocabulary placement metadata", () => {
     expect(lexeme?.lemma).toBe("ability");
     const metadata = listed.find((item) => item.lexemeId === lexeme?.id);
     expect(metadata?.difficultyBand).toBeUndefined();
-    expect(metadata?.coreFoundation?.value).toBe(false);
+    expect(metadata?.starred?.value).toBe(false);
     const comment = readFileSync(
       join(process.cwd(), "src/domain/vocabulary/lexeme.ts"),
       "utf8",
@@ -109,8 +110,8 @@ describe("Vocabulary placement metadata", () => {
   it("M3: metadata provenance is required", async () => {
     const listed = await repository.listPlacementMetadata();
     for (const record of listed) {
-      expect(record.coreFoundation?.provenance.length).toBeGreaterThan(0);
-      expect(record.coreFoundation?.source).toBe("SOURCE");
+      expect(record.starred?.provenance.length).toBeGreaterThan(0);
+      expect(record.starred?.source).toBe("SOURCE");
       if (record.alphabeticalSection) {
         expect(record.alphabeticalSection.provenance.length).toBeGreaterThan(0);
         expect(record.alphabeticalSection.source).toBe("SOURCE");
@@ -123,7 +124,7 @@ describe("Vocabulary placement metadata", () => {
       [
         {
           lexemeId: dataset.lexemes[0].id,
-          coreFoundation: {
+          starred: {
             value: true,
             source: "SOURCE",
             provenance: [],
@@ -175,12 +176,12 @@ describe("Vocabulary placement metadata", () => {
       provenance: ["canonical.partsOfSpeech", FUNCTION_WORD_POS_RULE_ID],
       confidence: 0.8,
     });
-    expect(articleMeta?.coreFoundation).toEqual({
+    expect(articleMeta?.starred).toEqual({
       value: true,
       source: "SOURCE",
       provenance: ["pdf.starred"],
     });
-    expect(articleMeta?.functionWord?.source).not.toBe(articleMeta?.coreFoundation?.source);
+    expect(articleMeta?.functionWord?.source).not.toBe(articleMeta?.starred?.source);
     expect(classifyFunctionWord(["noun"])).toBe(false);
     expect(classifyFunctionWord(["adverb"])).toBeNull();
   });
@@ -263,7 +264,7 @@ describe("Vocabulary placement metadata", () => {
       [
         {
           lexemeId: "does-not-exist",
-          coreFoundation: {
+          starred: {
             value: true,
             source: "SOURCE",
             provenance: ["pdf.starred"],
@@ -311,7 +312,7 @@ describe("Vocabulary placement metadata", () => {
       [
         {
           lexemeId,
-          coreFoundation: {
+          starred: {
             value: false,
             source: "SOURCE",
             provenance: ["pdf.starred"],
@@ -319,7 +320,7 @@ describe("Vocabulary placement metadata", () => {
         },
         {
           lexemeId,
-          coreFoundation: {
+          starred: {
             value: true,
             source: "SOURCE",
             provenance: ["pdf.starred"],
