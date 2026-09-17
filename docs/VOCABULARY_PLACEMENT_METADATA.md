@@ -2,9 +2,11 @@
 
 Evidence-backed curriculum / placement metadata for the junior-high 1600-word list. This is **Vocabulary Domain reference data**, not learner state.
 
-This document is not Adaptive Placement. Scheduler, Daily Training, `StudentLexemeModel`, and `LearningEvidence` do not consume these fields yet.
+This document is not Adaptive Placement. Scheduler, Daily Training, `StudentLexemeModel`, and `LearningEvidence` do not consume placement fields for admission. Placement-aware NEW_WORD selection is blocked until production-authoritative bands exist.
 
-Status: **PLACEMENT_METADATA_INCOMPLETE**. The schema and provenance rules exist. There is not enough reliable data to drive fast placement.
+Status: **PLACEMENT_METADATA_INCOMPLETE** / Phase 12 **PLACEMENT_DATA_BLOCKER**.
+
+The schema and provenance rules exist. Production overlay `word-placement.json` has **zero** `CURATED` / `EXTERNAL_REFERENCE` band records. Adaptive placement is **not** implemented in Scheduler or Daily Training. `assessAdaptivePlacementReadiness()` returns `PLACEMENT_DATA_BLOCKER` and must not be bypassed with `sourceIndex`, A–Z sections, `starred`, or `functionWord`.
 
 ---
 
@@ -81,6 +83,59 @@ For `READY_FOR_ADAPTIVE_PLACEMENT`, add at least one reviewed dataset, licensed 
 3. **Externally validated CEFR-like bands** from a licensed wordlist, matched conservatively (homographs stay unmatched rather than guessed).
 
 Until those exist, placement must not skip bands, jump indexes, or treat function words as known.
+
+## Phase 12 — PLACEMENT_DATA_BLOCKER
+
+Adaptive Placement was not shipped. Fake placement from print order would violate ADR-075 / ADR-077.
+
+### Why current fields are insufficient
+
+| Field | Why it cannot drive placement |
+| --- | --- |
+| `sourceIndex` | PDF numbered order. Later ≠ harder. |
+| `alphabeticalSection` | Lemma A–Z grouping. `ability` is not a lower grade than `zoo`. |
+| `starred` | Typographic PDF marker. Not easy, core, CEFR, or mastered. |
+| `functionWord` | `INFERRED` POS heuristic. Must not skip training or write mastery. |
+
+Production-authoritative placement requires `source == CURATED` or `source == EXTERNAL_REFERENCE` on a **single** primary band axis.
+
+### Minimum dataset required
+
+1. One primary axis, in this order if complete enough: `curriculumBand`, else `gradeBand`, else `difficultyBand` / `frequencyBand`.
+2. At least **3** distinct ordered bands on that axis.
+3. Coverage of **≥ 80%** of canonical lexemes (1638), keyed by `lexemeId` (not source entry).
+4. Licensed or human-reviewed provenance on every band field. No LLM-inferred CEFR/difficulty.
+5. Enough lexemes per band to sample 6–12 Daily Training probes without fabricating Evidence or marking untested words mastered.
+
+Gate constants: `MIN_AUTHORITATIVE_PLACEMENT_BANDS = 3`, `MIN_AUTHORITATIVE_PLACEMENT_COVERAGE = 0.8`.
+
+### Recommended overlay shape
+
+`data/vocabulary/enrichment/word-placement.json` (do not invent values until a real source exists):
+
+```json
+{
+  "meta": {
+    "primaryAxis": "curriculumBand",
+    "recordCount": 1638
+  },
+  "records": [
+    {
+      "lexemeId": "lex-0001-1",
+      "curriculumBand": {
+        "value": "FOUNDATION",
+        "source": "CURATED",
+        "provenance": ["publisher-scope-and-sequence:junior-high-1600/v1"],
+        "confidence": 1
+      }
+    }
+  ]
+}
+```
+
+Band string values must come from the reviewed source. `FOUNDATION` / `MIDDLE` / `ADVANCED` are test-fixture names only; do not write them into production overlay as guessed labels.
+
+Until this overlay is populated and the readiness gate returns `READY`, Daily Training NEW_WORD admission stays source-list order. Untested words remain `UNSEEN`. No fake Evidence.
 
 ---
 

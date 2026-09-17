@@ -147,6 +147,8 @@ If fewer review/progress candidates exist than requested slots, remaining slots 
 
 `sourceIndex` is PDF/source numbered order. It is not difficulty, CEFR, or grade. Do not treat a later index as a harder word.
 
+Adaptive placement (band-aware NEW_WORD admission) is **not** enabled. Production vocabulary has no `CURATED` / `EXTERNAL_REFERENCE` `curriculumBand` / `gradeBand` / `difficultyBand` / `frequencyBand` overlay. The readiness gate is `PLACEMENT_DATA_BLOCKER`. Do not substitute A–Z sections, PDF stars, or inferred function words. See `docs/VOCABULARY_PLACEMENT_METADATA.md`.
+
 ## Progressive placement (scheduler v2)
 
 UNSEEN means the system has no evidence yet. It does not mean the student does not know the word.

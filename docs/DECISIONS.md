@@ -462,6 +462,12 @@ Every present placement field declares `source` (`SOURCE` / `CURATED` / `EXTERNA
 
 Rule-inferred fields such as `functionWord` are labeled `INFERRED` and are not production placement authority. LLM-guessed CEFR/grade/frequency/difficulty is forbidden as truth; inferred band fields are invalid. Adaptive placement waits for curated or licensed external data.
 
+## ADR-078 — Adaptive placement is blocked without production-authoritative bands
+
+**Status:** accepted
+
+Phase 12 inspected bundled placement metadata and `word-placement.json` (zero overlay records). No `CURATED` or `EXTERNAL_REFERENCE` `curriculumBand` / `gradeBand` / `difficultyBand` / `frequencyBand` exists. Adaptive placement is therefore `PLACEMENT_DATA_BLOCKER`: Scheduler v2 and Daily Training must not jump, skip, or re-rank NEW_WORD by `sourceIndex`, A–Z section, PDF `starred`, or inferred `functionWord`. `assessAdaptivePlacementReadiness()` is the design gate. Placement still must not fabricate Evidence or mark untested lexemes `MASTERED` if a later overlay unlocks it.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

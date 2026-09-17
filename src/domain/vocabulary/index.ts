@@ -34,6 +34,16 @@ export {
   placementMetadataIssues,
   type PlacementMetadataIssue,
 } from "./validate-placement-metadata";
+export {
+  ADAPTIVE_PLACEMENT_READINESS,
+  MIN_AUTHORITATIVE_PLACEMENT_BANDS,
+  MIN_AUTHORITATIVE_PLACEMENT_COVERAGE,
+  PLACEMENT_AXIS_PRIORITY,
+  PRODUCTION_PLACEMENT_SOURCES,
+  assessAdaptivePlacementReadiness,
+  type AdaptivePlacementReadiness,
+  type AdaptivePlacementReadinessStatus,
+} from "./adaptive-placement-readiness";
 export type { VocabularyRepository, GetRelationsOptions } from "./vocabulary-repository";
 export {
   DEFAULT_VOCABULARY_CONTENT_POLICY,
