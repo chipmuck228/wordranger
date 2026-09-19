@@ -7,9 +7,9 @@ import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
 import type { TaskAnswerKey } from "@/domain/tasks/task-answer-key";
 import type { DomainErrorCode } from "../domain/errors";
 import type {
+  AssessableExperienceStepSpec,
   CompilationTrace,
   ExperienceId,
-  ExperienceStepSpec,
   ResolvedContextSnapshot,
   ResolvedTargetSnapshot,
   StepSupportPolicy,
@@ -18,7 +18,7 @@ import type {
 export interface TaskCompilationRequest {
   experienceId: ExperienceId;
   learningNeedId: string;
-  step: ExperienceStepSpec;
+  step: AssessableExperienceStepSpec;
   resolvedContext: ResolvedContextSnapshot;
   resolvedTargets: ResolvedTargetSnapshot[];
   supportPolicy: StepSupportPolicy;

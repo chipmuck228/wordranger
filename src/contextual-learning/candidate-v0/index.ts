@@ -13,13 +13,20 @@ export type {
   DomainValidationResult,
 } from "./domain/errors";
 export type {
+  AssessableExperienceStepSpec,
   CognitiveMode,
   ContextFrame,
   ExperienceStepSpec,
+  GuidedActivityKind,
+  GuidedExperienceStepSpec,
   LearningExperiencePlan,
   LexemeSenseRef,
   RuntimeCapability,
   SemanticSkeleton,
+} from "./domain/types";
+export {
+  isAssessableExperienceStep,
+  isGuidedExperienceStep,
 } from "./domain/types";
 export { sameLexemeSense, lexemeSenseKey } from "./domain/lexeme-sense";
 
@@ -50,8 +57,13 @@ export {
   ExecutionErrorCode,
   abortExperienceRun,
   applyExperienceCommand,
+  classifyExperienceStep,
   createExperienceRun,
+  createPublicGuidedActivity,
+  guidedActivityId,
   issueCurrentStep,
+  recordFrozenTaskCompletion,
+  recordGuidedActivityCompletion,
   recordTaskCompletion,
   validateExperienceRun,
 } from "./execution";
@@ -60,6 +72,9 @@ export type {
   ExperienceRunCommand,
   ExperienceRunResult,
   FrozenTaskCompletionReceipt,
+  GuidedActivityCompletionReceipt,
+  PublicGuidedActivity,
+  StepExecutionClassification,
 } from "./execution";
 
 export { mealSkeleton } from "./fixtures/meal/skeleton";
@@ -74,6 +89,7 @@ export { schoolChallengeSkeleton } from "./fixtures/school-challenge/skeleton";
 export { SCHOOL_FRAMES } from "./fixtures/school-challenge/contexts";
 export {
   createSchoolBuildPlan,
+  createSchoolGuidedPresentationPlan,
   createSchoolStrengthenPlan,
 } from "./fixtures/school-challenge/plans";
 
@@ -81,6 +97,7 @@ export { borrowingSharingSkeleton } from "./fixtures/borrowing-sharing/skeleton"
 export { BORROW_FRAMES } from "./fixtures/borrowing-sharing/contexts";
 export {
   createBorrowBuildPlan,
+  createBorrowGuidedPerspectivePlan,
   createBorrowStrengthenPlan,
   createUnsupportedOrderStep,
 } from "./fixtures/borrowing-sharing/plans";

@@ -8,7 +8,8 @@ This module is an adapter spike. It is not a project standard, is not wired into
 
 ```text
 LearningNeed  →  LearningExperiencePlan / ExperienceStepSpec
-                 → compileExperienceStep
+                 → classify: ASSESSABLE_FROZEN_TASK | GUIDED_ACTIVITY | UNSUPPORTED
+                 → compileExperienceStep (assessable only)
                  → frozen PublicLearningTask
                  → frozen StudentAction / TaskEvaluator / LearningEvidence
 ```
@@ -77,7 +78,7 @@ Choice responses declare `candidates` and `correctCandidateIds`. The compiler co
 
 | Case | Skeleton | What it proves |
 | --- | --- | --- |
-| Meal | `meal-setting-v0` | One skeleton, three frames. `SUITABLE_FOR` is a contextual fact, not a universal lexical truth. Meal RECALL can compile; IDENTIFY cannot. |
+| Meal | `meal-setting-v0` | One skeleton, three frames. BUILD is guided present / observe / contrast then assessable RECALL. STRENGTHEN IDENTIFY remains assessable and unsupported. |
 | School Challenge | `goal-directed-challenge-v0` | Abstract words bind as property / action / state / outcome / grounded claim. Local success is not general ability. CLAIM_CHOICE does not compile. |
 | Borrowing-Sharing | `temporary-resource-access-v0` | Same transfer event; requester perspective is `borrow`, owner perspective is `lend`. Contextual RELATION_CHOICE does not compile. |
 
@@ -117,9 +118,11 @@ npm run lint
 ```text
 validated LearningExperiencePlan
   → ExperienceRun(READY)
-  → issue current step via compileExperienceStep
-  → TASK_ISSUED + PublicLearningTask
-  → FrozenTaskCompletionReceipt { taskId, completedAt }
+  → classify current step from explicit executionIntent
+  → GUIDED_ACTIVITY_ISSUED + PublicGuidedActivity
+     or FROZEN_TASK_ISSUED + PublicLearningTask
+     or BLOCKED / UNSUPPORTED
+  → acknowledge receipt or frozen-task receipt
   → next READY step, or COMPLETED
 ```
 
@@ -127,9 +130,13 @@ It manages plan order and issued-task identity only.
 
 `createExperienceRun` deep-copies the plan plus the real `ResolvedContextSnapshot` and `ResolvedTargetSnapshot[]`. It rejects a plan whose terminal / `END` step would fire before every required step can complete, or whose resolved ids do not match the plan.
 
-`issueCurrentStep` assembles `TaskCompilationRequest` from that snapshot. The caller cannot supply `resolvedContext`, `resolvedTargets`, `displayForm`, facts, or entity bindings at issue time.
+`issueCurrentStep` assembles `TaskCompilationRequest` from that snapshot only for assessable steps that have a semantic projection. Guided steps emit `PublicGuidedActivity` from the same snapshot. The caller cannot supply `resolvedContext`, `resolvedTargets`, `displayForm`, facts, or entity bindings at issue time.
 
-A valid completion receipt always persists `TASK_COMPLETED` on that step. The run never stays `TASK_ISSUED` after the frozen task has been recorded.
+A valid completion receipt always persists `STEP_COMPLETED` on that step. The run never stays issued after the receipt has been recorded.
+
+Assessable frozen tasks can produce frozen Evidence later, through the existing evaluator path. Guided activities do not produce Evidence. Guided completion means only that the host acknowledged the presentation; it is not learning success. Unsupported steps stay `BLOCKED`. A compile failure never becomes guided.
+
+The Meal BUILD sequence is an execution-protocol demo: three acknowledgements, then one frozen recall. It does not prove the learner understood the scene. School `CLAIM_CHOICE` and Borrow `RELATION_CHOICE` remain assessable and unsupported.
 
 It does **not**:
 
@@ -140,9 +147,7 @@ It does **not**:
 - skip an unsupported step
 - downgrade a blocked step into `MEANING_CHOICE`
 
-If the current step has no semantic projection (Meal IDENTIFY, School `CLAIM_CHOICE`, Borrow `RELATION_CHOICE`), the run becomes `BLOCKED` and keeps the original compiler code. The next step is never compiled.
-
-Today only the lexical-recall whitelist can reach `TASK_ISSUED` / `COMPLETED`. A one-step safe recall fixture exists to test sequencing. It does **not** mean a full Meal / School / Borrow experience can run.
+If an assessable step has no semantic projection (Meal STRENGTHEN IDENTIFY, School `CLAIM_CHOICE`, Borrow `RELATION_CHOICE`), the run becomes `BLOCKED` and does not emit a guided activity. The next step is never compiled or skipped.
 
 There is no persistence, UI, scheduler hook, or `submitTaskAction` integration.
 

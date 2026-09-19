@@ -12,11 +12,17 @@ import type {
   ResolvedContextSnapshot,
   ResolvedTargetSnapshot,
 } from "../domain/types";
+import type { StepExecutionClassification } from "./classify-step";
 import type { ExperienceExecutionError } from "./errors";
+import type {
+  GuidedActivityCompletionReceipt,
+  PublicGuidedActivity,
+} from "./guided-activity";
 
 export type ExperienceRunStatus =
   | "READY"
-  | "TASK_ISSUED"
+  | "FROZEN_TASK_ISSUED"
+  | "GUIDED_ACTIVITY_ISSUED"
   | "BLOCKED"
   | "COMPLETED"
   | "ABORTED";
@@ -24,8 +30,9 @@ export type ExperienceRunStatus =
 export type ExperienceStepRunStatus =
   | "PENDING"
   | "COMPILATION_FAILED"
-  | "TASK_ISSUED"
-  | "TASK_COMPLETED"
+  | "FROZEN_TASK_ISSUED"
+  | "GUIDED_ACTIVITY_ISSUED"
+  | "STEP_COMPLETED"
   | "BLOCKED";
 
 export interface ExperiencePlanSnapshot {
@@ -37,7 +44,9 @@ export interface ExperiencePlanSnapshot {
 export interface ExperienceStepRun {
   stepId: string;
   status: ExperienceStepRunStatus;
+  classification?: StepExecutionClassification;
   taskId?: string;
+  activityId?: string;
   compilationTrace?: CompilationTrace;
   compilationError?: CompilationError;
   issuedAt?: string;
@@ -71,8 +80,12 @@ export type ExperienceRunCommand =
       createId?: () => string;
     }
   | {
-      kind: "RECORD_TASK_COMPLETION";
+      kind: "RECORD_FROZEN_TASK_COMPLETION";
       receipt: FrozenTaskCompletionReceipt;
+    }
+  | {
+      kind: "RECORD_GUIDED_ACTIVITY_COMPLETION";
+      receipt: GuidedActivityCompletionReceipt;
     }
   | {
       kind: "ABORT";
@@ -85,9 +98,13 @@ export type ExperienceRunResult =
       run: ExperienceRun;
       issuedTask?: PublicLearningTask;
       answerKey?: TaskAnswerKey;
+      issuedActivity?: PublicGuidedActivity;
+      classification?: StepExecutionClassification;
     }
   | {
       ok: false;
       run: ExperienceRun;
       error: ExperienceExecutionError;
+      issuedActivity?: PublicGuidedActivity;
+      classification?: StepExecutionClassification;
     };

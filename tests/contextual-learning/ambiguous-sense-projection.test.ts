@@ -11,6 +11,7 @@ describe("Candidate V0 ambiguous sense → lexeme projection", () => {
       learningNeedId: "need-issue",
       step: {
         id: "recall-issue-problem",
+        executionIntent: { kind: "ASSESSABLE" },
         purpose: "RECALL",
         targetIds: ["target-issue-problem"],
         semanticAction: "TYPE",

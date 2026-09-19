@@ -6,7 +6,9 @@ import {
   applyExperienceCommand,
   createExperienceRun,
   issueCurrentStep,
-  recordTaskCompletion,
+  guidedActivityId,
+  recordFrozenTaskCompletion,
+  recordGuidedActivityCompletion,
 } from "@/contextual-learning/candidate-v0/execution";
 import type { ExperienceRun } from "@/contextual-learning/candidate-v0/execution";
 import { createSafeLexicalRecallPlan } from "@/contextual-learning/candidate-v0/fixtures/execution/safe-lexical-recall";
@@ -20,7 +22,10 @@ import {
   restaurantMealFrame,
 } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
-import { createMealBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
+import {
+  createMealBuildPlan,
+  createMealStrengthenPlan,
+} from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
 import { scienceTowerFrame } from "@/contextual-learning/candidate-v0/fixtures/school-challenge/contexts";
 import { SCHOOL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/school-challenge/knowledge";
@@ -124,12 +129,12 @@ function handIssuedUnreachableRun(): ExperienceRun {
     schemaVersion: "candidate-v0",
     experienceId: plan.id,
     planSnapshot: { plan, ...resolvedSnapshotForPlan(plan) },
-    status: "TASK_ISSUED",
+    status: "FROZEN_TASK_ISSUED",
     currentStepIndex: 0,
     stepRuns: [
       {
         stepId: "early-end",
-        status: "TASK_ISSUED",
+        status: "FROZEN_TASK_ISSUED",
         taskId: "task-early-end",
         issuedAt: now,
       },
@@ -143,7 +148,7 @@ function handIssuedUnreachableRun(): ExperienceRun {
 function expectStepNotStillIssued(run: ExperienceRun, taskId: string) {
   const step = run.stepRuns.find((item) => item.taskId === taskId);
   expect(step).toBeDefined();
-  expect(step?.status).not.toBe("TASK_ISSUED");
+  expect(step?.status).not.toBe("FROZEN_TASK_ISSUED");
 }
 
 describe("Candidate V0 experience execution — creation", () => {
@@ -227,7 +232,7 @@ describe("Candidate V0 experience execution — safe lexical recall", () => {
     if (!issued.ok) {
       return;
     }
-    expect(issued.run.status).toBe("TASK_ISSUED");
+    expect(issued.run.status).toBe("FROZEN_TASK_ISSUED");
     expect(issued.issuedTask?.taskType).toBe(LearningTaskType.ACTIVE_RECALL_TYPING);
     expect(issued.issuedTask?.targetSkill).toBe(VocabularySkill.ACTIVE_RECALL);
     expect(issued.run.stepRuns[0]?.compilationTrace?.semanticProjectionId).toBe(
@@ -237,7 +242,7 @@ describe("Candidate V0 experience execution — safe lexical recall", () => {
     expect(issued.answerKey?.exactAcceptedTexts).toEqual(["spoon"]);
     expect(issued.issuedTask?.lexemeId).toBe("lex-spoon");
 
-    const completed = recordTaskCompletion({
+    const completed = recordFrozenTaskCompletion({
       run: issued.run,
       receipt: {
         taskId: issued.issuedTask!.id,
@@ -249,17 +254,17 @@ describe("Candidate V0 experience execution — safe lexical recall", () => {
       return;
     }
     expect(completed.run.status).toBe("COMPLETED");
-    expect(completed.run.stepRuns[0]?.status).toBe("TASK_COMPLETED");
+    expect(completed.run.stepRuns[0]?.status).toBe("STEP_COMPLETED");
     expect(completed.run.currentStepIndex).toBe(0);
     expectStepNotStillIssued(completed.run, issued.issuedTask!.id);
   });
 });
 
 describe("Candidate V0 experience execution — completion persistence", () => {
-  it("does not leave TASK_ISSUED after a legal receipt, even if the terminal policy fails", () => {
+  it("does not leave FROZEN_TASK_ISSUED after a legal receipt, even if the terminal policy fails", () => {
     const run = handIssuedUnreachableRun();
     const receipt = { taskId: "task-early-end", completedAt: now };
-    const first = recordTaskCompletion({ run, receipt });
+    const first = recordFrozenTaskCompletion({ run, receipt });
     expect(first.ok).toBe(false);
     if (first.ok) {
       return;
@@ -267,10 +272,10 @@ describe("Candidate V0 experience execution — completion persistence", () => {
     expect(first.error.code).toBe(
       ExecutionErrorCode.EXEC_TERMINAL_POLICY_NOT_SATISFIED,
     );
-    expect(first.run.status).not.toBe("TASK_ISSUED");
+    expect(first.run.status).not.toBe("FROZEN_TASK_ISSUED");
     expectStepNotStillIssued(first.run, receipt.taskId);
 
-    const retry = recordTaskCompletion({ run: first.run, receipt });
+    const retry = recordFrozenTaskCompletion({ run: first.run, receipt });
     expect(retry.ok).toBe(false);
     if (retry.ok) {
       return;
@@ -410,7 +415,7 @@ describe("Candidate V0 experience execution — resolved snapshot binding", () =
 
 describe("Candidate V0 experience execution — unsupported first steps stay BLOCKED", () => {
   it("blocks Meal IDENTIFY without skipping to RECALL", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealStrengthenPlan(homeBreakfastFrame);
     const run = expectReadyRun(plan);
     const issued = issueCurrentStep({
       run,
@@ -421,6 +426,8 @@ describe("Candidate V0 experience execution — unsupported first steps stay BLO
       return;
     }
     expect("issuedTask" in issued).toBe(false);
+    expect(issued.issuedActivity).toBeUndefined();
+    expect(issued.classification?.kind).toBe("UNSUPPORTED");
     expect(issued.run.status).toBe("BLOCKED");
     expect(issued.run.currentStepIndex).toBe(0);
     expect(issued.error.code).toBe(DomainErrorCode.COMPILATION_SEMANTIC_MISMATCH);
@@ -443,6 +450,8 @@ describe("Candidate V0 experience execution — unsupported first steps stay BLO
       return;
     }
     expect("issuedTask" in issued).toBe(false);
+    expect(issued.issuedActivity).toBeUndefined();
+    expect(issued.classification?.kind).toBe("UNSUPPORTED");
     expect(issued.run.status).toBe("BLOCKED");
     expect(issued.run.currentStepIndex).toBe(0);
     expect(issued.error.code).toBe(DomainErrorCode.COMPILATION_SEMANTIC_MISMATCH);
@@ -460,11 +469,13 @@ describe("Candidate V0 experience execution — unsupported first steps stay BLO
       return;
     }
     expect("issuedTask" in issued).toBe(false);
+    expect(issued.issuedActivity).toBeUndefined();
+    expect(issued.classification?.kind).toBe("UNSUPPORTED");
     expect(issued.run.status).toBe("BLOCKED");
     expect(issued.run.currentStepIndex).toBe(0);
     expect(issued.error.code).toBe(DomainErrorCode.COMPILATION_SEMANTIC_MISMATCH);
     expect(
-      issued.run.stepRuns.some((item) => item.status === "TASK_ISSUED"),
+      issued.run.stepRuns.some((item) => item.status === "FROZEN_TASK_ISSUED"),
     ).toBe(false);
   });
 });
@@ -507,7 +518,7 @@ describe("Candidate V0 experience execution — no skip", () => {
 describe("Candidate V0 experience execution — illegal transitions", () => {
   it("rejects completion before a task is issued", () => {
     const run = expectReadyRun(createSafeLexicalRecallPlan(homeBreakfastFrame));
-    const completed = recordTaskCompletion({
+    const completed = recordFrozenTaskCompletion({
       run,
       receipt: { taskId: "never-issued", completedAt: now },
     });
@@ -533,7 +544,7 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
     if (!issued.ok) {
       return;
     }
-    const completed = recordTaskCompletion({
+    const completed = recordFrozenTaskCompletion({
       run: issued.run,
       receipt: { taskId: "other-task", completedAt: now },
     });
@@ -542,7 +553,7 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
       return;
     }
     expect(completed.error.code).toBe(ExecutionErrorCode.EXEC_TASK_ID_MISMATCH);
-    expect(issued.run.status).toBe("TASK_ISSUED");
+    expect(issued.run.status).toBe("FROZEN_TASK_ISSUED");
   });
 
   it("rejects a duplicate completion receipt", () => {
@@ -560,12 +571,12 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
       taskId: issued.issuedTask!.id,
       completedAt: now,
     };
-    const first = recordTaskCompletion({ run: issued.run, receipt });
+    const first = recordFrozenTaskCompletion({ run: issued.run, receipt });
     expect(first.ok).toBe(true);
     if (!first.ok) {
       return;
     }
-    const second = recordTaskCompletion({ run: first.run, receipt });
+    const second = recordFrozenTaskCompletion({ run: first.run, receipt });
     expect(second.ok).toBe(false);
     if (second.ok) {
       return;
@@ -575,7 +586,7 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
   });
 
   it("rejects issuing from BLOCKED or COMPLETED, and completion from ABORTED", () => {
-    const meal = createMealBuildPlan(homeBreakfastFrame);
+    const meal = createMealStrengthenPlan(homeBreakfastFrame);
     const blocked = issueCurrentStep({
       run: expectReadyRun(meal),
       now,
@@ -603,7 +614,7 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
     if (!issued.ok) {
       return;
     }
-    const completed = recordTaskCompletion({
+    const completed = recordFrozenTaskCompletion({
       run: issued.run,
       receipt: { taskId: issued.issuedTask!.id, completedAt: now },
     });
@@ -632,7 +643,7 @@ describe("Candidate V0 experience execution — illegal transitions", () => {
     if (!aborted.ok) {
       return;
     }
-    const afterAbort = recordTaskCompletion({
+    const afterAbort = recordFrozenTaskCompletion({
       run: aborted.run,
       receipt: { taskId: "any", completedAt: now },
     });
@@ -673,5 +684,202 @@ describe("Candidate V0 experience execution — immutability", () => {
       status: "PENDING",
     });
     expect(run.stepRuns).toHaveLength(1);
+  });
+});
+
+describe("Candidate V0 experience execution — Meal guided then recall", () => {
+  it("acknowledges three guided steps then issues one frozen recall", () => {
+    const plan = createMealBuildPlan(homeBreakfastFrame);
+    let run = expectReadyRun(plan);
+    expect(plan.steps).toHaveLength(4);
+
+    for (let index = 0; index < 3; index += 1) {
+      const issued = issueCurrentStep({ run, now });
+      expect(issued.ok).toBe(true);
+      if (!issued.ok) {
+        return;
+      }
+      expect(issued.issuedTask).toBeUndefined();
+      expect(issued.answerKey).toBeUndefined();
+      expect(issued.issuedActivity).toBeDefined();
+      expect(issued.issuedActivity?.completionContract.kind).toBe(
+        "ACKNOWLEDGE_ONLY",
+      );
+      expect(issued.classification?.kind).toBe("GUIDED_ACTIVITY");
+      expect(issued.run.status).toBe("GUIDED_ACTIVITY_ISSUED");
+      const completed = recordGuidedActivityCompletion({
+        run: issued.run,
+        receipt: {
+          activityId: issued.issuedActivity!.id,
+          completedAt: now,
+        },
+      });
+      expect(completed.ok).toBe(true);
+      if (!completed.ok) {
+        return;
+      }
+      expect(completed.run.stepRuns[index]?.status).toBe("STEP_COMPLETED");
+      run = completed.run;
+    }
+
+    const frozen = issueCurrentStep({ run, now });
+    expect(frozen.ok).toBe(true);
+    if (!frozen.ok) {
+      return;
+    }
+    expect(frozen.issuedTask).toBeDefined();
+    expect(frozen.answerKey).toBeDefined();
+    expect(frozen.issuedActivity).toBeUndefined();
+    expect(frozen.classification?.kind).toBe("ASSESSABLE_FROZEN_TASK");
+    expect(frozen.run.status).toBe("FROZEN_TASK_ISSUED");
+
+    const finished = recordFrozenTaskCompletion({
+      run: frozen.run,
+      receipt: {
+        taskId: frozen.issuedTask!.id,
+        completedAt: now,
+      },
+    });
+    expect(finished.ok).toBe(true);
+    if (!finished.ok) {
+      return;
+    }
+    expect(finished.run.status).toBe("COMPLETED");
+    expect(
+      finished.run.stepRuns.filter((item) => item.status === "STEP_COMPLETED"),
+    ).toHaveLength(4);
+  });
+});
+
+describe("Candidate V0 experience execution — receipt kind isolation", () => {
+  it("rejects a guided receipt against a frozen task and the reverse", () => {
+    const recall = expectReadyRun(createSafeLexicalRecallPlan(homeBreakfastFrame));
+    const frozen = issueCurrentStep({ run: recall, now });
+    expect(frozen.ok).toBe(true);
+    if (!frozen.ok) {
+      return;
+    }
+    const guidedOnFrozen = recordGuidedActivityCompletion({
+      run: frozen.run,
+      receipt: {
+        activityId: guidedActivityId(frozen.run.experienceId, frozen.run.stepRuns[0]!.stepId),
+        completedAt: now,
+      },
+    });
+    expect(guidedOnFrozen.ok).toBe(false);
+    if (guidedOnFrozen.ok) {
+      return;
+    }
+    expect(guidedOnFrozen.error.code).toBe(
+      ExecutionErrorCode.EXEC_RECEIPT_KIND_MISMATCH,
+    );
+
+    const meal = expectReadyRun(createMealBuildPlan(homeBreakfastFrame));
+    const guided = issueCurrentStep({ run: meal, now });
+    expect(guided.ok).toBe(true);
+    if (!guided.ok) {
+      return;
+    }
+    const frozenOnGuided = recordFrozenTaskCompletion({
+      run: guided.run,
+      receipt: { taskId: "task-not-this-step", completedAt: now },
+    });
+    expect(frozenOnGuided.ok).toBe(false);
+    if (frozenOnGuided.ok) {
+      return;
+    }
+    expect(frozenOnGuided.error.code).toBe(
+      ExecutionErrorCode.EXEC_RECEIPT_KIND_MISMATCH,
+    );
+
+    const wrongActivity = recordGuidedActivityCompletion({
+      run: guided.run,
+      receipt: { activityId: "guided:wrong:id", completedAt: now },
+    });
+    expect(wrongActivity.ok).toBe(false);
+    if (wrongActivity.ok) {
+      return;
+    }
+    expect(wrongActivity.error.code).toBe(
+      ExecutionErrorCode.EXEC_ACTIVITY_ID_MISMATCH,
+    );
+
+    const wrongTask = recordFrozenTaskCompletion({
+      run: frozen.run,
+      receipt: { taskId: "wrong-task", completedAt: now },
+    });
+    expect(wrongTask.ok).toBe(false);
+    if (wrongTask.ok) {
+      return;
+    }
+    expect(wrongTask.error.code).toBe(ExecutionErrorCode.EXEC_TASK_ID_MISMATCH);
+
+    const firstGuided = recordGuidedActivityCompletion({
+      run: guided.run,
+      receipt: {
+        activityId: guided.issuedActivity!.id,
+        completedAt: now,
+      },
+    });
+    expect(firstGuided.ok).toBe(true);
+    if (!firstGuided.ok) {
+      return;
+    }
+    const duplicateGuided = recordGuidedActivityCompletion({
+      run: firstGuided.run,
+      receipt: {
+        activityId: guided.issuedActivity!.id,
+        completedAt: now,
+      },
+    });
+    expect(duplicateGuided.ok).toBe(false);
+    if (duplicateGuided.ok) {
+      return;
+    }
+    expect(duplicateGuided.error.code).toBe(
+      ExecutionErrorCode.EXEC_DUPLICATE_COMPLETION,
+    );
+  });
+});
+
+describe("Candidate V0 experience execution — no guided downgrade", () => {
+  it("does not return a PublicGuidedActivity for assessable CLAIM_CHOICE", () => {
+    const issued = issueCurrentStep({
+      run: expectReadyRun(createSchoolBuildPlan(scienceTowerFrame)),
+      now,
+    });
+    expect(issued.ok).toBe(false);
+    if (issued.ok) {
+      return;
+    }
+    expect(issued.issuedActivity).toBeUndefined();
+    expect(issued.classification?.kind).toBe("UNSUPPORTED");
+    expect(issued.run.status).toBe("BLOCKED");
+  });
+
+  it("keeps compile failure assessable instead of rewriting it as guided", () => {
+    const plan = createSafeLexicalRecallPlan(homeBreakfastFrame);
+    const resolved = resolvedSnapshotForPlan(plan);
+    resolved.resolvedTargets[0] = {
+      ...resolved.resolvedTargets[0]!,
+      displayForm: "",
+    };
+    const created = createExperienceRun({
+      plan,
+      ...resolved,
+      now,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) {
+      return;
+    }
+    const issued = issueCurrentStep({ run: created.run, now });
+    expect(issued.ok).toBe(false);
+    if (issued.ok) {
+      return;
+    }
+    expect(issued.classification?.kind).toBe("ASSESSABLE_FROZEN_TASK");
+    expect(issued.issuedActivity).toBeUndefined();
+    expect(issued.run.stepRuns[0]?.status).toBe("COMPILATION_FAILED");
   });
 });

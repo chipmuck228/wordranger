@@ -5,7 +5,8 @@
 
 import { abortExperienceRun } from "./abort-experience-run";
 import { issueCurrentStep } from "./issue-current-step";
-import { recordTaskCompletion } from "./record-task-completion";
+import { recordGuidedActivityCompletion } from "./record-guided-activity-completion";
+import { recordFrozenTaskCompletion } from "./record-task-completion";
 import type {
   ExperienceRun,
   ExperienceRunCommand,
@@ -28,8 +29,15 @@ export function applyExperienceCommand(
       now: options.now,
     });
   }
-  if (command.kind === "RECORD_TASK_COMPLETION") {
-    return recordTaskCompletion({
+  if (command.kind === "RECORD_FROZEN_TASK_COMPLETION") {
+    return recordFrozenTaskCompletion({
+      run,
+      receipt: command.receipt,
+      now: options.now,
+    });
+  }
+  if (command.kind === "RECORD_GUIDED_ACTIVITY_COMPLETION") {
+    return recordGuidedActivityCompletion({
       run,
       receipt: command.receipt,
       now: options.now,

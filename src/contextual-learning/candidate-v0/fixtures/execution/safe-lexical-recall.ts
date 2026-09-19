@@ -13,6 +13,7 @@ import type {
 import {
   FIXTURE_PROVENANCE,
   MINIMAL_SUPPORT,
+  assessable,
   completeAll,
   entityArg,
   nextOrEnd,
@@ -30,7 +31,7 @@ export function createSafeLexicalRecallPlan(
   frame: ContextFrame,
 ): LearningExperiencePlan {
   const prefix = mealPrefixForFrame(frame.id);
-  const recall: ExperienceStepSpec = {
+  const recall: ExperienceStepSpec = assessable({
     id: `${prefix}-safe-recall`,
     purpose: "RECALL",
     targetIds: ["target-spoon-form"],
@@ -46,7 +47,7 @@ export function createSafeLexicalRecallPlan(
     supportPolicy: MINIMAL_SUPPORT,
     requiredCapabilities: ["frozen-text-input:TYPE"],
     transition: nextOrEnd(true),
-  };
+  });
 
   return {
     id: `safe-lexical-recall-${frame.id}`,

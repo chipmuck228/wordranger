@@ -1,30 +1,28 @@
 /**
  * Candidate V0 / Experimental / Not a Standard.
- * Records that an issued frozen task finished. Does not interpret correctness.
+ * Records that a guided activity was acknowledged. Does not mean learning success.
  */
 
 import { applyRecordedStepCompletion } from "./apply-step-completion";
 import { ExecutionErrorCode, executionError } from "./errors";
-import type {
-  ExperienceRun,
-  ExperienceRunResult,
-  FrozenTaskCompletionReceipt,
-} from "./types";
+import type { GuidedActivityCompletionReceipt } from "./guided-activity";
+import type { ExperienceRun, ExperienceRunResult } from "./types";
 
-export interface RecordFrozenTaskCompletionInput {
+export interface RecordGuidedActivityCompletionInput {
   run: ExperienceRun;
-  receipt: FrozenTaskCompletionReceipt;
+  receipt: GuidedActivityCompletionReceipt;
   now?: string;
 }
 
-export function recordFrozenTaskCompletion(
-  input: RecordFrozenTaskCompletionInput,
+export function recordGuidedActivityCompletion(
+  input: RecordGuidedActivityCompletionInput,
 ): ExperienceRunResult {
   const { run, receipt } = input;
   if (
     run.stepRuns.some(
       (stepRun) =>
-        stepRun.taskId === receipt.taskId && stepRun.status === "STEP_COMPLETED",
+        stepRun.activityId === receipt.activityId &&
+        stepRun.status === "STEP_COMPLETED",
     )
   ) {
     return {
@@ -32,31 +30,31 @@ export function recordFrozenTaskCompletion(
       run,
       error: executionError(
         ExecutionErrorCode.EXEC_DUPLICATE_COMPLETION,
-        `Task ${receipt.taskId} was already recorded as completed`,
-        "receipt.taskId",
+        `Guided activity ${receipt.activityId} was already recorded as completed`,
+        "receipt.activityId",
       ),
     };
   }
 
-  if (run.status === "GUIDED_ACTIVITY_ISSUED") {
+  if (run.status === "FROZEN_TASK_ISSUED") {
     return {
       ok: false,
       run,
       error: executionError(
         ExecutionErrorCode.EXEC_RECEIPT_KIND_MISMATCH,
-        "A frozen-task receipt cannot complete a guided activity",
+        "A guided-activity receipt cannot complete a frozen task",
         "receipt",
       ),
     };
   }
 
-  if (run.status !== "FROZEN_TASK_ISSUED") {
+  if (run.status !== "GUIDED_ACTIVITY_ISSUED") {
     return {
       ok: false,
       run,
       error: executionError(
         ExecutionErrorCode.EXEC_INVALID_STATE_TRANSITION,
-        `Cannot record frozen-task completion while run is ${run.status}`,
+        `Cannot record guided-activity completion while run is ${run.status}`,
         "run.status",
       ),
     };
@@ -74,25 +72,25 @@ export function recordFrozenTaskCompletion(
       ),
     };
   }
-  if (current.status !== "FROZEN_TASK_ISSUED" || !current.taskId) {
+  if (current.status !== "GUIDED_ACTIVITY_ISSUED" || !current.activityId) {
     return {
       ok: false,
       run,
       error: executionError(
         ExecutionErrorCode.EXEC_INVALID_STATE_TRANSITION,
-        `Current step ${current.stepId} is not awaiting a frozen-task receipt`,
+        `Current step ${current.stepId} is not awaiting a guided-activity receipt`,
         "stepRuns",
       ),
     };
   }
-  if (receipt.taskId !== current.taskId) {
+  if (receipt.activityId !== current.activityId) {
     return {
       ok: false,
       run,
       error: executionError(
-        ExecutionErrorCode.EXEC_TASK_ID_MISMATCH,
-        `Receipt taskId ${receipt.taskId} does not match issued task ${current.taskId}`,
-        "receipt.taskId",
+        ExecutionErrorCode.EXEC_ACTIVITY_ID_MISMATCH,
+        `Receipt activityId ${receipt.activityId} does not match issued activity ${current.activityId}`,
+        "receipt.activityId",
       ),
     };
   }
@@ -109,6 +107,3 @@ export function recordFrozenTaskCompletion(
   );
   return applyRecordedStepCompletion({ run, completedRuns, now });
 }
-
-/** @deprecated Use recordFrozenTaskCompletion. */
-export const recordTaskCompletion = recordFrozenTaskCompletion;

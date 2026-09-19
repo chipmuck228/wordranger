@@ -4,16 +4,22 @@ import { findSemanticProjection } from "@/contextual-learning/candidate-v0/compi
 import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
 import { homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_PROFILES, MEAL_SENSE } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
-import { createMealBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
+import {
+  createMealBuildPlan,
+  createMealStrengthenPlan,
+} from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
-import { MINIMAL_SUPPORT } from "@/contextual-learning/candidate-v0/fixtures/shared";
+import { MINIMAL_SUPPORT, assessable } from "@/contextual-learning/candidate-v0/fixtures/shared";
 import { profileMap } from "@/contextual-learning/candidate-v0/fixtures/shared";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import { LearningTaskType } from "@/domain/tasks/task-type";
-import type { ExperienceStepSpec } from "@/contextual-learning/candidate-v0/domain/types";
+import {
+  isAssessableExperienceStep,
+  type AssessableExperienceStepSpec,
+} from "@/contextual-learning/candidate-v0/domain/types";
 import { compilationRequest } from "./helpers";
 
-function compileMealVariant(step: ExperienceStepSpec) {
+function compileMealVariant(step: AssessableExperienceStepSpec) {
   const plan = createMealBuildPlan(homeBreakfastFrame);
   return compileExperienceStep(
     compilationRequest({
@@ -26,7 +32,7 @@ function compileMealVariant(step: ExperienceStepSpec) {
   );
 }
 
-const lexicalRecall: ExperienceStepSpec = {
+const lexicalRecall: AssessableExperienceStepSpec = assessable({
   id: "proj-lexical-recall",
   purpose: "RECALL",
   targetIds: ["target-spoon-form"],
@@ -40,7 +46,7 @@ const lexicalRecall: ExperienceStepSpec = {
   supportPolicy: MINIMAL_SUPPORT,
   requiredCapabilities: ["frozen-text-input:TYPE"],
   transition: { onTaskCompleted: "END", onSupportExhausted: "END" },
-};
+});
 
 describe("Candidate V0 semantic projection whitelist", () => {
   it("maps LEXICAL_FORM + TYPE/RECALL + MEANING_TO_FORM + RECALL to ACTIVE_RECALL", () => {
@@ -183,8 +189,12 @@ describe("Candidate V0 semantic projection whitelist", () => {
   });
 
   it("rejects ENTITY_REF that requires situational / relation reasoning", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealStrengthenPlan(homeBreakfastFrame);
     const identify = plan.steps[0];
+    expect(isAssessableExperienceStep(identify)).toBe(true);
+    if (!isAssessableExperienceStep(identify)) {
+      return;
+    }
     expect(identify.semanticAction).toBe("IDENTIFY");
     expect(identify.expectedResponse.kind).toBe("ENTITY_REF");
     const compiled = compileMealVariant(identify);

@@ -6,7 +6,11 @@ import { SEMANTIC_PROJECTION_WHITELIST } from "@/contextual-learning/candidate-v
 import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
 import { homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
-import { createMealBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
+import { isAssessableExperienceStep } from "@/contextual-learning/candidate-v0/domain/types";
+import {
+  createMealBuildPlan,
+  createMealStrengthenPlan,
+} from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
 import { profileMap } from "@/contextual-learning/candidate-v0/fixtures/shared";
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
@@ -98,8 +102,8 @@ describe("Candidate V0 frozen-contract protection", () => {
   it("emits a frozen PublicLearningTask only when a semantic projection exists", () => {
     const plan = createMealBuildPlan(homeBreakfastFrame);
     const recall = plan.steps.find((step) => step.purpose === "RECALL");
-    expect(recall).toBeDefined();
-    if (!recall) {
+    expect(recall && isAssessableExperienceStep(recall)).toBe(true);
+    if (!recall || !isAssessableExperienceStep(recall)) {
       return;
     }
     const compiled = compileExperienceStep(
@@ -122,11 +126,16 @@ describe("Candidate V0 frozen-contract protection", () => {
   });
 
   it("does not emit a PublicLearningTask when no projection exists", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealStrengthenPlan(homeBreakfastFrame);
+    const step = plan.steps[0];
+    expect(isAssessableExperienceStep(step)).toBe(true);
+    if (!isAssessableExperienceStep(step)) {
+      return;
+    }
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,
-        step: plan.steps[0],
+        step,
         frame: homeBreakfastFrame,
         skeleton: mealSkeleton,
         profiles: profileMap(MEAL_PROFILES),

@@ -4,7 +4,15 @@ import { findSemanticProjection } from "@/contextual-learning/candidate-v0/compi
 import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
 import { homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
-import { createMealBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
+import {
+  createMealBuildPlan,
+  createMealStrengthenPlan,
+} from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
+import {
+  isAssessableExperienceStep,
+  type AssessableExperienceStepSpec,
+  type ExperienceStepSpec,
+} from "@/contextual-learning/candidate-v0/domain/types";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
 import { MEAL_SUPPORTS } from "@/contextual-learning/candidate-v0/fixtures/meal/supports";
 import { scienceTowerFrame } from "@/contextual-learning/candidate-v0/fixtures/school-challenge/contexts";
@@ -28,6 +36,16 @@ import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
 import { compilationRequest } from "./helpers";
 
 const evaluator = new DefaultTaskEvaluator();
+
+function expectAssessable(
+  step: ExperienceStepSpec | undefined,
+): AssessableExperienceStepSpec {
+  expect(step !== undefined && isAssessableExperienceStep(step)).toBe(true);
+  if (!step || !isAssessableExperienceStep(step)) {
+    throw new Error("expected assessable step");
+  }
+  return step;
+}
 
 function expectFrozenTask(task: PublicLearningTask): void {
   expect(task.protocolVersion).toBe("v1");
@@ -54,8 +72,12 @@ function runEvidence(task: PublicLearningTask, answerKey: Parameters<DefaultTask
 
 describe("Candidate V0 compilation contract", () => {
   it("rejects meal IDENTIFY as situational reasoning, not meaning recognition", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealStrengthenPlan(homeBreakfastFrame);
     const step = plan.steps[0];
+    expect(isAssessableExperienceStep(step)).toBe(true);
+    if (!isAssessableExperienceStep(step)) {
+      return;
+    }
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,
@@ -75,7 +97,7 @@ describe("Candidate V0 compilation contract", () => {
 
   it("rejects school CLAIM_CHOICE instead of emitting MEANING_RECOGNITION Evidence", () => {
     const plan = createSchoolBuildPlan(scienceTowerFrame);
-    const step = plan.steps[0];
+    const step = expectAssessable(plan.steps[0]);
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,
@@ -95,7 +117,7 @@ describe("Candidate V0 compilation contract", () => {
 
   it("rejects borrow/lend RELATION_CHOICE instead of mapping it to MEANING_CHOICE", () => {
     const plan = createBorrowBuildPlan(classroomRulerFrame);
-    const step = plan.steps[0];
+    const step = expectAssessable(plan.steps[0]);
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,
@@ -115,11 +137,9 @@ describe("Candidate V0 compilation contract", () => {
 
   it("compiles meal RECALL through the lexical-form whitelist and frozen evaluator", () => {
     const plan = createMealBuildPlan(homeBreakfastFrame);
-    const step = plan.steps.find((item) => item.purpose === "RECALL");
-    expect(step).toBeDefined();
-    if (!step) {
-      return;
-    }
+    const step = expectAssessable(
+      plan.steps.find((item) => item.purpose === "RECALL"),
+    );
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,

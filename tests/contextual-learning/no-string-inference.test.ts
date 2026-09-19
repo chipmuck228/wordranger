@@ -6,10 +6,9 @@ import { classroomRulerFrame } from "@/contextual-learning/candidate-v0/fixtures
 import { BORROW_PROFILES, BORROW_SENSE } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/knowledge";
 import { createBorrowBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/plans";
 import { borrowingSharingSkeleton } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/skeleton";
-import { MINIMAL_SUPPORT, profileMap } from "@/contextual-learning/candidate-v0/fixtures/shared";
+import { MINIMAL_SUPPORT, assessable, profileMap } from "@/contextual-learning/candidate-v0/fixtures/shared";
 import type {
   ChoiceExpectedResponse,
-  ExperienceStepSpec,
 } from "@/contextual-learning/candidate-v0/domain/types";
 import { compilationRequest } from "./helpers";
 
@@ -110,7 +109,7 @@ describe("Candidate V0 does not infer answers from strings", () => {
 
   it("does not compile a trap RELATION_CHOICE into a guessed MEANING_CHOICE task", () => {
     const plan = createBorrowBuildPlan(classroomRulerFrame);
-    const step: ExperienceStepSpec = {
+    const step = assessable({
       id: "trap-relation",
       purpose: "OBSERVE",
       targetIds: ["target-borrow"],
@@ -127,7 +126,7 @@ describe("Candidate V0 does not infer answers from strings", () => {
       supportPolicy: MINIMAL_SUPPORT,
       requiredCapabilities: ["frozen-choice:OBSERVE"],
       transition: { onTaskCompleted: "END", onSupportExhausted: "END" },
-    };
+    });
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,

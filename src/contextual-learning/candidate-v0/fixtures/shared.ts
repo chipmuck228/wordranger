@@ -5,6 +5,7 @@
 import { curatedFixtureProvenance } from "../domain/provenance";
 import { findProfile, lexemeSenseKey } from "../domain/lexeme-sense";
 import type {
+  AssessableExperienceStepSpec,
   ExperienceCompletionPolicy,
   ExperienceStepSpec,
   ExplicitSemanticChoice,
@@ -73,6 +74,15 @@ export function profile(
     expresses,
     provenance: FIXTURE_PROVENANCE,
     reviewStatus: "REVIEWED",
+  };
+}
+
+export function assessable(
+  step: Omit<AssessableExperienceStepSpec, "executionIntent">,
+): AssessableExperienceStepSpec {
+  return {
+    ...step,
+    executionIntent: { kind: "ASSESSABLE" },
   };
 }
 

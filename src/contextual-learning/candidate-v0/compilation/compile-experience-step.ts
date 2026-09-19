@@ -1,7 +1,7 @@
 import { findResponseTransport } from "../capabilities/capability-registry";
 import { sameLexemeSense } from "../domain/lexeme-sense";
 import { DomainErrorCode } from "../domain/errors";
-import type { SupportBlock } from "../domain/types";
+import { isAssessableExperienceStep, type SupportBlock } from "../domain/types";
 import { compileChoiceStep } from "./adapters/choice-adapter";
 import { compileLexicalFormStep } from "./adapters/lexical-form-adapter";
 import { assertFrozenPublicLearningTask } from "./frozen-task-guard";
@@ -23,6 +23,14 @@ export function compileExperienceStep(
   request: TaskCompilationRequest,
   options: CompileExperienceStepOptions = {},
 ): CompileResult {
+  if (!isAssessableExperienceStep(request.step)) {
+    return compileFail(
+      DomainErrorCode.COMPILATION_SEMANTIC_MISMATCH,
+      "Guided steps cannot compile to a frozen PublicLearningTask",
+      "executionIntent",
+    );
+  }
+
   const stepError = validateStepStructure(request);
   if (stepError) {
     return stepError;

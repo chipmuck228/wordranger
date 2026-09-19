@@ -2,10 +2,12 @@
  * Candidate V0 / Experimental / Not a Standard.
  */
 
-import type {
-  LearningExperiencePlan,
-  ResolvedContextSnapshot,
-  ResolvedTargetSnapshot,
+import {
+  isAssessableExperienceStep,
+  isGuidedExperienceStep,
+  type LearningExperiencePlan,
+  type ResolvedContextSnapshot,
+  type ResolvedTargetSnapshot,
 } from "../domain/types";
 import { cloneValue } from "./clone";
 import { ExecutionErrorCode, executionError } from "./errors";
@@ -135,6 +137,10 @@ function validatePlanSnapshot(plan: LearningExperiencePlan) {
       );
     }
     seen.add(step.id);
+    const intentError = validateStepIntent(step);
+    if (intentError) {
+      return intentError;
+    }
   }
 
   for (const stepId of plan.completionPolicy.requiredStepIds) {
@@ -180,6 +186,34 @@ function validatePlanSnapshot(plan: LearningExperiencePlan) {
   }
 
   return null;
+}
+
+function validateStepIntent(step: LearningExperiencePlan["steps"][number]) {
+  if (isGuidedExperienceStep(step)) {
+    if (step.executionIntent.completionMode !== "ACKNOWLEDGE_ONLY") {
+      return executionError(
+        ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,
+        `Guided step ${step.id} must declare ACKNOWLEDGE_ONLY`,
+        "executionIntent.completionMode",
+      );
+    }
+    if ("expectedResponse" in step) {
+      return executionError(
+        ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,
+        `Guided step ${step.id} must not declare an answer spec`,
+        "expectedResponse",
+      );
+    }
+    return null;
+  }
+  if (isAssessableExperienceStep(step)) {
+    return null;
+  }
+  return executionError(
+    ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,
+    "Every step must declare ASSESSABLE or GUIDED executionIntent",
+    "executionIntent",
+  );
 }
 
 /**

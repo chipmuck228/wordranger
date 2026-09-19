@@ -1,14 +1,20 @@
 /**
  * Candidate V0 / Experimental / Not a Standard.
- * Compiles the snapshotted current step. Does not skip on failure.
- * Semantic context and targets come only from the run snapshot.
+ * Issues the current snapshotted step as a frozen task or guided activity.
  */
 
 import { compileExperienceStep } from "../compilation/compile-experience-step";
 import type { TaskCompilationRequest } from "../compilation/types";
-import type { ExperienceStepSpec } from "../domain/types";
+import {
+  isAssessableExperienceStep,
+  isGuidedExperienceStep,
+  type AssessableExperienceStepSpec,
+  type ExperienceStepSpec,
+} from "../domain/types";
+import { classifyExperienceStep } from "./classify-step";
 import { cloneValue } from "./clone";
 import { ExecutionErrorCode, executionError } from "./errors";
+import { createPublicGuidedActivity } from "./guided-activity";
 import type {
   ExperiencePlanSnapshot,
   ExperienceRun,
@@ -71,15 +77,107 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
     };
   }
 
+  const now = input.now ?? "2026-09-17T12:00:00.000Z";
+  const classification = classifyExperienceStep({
+    step: snapshotStep,
+    resolvedTargets: targetsForStep(run.planSnapshot, snapshotStep) ?? [],
+  });
+
+  if (classification.kind === "GUIDED_ACTIVITY") {
+    if (!isGuidedExperienceStep(snapshotStep)) {
+      return {
+        ok: false,
+        run,
+        classification,
+        error: executionError(
+          ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,
+          "Guided classification requires a guided step spec",
+          "executionIntent",
+        ),
+      };
+    }
+    const issuedActivity = createPublicGuidedActivity({
+      experienceId: run.experienceId,
+      contextFrameId: run.planSnapshot.resolvedContext.contextFrameId,
+      step: snapshotStep,
+    });
+    return {
+      ok: true,
+      issuedActivity,
+      classification,
+      run: {
+        ...cloneValue(run),
+        status: "GUIDED_ACTIVITY_ISSUED",
+        updatedAt: now,
+        stepRuns: run.stepRuns.map((stepRun, index) =>
+          index === run.currentStepIndex
+            ? {
+                ...stepRun,
+                status: "GUIDED_ACTIVITY_ISSUED",
+                classification,
+                activityId: issuedActivity.id,
+                issuedAt: now,
+              }
+            : { ...stepRun },
+        ),
+      },
+    };
+  }
+
+  if (classification.kind === "UNSUPPORTED") {
+    return {
+      ok: false,
+      classification,
+      run: {
+        ...cloneValue(run),
+        status: "BLOCKED",
+        updatedAt: now,
+        stepRuns: run.stepRuns.map((stepRun, index) =>
+          index === run.currentStepIndex
+            ? {
+                ...stepRun,
+                status: "BLOCKED",
+                classification,
+                compilationError: {
+                  code: classification.reasonCode,
+                  message: classification.rationale,
+                  path: "step",
+                },
+              }
+            : { ...stepRun },
+        ),
+      },
+      error: executionError(
+        classification.reasonCode,
+        classification.rationale,
+        "step",
+      ),
+    };
+  }
+
+  if (!isAssessableExperienceStep(snapshotStep)) {
+    return {
+      ok: false,
+      classification,
+      run,
+      error: executionError(
+        ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,
+        "Assessable classification requires an assessable step spec",
+        "executionIntent",
+      ),
+    };
+  }
+
   const compilationRequest = compilationRequestFromSnapshot({
     run,
     snapshotStep,
-    now: input.now,
+    now,
     createId: input.createId,
   });
   if (!compilationRequest) {
     return {
       ok: false,
+      classification,
       run,
       error: executionError(
         ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,
@@ -89,12 +187,11 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
     };
   }
 
-  const now = input.now ?? "2026-09-17T12:00:00.000Z";
   const compiled = compileExperienceStep(compilationRequest);
-
   if (!compiled.ok) {
     return {
       ok: false,
+      classification,
       run: {
         ...cloneValue(run),
         status: "BLOCKED",
@@ -104,6 +201,7 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
             ? {
                 ...stepRun,
                 status: "COMPILATION_FAILED",
+                classification,
                 compilationError: compiled.error,
               }
             : { ...stepRun },
@@ -121,15 +219,17 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
     ok: true,
     issuedTask: compiled.value.publicLearningTask,
     answerKey: compiled.value.answerKey,
+    classification,
     run: {
       ...cloneValue(run),
-      status: "TASK_ISSUED",
+      status: "FROZEN_TASK_ISSUED",
       updatedAt: now,
       stepRuns: run.stepRuns.map((stepRun, index) =>
         index === run.currentStepIndex
           ? {
               ...stepRun,
-              status: "TASK_ISSUED",
+              status: "FROZEN_TASK_ISSUED",
+              classification,
               taskId: compiled.value.publicLearningTask.id,
               compilationTrace: compiled.value.trace,
               issuedAt: now,
@@ -142,7 +242,7 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
 
 function compilationRequestFromSnapshot(input: {
   run: ExperienceRun;
-  snapshotStep: ExperienceStepSpec;
+  snapshotStep: AssessableExperienceStepSpec;
   now?: string;
   createId?: () => string;
 }): TaskCompilationRequest | null {

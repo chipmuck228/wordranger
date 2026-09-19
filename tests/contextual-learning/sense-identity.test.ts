@@ -6,8 +6,8 @@ import { homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/
 import { MEAL_PROFILES, MEAL_SENSE } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
 import { createMealBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
-import { MINIMAL_SUPPORT, profileMap } from "@/contextual-learning/candidate-v0/fixtures/shared";
-import type { ExperienceStepSpec } from "@/contextual-learning/candidate-v0/domain/types";
+import { MINIMAL_SUPPORT, assessable, profileMap } from "@/contextual-learning/candidate-v0/fixtures/shared";
+import type { AssessableExperienceStepSpec } from "@/contextual-learning/candidate-v0/domain/types";
 import { compilationRequest } from "./helpers";
 
 describe("Candidate V0 full-sense identity", () => {
@@ -28,7 +28,7 @@ describe("Candidate V0 full-sense identity", () => {
 
   it("fails compilation when expected senseId matches a target but lexemeId differs", () => {
     const plan = createMealBuildPlan(homeBreakfastFrame);
-    const step: ExperienceStepSpec = {
+    const step: AssessableExperienceStepSpec = assessable({
       id: "mismatched-lexeme",
       purpose: "RECALL",
       targetIds: ["target-spoon-form"],
@@ -49,7 +49,7 @@ describe("Candidate V0 full-sense identity", () => {
       supportPolicy: MINIMAL_SUPPORT,
       requiredCapabilities: ["frozen-text-input:TYPE"],
       transition: { onTaskCompleted: "END", onSupportExhausted: "END" },
-    };
+    });
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,

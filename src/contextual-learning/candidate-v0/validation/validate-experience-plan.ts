@@ -1,13 +1,19 @@
 import { validateExplicitAnswerSpec } from "../compilation/validate-answer-spec";
 import { findProfile, sameLexemeSense } from "../domain/lexeme-sense";
 import type {
+  AssessableExperienceStepSpec,
   ContextFrame,
+  GuidedExperienceStepSpec,
   LearningExperiencePlan,
   LexemeSenseRef,
   RuntimeCapability,
   SemanticSkeleton,
   SenseSemanticProfile,
   SupportBlock,
+} from "../domain/types";
+import {
+  isAssessableExperienceStep,
+  isGuidedExperienceStep,
 } from "../domain/types";
 import { DomainErrorCode, errorIssue, validationResult } from "../domain/errors";
 import type { DomainValidationResult } from "../domain/errors";
@@ -110,73 +116,31 @@ export function validateExperiencePlan(
       );
     }
 
-    const matched = findCapability(capabilities, step.semanticAction, step.expectedResponse.kind);
-    if (step.requiredCapabilities.length > 0) {
-      const missing = step.requiredCapabilities.filter(
-        (id) => !capabilities.some((capability) => capability.id === id),
-      );
-      if (missing.length > 0 || !matched) {
-        issues.push(
-          errorIssue(
-            DomainErrorCode.EXP_NO_RUNTIME_CAPABILITY,
-            `steps.${step.id}.requiredCapabilities`,
-            `No frozen runtime transport for ${step.semanticAction}/${step.expectedResponse.kind}`,
-          ),
-        );
-      }
-    } else if (!matched) {
-      issues.push(
-        errorIssue(
-          DomainErrorCode.EXP_NO_RUNTIME_CAPABILITY,
-          `steps.${step.id}`,
-          `No frozen runtime transport for ${step.semanticAction}/${step.expectedResponse.kind}`,
-        ),
-      );
+    if (isGuidedExperienceStep(step)) {
+      issues.push(...validateGuidedStep(step));
+      continue;
     }
 
-    if (step.expectedResponse.kind !== "ORDERED_ENTITY_REFS") {
-      const answerError = validateExplicitAnswerSpec(step.expectedResponse);
-      if (answerError && !answerError.ok) {
-        issues.push(
-          errorIssue(
-            answerError.error.code,
-            `steps.${step.id}.${answerError.error.path}`,
-            answerError.error.message,
-          ),
-        );
-      }
+    if (!isAssessableExperienceStep(step)) {
+      issues.push(
+        errorIssue(
+          DomainErrorCode.EXP_INVALID_STEP_INTENT,
+          "steps.executionIntent",
+          "Every step must declare ASSESSABLE or GUIDED executionIntent",
+        ),
+      );
+      continue;
     }
 
     issues.push(
-      ...validateSupportPolicy(
-        step.supportPolicy,
+      ...validateAssessableStep({
+        step,
+        capabilities,
         supportBlocks,
-        `steps.${step.id}.supportPolicy`,
-      ),
+        senseProfiles,
+        targetById,
+      }),
     );
-
-    const leaksAnswer =
-      step.purpose === "RECALL" ||
-      step.promptIntent.mustNotRevealTargetForm === true;
-    if (leaksAnswer) {
-      for (const targetId of step.targetIds) {
-        const target = targetById.get(targetId);
-        if (!target) {
-          continue;
-        }
-        const profile = findProfile(senseProfiles, target.sense);
-        const form = profile?.displayForm ?? "";
-        if (form && promptRevealsForm(step.promptIntent, form)) {
-          issues.push(
-            errorIssue(
-              DomainErrorCode.EXP_RECALL_LEAKS_ANSWER,
-              `steps.${step.id}.promptIntent`,
-              `RECALL prompt reveals target form "${form}"`,
-            ),
-          );
-        }
-      }
-    }
   }
 
   const completionRecord = plan.completionPolicy as unknown as Record<
@@ -197,6 +161,130 @@ export function validateExperiencePlan(
 
   void skeleton;
   return validationResult(issues);
+}
+
+function validateGuidedStep(step: GuidedExperienceStepSpec) {
+  const issues = [];
+  if (step.executionIntent.completionMode !== "ACKNOWLEDGE_ONLY") {
+    issues.push(
+      errorIssue(
+        DomainErrorCode.EXP_INVALID_STEP_INTENT,
+        `steps.${step.id}.executionIntent.completionMode`,
+        "Guided steps must declare ACKNOWLEDGE_ONLY",
+      ),
+    );
+  }
+  if (!step.presentation.instruction.trim()) {
+    issues.push(
+      errorIssue(
+        DomainErrorCode.EXP_INVALID_STEP_INTENT,
+        `steps.${step.id}.presentation.instruction`,
+        "Guided steps must declare a presentation instruction",
+      ),
+    );
+  }
+  if ("expectedResponse" in step) {
+    issues.push(
+      errorIssue(
+        DomainErrorCode.EXP_GUIDED_DECLARES_ASSESSMENT,
+        `steps.${step.id}.expectedResponse`,
+        "Guided steps must not declare an answer spec or correctCandidateIds",
+      ),
+    );
+  }
+  if ("supportPolicy" in step || "requiredCapabilities" in step) {
+    issues.push(
+      errorIssue(
+        DomainErrorCode.EXP_GUIDED_DECLARES_ASSESSMENT,
+        `steps.${step.id}`,
+        "Guided steps must not require frozen transport or an answer-support ladder",
+      ),
+    );
+  }
+  return issues;
+}
+
+function validateAssessableStep(input: {
+  step: AssessableExperienceStepSpec;
+  capabilities: readonly RuntimeCapability[];
+  supportBlocks: ReadonlyMap<string, SupportBlock>;
+  senseProfiles: ReadonlyMap<string, SenseSemanticProfile>;
+  targetById: Map<string, LearningExperiencePlan["targets"][number]>;
+}) {
+  const { step, capabilities, supportBlocks, senseProfiles, targetById } = input;
+  const issues = [];
+  const matched = findCapability(
+    capabilities,
+    step.semanticAction,
+    step.expectedResponse.kind,
+  );
+  if (step.requiredCapabilities.length > 0) {
+    const missing = step.requiredCapabilities.filter(
+      (id) => !capabilities.some((capability) => capability.id === id),
+    );
+    if (missing.length > 0 || !matched) {
+      issues.push(
+        errorIssue(
+          DomainErrorCode.EXP_NO_RUNTIME_CAPABILITY,
+          `steps.${step.id}.requiredCapabilities`,
+          `No frozen runtime transport for ${step.semanticAction}/${step.expectedResponse.kind}`,
+        ),
+      );
+    }
+  } else if (!matched) {
+    issues.push(
+      errorIssue(
+        DomainErrorCode.EXP_NO_RUNTIME_CAPABILITY,
+        `steps.${step.id}`,
+        `No frozen runtime transport for ${step.semanticAction}/${step.expectedResponse.kind}`,
+      ),
+    );
+  }
+
+  if (step.expectedResponse.kind !== "ORDERED_ENTITY_REFS") {
+    const answerError = validateExplicitAnswerSpec(step.expectedResponse);
+    if (answerError && !answerError.ok) {
+      issues.push(
+        errorIssue(
+          answerError.error.code,
+          `steps.${step.id}.${answerError.error.path}`,
+          answerError.error.message,
+        ),
+      );
+    }
+  }
+
+  issues.push(
+    ...validateSupportPolicy(
+      step.supportPolicy,
+      supportBlocks,
+      `steps.${step.id}.supportPolicy`,
+    ),
+  );
+
+  const leaksAnswer =
+    step.purpose === "RECALL" ||
+    step.promptIntent.mustNotRevealTargetForm === true;
+  if (leaksAnswer) {
+    for (const targetId of step.targetIds) {
+      const target = targetById.get(targetId);
+      if (!target) {
+        continue;
+      }
+      const profile = findProfile(senseProfiles, target.sense);
+      const form = profile?.displayForm ?? "";
+      if (form && promptRevealsForm(step.promptIntent, form)) {
+        issues.push(
+          errorIssue(
+            DomainErrorCode.EXP_RECALL_LEAKS_ANSWER,
+            `steps.${step.id}.promptIntent`,
+            `RECALL prompt reveals target form "${form}"`,
+          ),
+        );
+      }
+    }
+  }
+  return issues;
 }
 
 export function findCapability(
@@ -230,7 +318,7 @@ function collectReachableSenses(frame: ContextFrame): LexemeSenseRef[] {
 }
 
 function promptRevealsForm(
-  prompt: LearningExperiencePlan["steps"][number]["promptIntent"],
+  prompt: AssessableExperienceStepSpec["promptIntent"],
   form: string,
 ): boolean {
   const needle = form.toLowerCase();

@@ -408,16 +408,67 @@ export interface StepTransitionPolicy {
   fallbackStepId?: ExperienceStepId;
 }
 
-export interface ExperienceStepSpec {
+export type GuidedActivityKind =
+  | "PRESENT_CONTEXT"
+  | "OBSERVE_RELATION"
+  | "SHOW_CONTRAST";
+
+export type AssessableExecutionIntent = {
+  kind: "ASSESSABLE";
+};
+
+export type GuidedExecutionIntent = {
+  kind: "GUIDED";
+  guidedActivityKind: GuidedActivityKind;
+  completionMode: "ACKNOWLEDGE_ONLY";
+  rationale: string;
+};
+
+export type StepExecutionIntent =
+  | AssessableExecutionIntent
+  | GuidedExecutionIntent;
+
+export interface GuidedPresentation {
+  instruction: string;
+  presentedEntityIds?: ContextEntityId[];
+  presentedFactPredicates?: string[];
+}
+
+interface ExperienceStepBase {
   id: ExperienceStepId;
   purpose: ExperienceStepPurpose;
   targetIds: string[];
   semanticAction: SemanticAction;
+  transition: StepTransitionPolicy;
+}
+
+export interface AssessableExperienceStepSpec extends ExperienceStepBase {
+  executionIntent: AssessableExecutionIntent;
   promptIntent: PromptIntent;
   expectedResponse: ExpectedSemanticResponse;
   supportPolicy: StepSupportPolicy;
   requiredCapabilities: string[];
-  transition: StepTransitionPolicy;
+}
+
+export interface GuidedExperienceStepSpec extends ExperienceStepBase {
+  executionIntent: GuidedExecutionIntent;
+  presentation: GuidedPresentation;
+}
+
+export type ExperienceStepSpec =
+  | AssessableExperienceStepSpec
+  | GuidedExperienceStepSpec;
+
+export function isAssessableExperienceStep(
+  step: ExperienceStepSpec,
+): step is AssessableExperienceStepSpec {
+  return step.executionIntent.kind === "ASSESSABLE";
+}
+
+export function isGuidedExperienceStep(
+  step: ExperienceStepSpec,
+): step is GuidedExperienceStepSpec {
+  return step.executionIntent.kind === "GUIDED";
 }
 
 export interface ExperienceCompletionPolicy {

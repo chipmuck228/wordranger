@@ -1,6 +1,7 @@
 import type { TaskCompilationRequest } from "@/contextual-learning/candidate-v0/compilation/types";
 import { findProfile } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
 import type {
+  AssessableExperienceStepSpec,
   ContextFrame,
   ExperienceStepSpec,
   LearningExperiencePlan,
@@ -59,7 +60,7 @@ export function resolvedSnapshotFor(
 
 export function compilationRequest(input: {
   plan: LearningExperiencePlan;
-  step: ExperienceStepSpec;
+  step: AssessableExperienceStepSpec;
   frame: ContextFrame;
   skeleton: SemanticSkeleton;
   profiles: ReadonlyMap<string, SenseSemanticProfile>;
