@@ -12,6 +12,7 @@ import {
 import { cloneValue } from "./clone";
 import { ExecutionErrorCode, executionError } from "./errors";
 import type { ExperienceRun, ExperienceRunResult, ExperienceStepRun } from "./types";
+import { findGuidedStepInvariantIssues } from "../validation/guided-step-invariants";
 import { validateExperienceRun } from "./validate-experience-run";
 import { validateResolvedSnapshotAgainstPlan } from "./validate-resolved-snapshot";
 
@@ -190,21 +191,15 @@ function validatePlanSnapshot(plan: LearningExperiencePlan) {
 
 function validateStepIntent(step: LearningExperiencePlan["steps"][number]) {
   if (isGuidedExperienceStep(step)) {
-    if (step.executionIntent.completionMode !== "ACKNOWLEDGE_ONLY") {
-      return executionError(
-        ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,
-        `Guided step ${step.id} must declare ACKNOWLEDGE_ONLY`,
-        "executionIntent.completionMode",
-      );
+    const [issue] = findGuidedStepInvariantIssues(step);
+    if (!issue) {
+      return null;
     }
-    if ("expectedResponse" in step) {
-      return executionError(
-        ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,
-        `Guided step ${step.id} must not declare an answer spec`,
-        "expectedResponse",
-      );
-    }
-    return null;
+    return executionError(
+      ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT,
+      issue.message,
+      issue.path,
+    );
   }
   if (isAssessableExperienceStep(step)) {
     return null;

@@ -33,6 +33,7 @@ import { createSchoolBuildPlan } from "@/contextual-learning/candidate-v0/fixtur
 import { schoolChallengeSkeleton } from "@/contextual-learning/candidate-v0/fixtures/school-challenge/skeleton";
 import {
   FIXTURE_PROVENANCE,
+  MINIMAL_SUPPORT,
   completeAll,
   nextOrEnd,
   profileMap,
@@ -217,6 +218,72 @@ describe("Candidate V0 experience execution — creation", () => {
       return;
     }
     expect(created.error.code).toBe(ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT);
+  });
+});
+
+describe("Candidate V0 experience execution — guided snapshot invariants", () => {
+  function smuggledGuidedPlan(
+    mutate: (step: Record<string, unknown>) => void,
+  ): LearningExperiencePlan {
+    const base = createMealBuildPlan(homeBreakfastFrame);
+    const step = { ...(base.steps[0] as object) } as Record<string, unknown>;
+    mutate(step);
+    return {
+      ...base,
+      steps: [step, ...base.steps.slice(1)],
+    } as unknown as LearningExperiencePlan;
+  }
+
+  function expectGuidedPlanRejected(plan: LearningExperiencePlan) {
+    const created = createRun(plan);
+    expect(created.ok).toBe(false);
+    if (created.ok) {
+      return created;
+    }
+    expect(created.error.code).toBe(ExecutionErrorCode.EXEC_INVALID_PLAN_SNAPSHOT);
+    const issued = issueCurrentStep({ run: created.run, now });
+    expect(issued.ok).toBe(false);
+    expect(issued.issuedActivity).toBeUndefined();
+    return created;
+  }
+
+  it("rejects Guided + supportPolicy", () => {
+    expectGuidedPlanRejected(
+      smuggledGuidedPlan((step) => {
+        step.supportPolicy = MINIMAL_SUPPORT;
+      }),
+    );
+  });
+
+  it("rejects Guided + requiredCapabilities", () => {
+    expectGuidedPlanRejected(
+      smuggledGuidedPlan((step) => {
+        step.requiredCapabilities = ["frozen-choice:OBSERVE"];
+      }),
+    );
+  });
+
+  it("rejects Guided + empty instruction", () => {
+    expectGuidedPlanRejected(
+      smuggledGuidedPlan((step) => {
+        step.presentation = {
+          ...(step.presentation as object),
+          instruction: "   ",
+        };
+      }),
+    );
+  });
+
+  it("rejects Guided + expectedResponse", () => {
+    expectGuidedPlanRejected(
+      smuggledGuidedPlan((step) => {
+        step.expectedResponse = {
+          kind: "ENTITY_REF",
+          candidates: [],
+          correctCandidateIds: ["secret-correct"],
+        };
+      }),
+    );
   });
 });
 

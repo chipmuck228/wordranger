@@ -3,7 +3,6 @@ import { findProfile, sameLexemeSense } from "../domain/lexeme-sense";
 import type {
   AssessableExperienceStepSpec,
   ContextFrame,
-  GuidedExperienceStepSpec,
   LearningExperiencePlan,
   LexemeSenseRef,
   RuntimeCapability,
@@ -17,6 +16,7 @@ import {
 } from "../domain/types";
 import { DomainErrorCode, errorIssue, validationResult } from "../domain/errors";
 import type { DomainValidationResult } from "../domain/errors";
+import { findGuidedStepInvariantIssues } from "./guided-step-invariants";
 import { validateSupportPolicy } from "./validate-support-policy";
 
 const LEARNER_MUTATION_KEYS = [
@@ -117,7 +117,17 @@ export function validateExperiencePlan(
     }
 
     if (isGuidedExperienceStep(step)) {
-      issues.push(...validateGuidedStep(step));
+      for (const issue of findGuidedStepInvariantIssues(step)) {
+        issues.push(
+          errorIssue(
+            issue.kind === "DECLARES_ASSESSMENT"
+              ? DomainErrorCode.EXP_GUIDED_DECLARES_ASSESSMENT
+              : DomainErrorCode.EXP_INVALID_STEP_INTENT,
+            issue.path,
+            issue.message,
+          ),
+        );
+      }
       continue;
     }
 
@@ -161,47 +171,6 @@ export function validateExperiencePlan(
 
   void skeleton;
   return validationResult(issues);
-}
-
-function validateGuidedStep(step: GuidedExperienceStepSpec) {
-  const issues = [];
-  if (step.executionIntent.completionMode !== "ACKNOWLEDGE_ONLY") {
-    issues.push(
-      errorIssue(
-        DomainErrorCode.EXP_INVALID_STEP_INTENT,
-        `steps.${step.id}.executionIntent.completionMode`,
-        "Guided steps must declare ACKNOWLEDGE_ONLY",
-      ),
-    );
-  }
-  if (!step.presentation.instruction.trim()) {
-    issues.push(
-      errorIssue(
-        DomainErrorCode.EXP_INVALID_STEP_INTENT,
-        `steps.${step.id}.presentation.instruction`,
-        "Guided steps must declare a presentation instruction",
-      ),
-    );
-  }
-  if ("expectedResponse" in step) {
-    issues.push(
-      errorIssue(
-        DomainErrorCode.EXP_GUIDED_DECLARES_ASSESSMENT,
-        `steps.${step.id}.expectedResponse`,
-        "Guided steps must not declare an answer spec or correctCandidateIds",
-      ),
-    );
-  }
-  if ("supportPolicy" in step || "requiredCapabilities" in step) {
-    issues.push(
-      errorIssue(
-        DomainErrorCode.EXP_GUIDED_DECLARES_ASSESSMENT,
-        `steps.${step.id}`,
-        "Guided steps must not require frozen transport or an answer-support ladder",
-      ),
-    );
-  }
-  return issues;
 }
 
 function validateAssessableStep(input: {
