@@ -10,6 +10,7 @@ export { abortExperienceRun } from "./abort-experience-run";
 export { classifyExperienceStep } from "./classify-step";
 export { createExperienceRun } from "./create-experience-run";
 export { ExecutionErrorCode } from "./errors";
+export { groundGuidedPresentation } from "./ground-guided-presentation";
 export {
   createPublicGuidedActivity,
   guidedActivityId,
@@ -28,6 +29,9 @@ export type {
 export type {
   ExperienceExecutionError,
 } from "./errors";
+export type {
+  GuidedPresentationGroundingResult,
+} from "./ground-guided-presentation";
 export type {
   GuidedActivityCompletionReceipt,
   PublicGuidedActivity,

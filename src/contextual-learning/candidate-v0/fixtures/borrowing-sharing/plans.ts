@@ -302,6 +302,7 @@ export function createBorrowGuidedPerspectivePlan(
       instruction:
         "The same temporary transfer can be seen from the requester and from the owner.",
       presentedEntityIds: [`${prefix}-owner`, `${prefix}-requester`, `${prefix}-item`],
+      presentedFactPredicates: ["owns"],
     },
     transition: nextOrEnd(true),
   };

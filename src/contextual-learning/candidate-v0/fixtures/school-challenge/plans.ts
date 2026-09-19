@@ -226,6 +226,7 @@ export function createSchoolGuidedPresentationPlan(
       instruction:
         "Watch the first attempt fall. This scene is shown, not scored.",
       presentedEntityIds: [`${prefix}-attempt-1`, `${prefix}-challenger`],
+      presentedFactPredicates: ["attempt_status"],
     },
     transition: nextOrEnd(true),
   };

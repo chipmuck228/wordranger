@@ -130,7 +130,7 @@ It manages plan order and issued-task identity only.
 
 `createExperienceRun` deep-copies the plan plus the real `ResolvedContextSnapshot` and `ResolvedTargetSnapshot[]`. It rejects a plan whose terminal / `END` step would fire before every required step can complete, or whose resolved ids do not match the plan.
 
-`issueCurrentStep` assembles `TaskCompilationRequest` from that snapshot only for assessable steps that have a semantic projection. Guided steps emit `PublicGuidedActivity` from the same snapshot. The caller cannot supply `resolvedContext`, `resolvedTargets`, `displayForm`, facts, or entity bindings at issue time.
+`issueCurrentStep` assembles `TaskCompilationRequest` from that snapshot only for assessable steps that have a semantic projection. Guided steps emit `PublicGuidedActivity` only after every `presentedEntityIds` / `presentedFactPredicates` value is an exact member of the frozen snapshot `entityBindings[].entityId` / `facts[].predicate`. Ungrounded Guided references block the run; they are never stripped, skipped, or downgraded. The caller cannot supply `resolvedContext`, `resolvedTargets`, `displayForm`, facts, or entity bindings at issue time.
 
 A valid completion receipt always persists `STEP_COMPLETED` on that step. The run never stays issued after the receipt has been recorded.
 

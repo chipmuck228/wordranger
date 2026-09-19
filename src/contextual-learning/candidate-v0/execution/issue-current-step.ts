@@ -14,6 +14,7 @@ import {
 import { classifyExperienceStep } from "./classify-step";
 import { cloneValue } from "./clone";
 import { ExecutionErrorCode, executionError } from "./errors";
+import { groundGuidedPresentation } from "./ground-guided-presentation";
 import { createPublicGuidedActivity } from "./guided-activity";
 import type {
   ExperiencePlanSnapshot,
@@ -94,6 +95,32 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
           "Guided classification requires a guided step spec",
           "executionIntent",
         ),
+      };
+    }
+    const grounding = groundGuidedPresentation({
+      presentation: snapshotStep.presentation,
+      resolvedContext: run.planSnapshot.resolvedContext,
+    });
+    if (!grounding.ok) {
+      return {
+        ok: false,
+        classification,
+        run: {
+          ...cloneValue(run),
+          status: "BLOCKED",
+          updatedAt: now,
+          stepRuns: run.stepRuns.map((stepRun, index) =>
+            index === run.currentStepIndex
+              ? {
+                  ...stepRun,
+                  status: "BLOCKED",
+                  classification,
+                  compilationError: grounding.error,
+                }
+              : { ...stepRun },
+          ),
+        },
+        error: grounding.error,
       };
     }
     const issuedActivity = createPublicGuidedActivity({
