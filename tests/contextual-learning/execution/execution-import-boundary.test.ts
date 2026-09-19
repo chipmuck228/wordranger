@@ -53,4 +53,21 @@ describe("Candidate V0 execution import boundary", () => {
       /import type \{ PublicLearningTask \} from "@\/domain\/tasks\/public-learning-task"/,
     );
   });
+
+  it("keeps Guided activity types and completion off Evidence and PublicLearningTask", () => {
+    const activity = readFileSync(join(root, "guided-activity.ts"), "utf8");
+    const completion = readFileSync(
+      join(root, "record-guided-activity-completion.ts"),
+      "utf8",
+    );
+    expect(activity).not.toContain("PublicLearningTask");
+    expect(activity).not.toContain("LearningEvidence");
+    expect(activity).not.toContain("processEvidence");
+    expect(activity).not.toContain("evidence-factory");
+    expect(activity).not.toContain("StudentLexemeModel");
+    expect(completion).not.toContain("processEvidence");
+    expect(completion).not.toContain("evidence-factory");
+    expect(completion).not.toContain("LearningEvidence");
+    expect(completion).not.toContain("StudentLexemeModel");
+  });
 });

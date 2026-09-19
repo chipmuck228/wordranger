@@ -8,6 +8,7 @@ import type { GuidedActivityKind, GuidedExperienceStepSpec } from "../domain/typ
 export interface PublicGuidedActivity {
   id: string;
   protocolVersion: "candidate-v0";
+  runId: string;
   experienceId: string;
   stepId: string;
   contextFrameId: string;
@@ -25,19 +26,21 @@ export interface GuidedActivityCompletionReceipt {
   completedAt: string;
 }
 
-export function guidedActivityId(experienceId: string, stepId: string): string {
-  return `guided:${experienceId}:${stepId}`;
+export function guidedActivityId(runId: string, stepId: string): string {
+  return `guided:${runId}:${stepId}`;
 }
 
 export function createPublicGuidedActivity(input: {
+  runId: string;
   experienceId: string;
   contextFrameId: string;
   step: GuidedExperienceStepSpec;
 }): PublicGuidedActivity {
-  const { experienceId, contextFrameId, step } = input;
+  const { runId, experienceId, contextFrameId, step } = input;
   return {
-    id: guidedActivityId(experienceId, step.id),
+    id: guidedActivityId(runId, step.id),
     protocolVersion: "candidate-v0",
+    runId,
     experienceId,
     stepId: step.id,
     contextFrameId,

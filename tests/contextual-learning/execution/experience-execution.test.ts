@@ -829,7 +829,7 @@ describe("Candidate V0 experience execution — receipt kind isolation", () => {
     const guidedOnFrozen = recordGuidedActivityCompletion({
       run: frozen.run,
       receipt: {
-        activityId: guidedActivityId(frozen.run.experienceId, frozen.run.stepRuns[0]!.stepId),
+        activityId: guidedActivityId(frozen.run.id, frozen.run.stepRuns[0]!.stepId),
         completedAt: now,
       },
     });

@@ -132,6 +132,8 @@ It manages plan order and issued-task identity only.
 
 `issueCurrentStep` assembles `TaskCompilationRequest` from that snapshot only for assessable steps that have a semantic projection. Guided steps emit `PublicGuidedActivity` only after every `presentedEntityIds` / `presentedFactPredicates` value is an exact member of the frozen snapshot `entityBindings[].entityId` / `facts[].predicate`. Ungrounded Guided references block the run; they are never stripped, skipped, or downgraded. The caller cannot supply `resolvedContext`, `resolvedTargets`, `displayForm`, facts, or entity bindings at issue time.
 
+A `PublicGuidedActivity` is bound to one `ExperienceRun`. Its id is `guided:${run.id}:${stepId}`. The public activity also carries `runId`. Completion matches the stored `ExperienceStepRun.activityId` exactly, so a receipt from run A cannot complete run B even when both runs share the same plan, `experienceId`, `stepId`, and context frame. The old `guided:${experienceId}:${stepId}` format is not accepted.
+
 A valid completion receipt always persists `STEP_COMPLETED` on that step. The run never stays issued after the receipt has been recorded.
 
 Assessable frozen tasks can produce frozen Evidence later, through the existing evaluator path. Guided activities do not produce Evidence. Guided completion means only that the host acknowledged the presentation; it is not learning success. Unsupported steps stay `BLOCKED`. A compile failure never becomes guided.

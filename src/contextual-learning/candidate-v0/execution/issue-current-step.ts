@@ -29,7 +29,7 @@ export interface IssueCurrentStepInput {
 }
 
 export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunResult {
-  const { run } = input;
+  const { run, now: issuedAt, createId } = input;
   if (run.status === "BLOCKED") {
     return {
       ok: false,
@@ -78,7 +78,7 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
     };
   }
 
-  const now = input.now ?? "2026-09-17T12:00:00.000Z";
+  const now = issuedAt ?? "2026-09-17T12:00:00.000Z";
   const classification = classifyExperienceStep({
     step: snapshotStep,
     resolvedTargets: targetsForStep(run.planSnapshot, snapshotStep) ?? [],
@@ -124,6 +124,7 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
       };
     }
     const issuedActivity = createPublicGuidedActivity({
+      runId: run.id,
       experienceId: run.experienceId,
       contextFrameId: run.planSnapshot.resolvedContext.contextFrameId,
       step: snapshotStep,
@@ -199,7 +200,7 @@ export function issueCurrentStep(input: IssueCurrentStepInput): ExperienceRunRes
     run,
     snapshotStep,
     now,
-    createId: input.createId,
+    createId,
   });
   if (!compilationRequest) {
     return {

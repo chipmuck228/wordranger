@@ -16,11 +16,14 @@ describe("Candidate V0 guided activity contract", () => {
       return;
     }
     const activity = createPublicGuidedActivity({
+      runId: "run-contract",
       experienceId: plan.id,
       contextFrameId: plan.contextFrameId,
       step,
     });
-    expect(activity.id).toBe(guidedActivityId(plan.id, step.id));
+    expect(activity.id).toBe(guidedActivityId("run-contract", step.id));
+    expect(activity.runId).toBe("run-contract");
+    expect(activity.experienceId).toBe(plan.id);
     expect(activity.protocolVersion).toBe("candidate-v0");
     expect(activity.completionContract).toEqual({ kind: "ACKNOWLEDGE_ONLY" });
     expect(activity).not.toHaveProperty("answerKey");
