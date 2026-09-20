@@ -3,6 +3,7 @@
  * Planner contracts. Mode is supplied; learner state is not read.
  */
 
+import type { ContextualMemoryRoutingDecision } from "../memory-routing/types";
 import type {
   CognitiveMode,
   ContextFrameId,
@@ -25,6 +26,12 @@ export interface ExperiencePlanningInput {
   targets: ExperienceTarget[];
   allowedContextIds?: ContextFrameId[];
   runtimeCapabilities: RuntimeCapability[];
+  /**
+   * Optional precomputed Candidate routing decision.
+   * Planner never derives BUILD/STRENGTHEN from a learner snapshot.
+   * UNRESOLVED fails closed. Omitted keeps the existing happy path.
+   */
+  memoryRoutingDecision?: ContextualMemoryRoutingDecision;
 }
 
 export type PlanExecutability =

@@ -286,6 +286,26 @@ It does **not**:
 
 Mode selection from learner state is out of scope.
 
+## Contextual Memory Routing Candidate V0
+
+`memory-routing/` is a pure frozen-need router plus a reviewed scene-vocabulary catalog. It is not a second learner model.
+
+```text
+Frozen LearningNeed projection + mapped LexemeSenseRef
+  → routeContextualMemory
+  → RESOLVED BUILD|STRENGTHEN or UNRESOLVED
+  → planningModeFromRoutingDecision
+  → existing planExperience({ mode, memoryRoutingDecision })
+```
+
+`NEW_WORD` / UNSEEN is **not** BUILD. Work Contract treats UNSEEN as unobserved. The router returns `MEMORY_ROUTING_INSUFFICIENT_FROZEN_SIGNAL`.
+
+`REVIEW_DUE` and focused `WEAKNESS` types route to STRENGTHEN. Missing, unknown, or conflicting signals stay UNRESOLVED and fail closed. The planner never re-reads a snapshot to pick an intent.
+
+The scene catalog maps only current Meal / School / Borrow fixture words onto real bundled UUIDs. Coverage is `npm run contextual:coverage`. `UNASSIGNED` is expected and is not a script failure.
+
+See `docs/CONTEXTUAL_MEMORY_ROUTING_CANDIDATE_V0.md`.
+
 ### Deterministic selection policy
 
 Among variants that pass admission:

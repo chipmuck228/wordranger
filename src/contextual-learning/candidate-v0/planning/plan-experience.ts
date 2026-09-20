@@ -235,6 +235,26 @@ function validatePlannerInput(
   input: ExperiencePlanningInput,
   variants: readonly ExperiencePlanVariant[],
 ): { error: ReturnType<typeof planningError>; trace?: Partial<ExperiencePlanningTrace> } | null {
+  if (input.memoryRoutingDecision) {
+    if (input.memoryRoutingDecision.status === "UNRESOLVED") {
+      return {
+        error: planningError(
+          PlanningErrorCode.PLAN_MEMORY_ROUTING_UNRESOLVED,
+          "UNRESOLVED memory routing cannot default to BUILD or STRENGTHEN",
+          "memoryRoutingDecision",
+        ),
+      };
+    }
+    if (input.memoryRoutingDecision.intent !== input.mode) {
+      return {
+        error: planningError(
+          PlanningErrorCode.PLAN_MEMORY_ROUTING_INTENT_MISMATCH,
+          "Planner mode must already equal the resolved routing intent",
+          "memoryRoutingDecision",
+        ),
+      };
+    }
+  }
   if (!input.learningNeedRef || !input.learningNeedRef.trim()) {
     return {
       error: planningError(
