@@ -30,6 +30,7 @@ import {
 } from "../validation/validate-experience-plan";
 import { validateSemanticSkeleton } from "../validation/validate-semantic-skeleton";
 import { PlanningErrorCode, planningError } from "./errors";
+import { matchRequestedTargetsToPlan } from "./match-targets";
 import {
   comparePlanVariants,
   findPlannerFrame,
@@ -45,6 +46,7 @@ import type {
   ExperiencePlanningResult,
   ExperiencePlanningTrace,
   PlanExecutability,
+  RejectedTargetRequirement,
 } from "./types";
 
 const MODES_REQUIRE_ASSESSABLE_VERIFICATION: readonly CognitiveMode[] = [
@@ -108,6 +110,7 @@ export function planExperience(
   let sawGuidedOnly = false;
   let sawUnsupportedAssessable = false;
   let sawInvalid = false;
+  let sawTargetMismatch = false;
 
   const ordered = [...matching].sort((left, right) =>
     comparePlanVariants(left, right, allowedContextIds),
@@ -123,12 +126,17 @@ export function planExperience(
       continue;
     }
     rejected.push({ variantId: variant.id, reason: evaluation.reason });
+    if (evaluation.rejection) {
+      trace.rejectedTargetRequirements.push(evaluation.rejection);
+    }
     if (evaluation.code === PlanningErrorCode.PLAN_MISSING_RUNTIME_CAPABILITY) {
       sawMissingCapability = true;
     } else if (evaluation.code === PlanningErrorCode.PLAN_GUIDED_ONLY_CANNOT_VERIFY_MODE) {
       sawGuidedOnly = true;
     } else if (evaluation.code === PlanningErrorCode.PLAN_VARIANT_INVALID) {
       sawInvalid = true;
+    } else if (evaluation.code === PlanningErrorCode.PLAN_TARGET_REQUIREMENT_MISMATCH) {
+      sawTargetMismatch = true;
     } else {
       sawUnsupportedAssessable = true;
     }
@@ -136,8 +144,25 @@ export function planExperience(
   trace.rejectedVariantReasons = [...rejected].sort((left, right) =>
     left.variantId.localeCompare(right.variantId),
   );
+  trace.rejectedTargetRequirements.sort((left, right) =>
+    left.variantId.localeCompare(right.variantId) || left.path.localeCompare(right.path),
+  );
 
   if (admitted.length === 0) {
+    if (sawTargetMismatch && !sawUnsupportedAssessable && !sawGuidedOnly && !sawMissingCapability) {
+      const first = trace.rejectedTargetRequirements[0];
+      return {
+        ok: false,
+        error: planningError(
+          PlanningErrorCode.PLAN_TARGET_REQUIREMENT_MISMATCH,
+          first
+            ? `Requested target ${first.lexemeId}::${first.senseId} ${first.field} is not covered by the plan`
+            : "Requested target requirements are not covered by any plan target",
+          first?.path ?? "targets",
+        ),
+        trace,
+      };
+    }
     if (sawMissingCapability && !sawUnsupportedAssessable && !sawGuidedOnly) {
       return {
         ok: false,
@@ -358,7 +383,12 @@ function evaluateVariant(
   input: ExperiencePlanningInput,
 ):
   | { ok: true; plan: LearningExperiencePlan; executability: PlanExecutability }
-  | { ok: false; code: (typeof PlanningErrorCode)[keyof typeof PlanningErrorCode]; reason: string } {
+  | {
+      ok: false;
+      code: (typeof PlanningErrorCode)[keyof typeof PlanningErrorCode];
+      reason: string;
+      rejection?: RejectedTargetRequirement;
+    } {
   if (variant.reviewStatus !== "REVIEWED") {
     return {
       ok: false,
@@ -387,6 +417,20 @@ function evaluateVariant(
 
   const plan = cloneValue(variant.createPlan());
   plan.sourceLearningNeedRef = input.learningNeedRef.trim();
+  const targetMatch = matchRequestedTargetsToPlan({
+    variantId: variant.id,
+    requested: input.targets,
+    planTargets: plan.targets,
+  });
+  if (!targetMatch.ok) {
+    const { rejection } = targetMatch;
+    return {
+      ok: false,
+      code: PlanningErrorCode.PLAN_TARGET_REQUIREMENT_MISMATCH,
+      reason: `Target requirement mismatch at ${rejection.path}: requested ${JSON.stringify(rejection.requested)} available ${JSON.stringify(rejection.available)}`,
+      rejection,
+    };
+  }
   const capabilities = uniqueCapabilities(input.runtimeCapabilities);
   const availableIds = new Set(capabilities.map((capability) => capability.id));
   const missingDeclared = variant.requiredCapabilityIds.filter((id) => !availableIds.has(id));
@@ -565,6 +609,7 @@ function emptyTrace(
     consideredContextIds: [],
     consideredVariantIds: [],
     rejectedVariantReasons: [],
+    rejectedTargetRequirements: [],
     requiredCapabilityIds: [],
     availableCapabilityIds,
   };

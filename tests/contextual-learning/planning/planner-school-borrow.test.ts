@@ -7,8 +7,8 @@ import {
   borrowTargets,
   capabilityById,
   planningInput,
-  schoolAbilityTarget,
   schoolSuccessTarget,
+  schoolTryTarget,
 } from "./helpers";
 
 const CHOICE_SELECT = capabilityById("frozen-choice:SELECT");
@@ -19,7 +19,7 @@ describe("Candidate V0 experience planner — School Challenge", () => {
     const planned = planExperience(
       planningInput({
         mode: "BUILD",
-        targets: [schoolAbilityTarget(), schoolSuccessTarget()],
+        targets: [schoolTryTarget(), schoolSuccessTarget()],
         runtimeCapabilities: [CHOICE_DISTINGUISH, TYPING_CAPABILITY],
       }),
     );
@@ -31,7 +31,7 @@ describe("Candidate V0 experience planner — School Challenge", () => {
       PlanningErrorCode.PLAN_GUIDED_ONLY_CANNOT_VERIFY_MODE,
     );
     expect(planned.trace.requestedTargetIdentities).toEqual([
-      { lexemeId: SCHOOL_SENSE.ability.lexemeId, senseId: SCHOOL_SENSE.ability.senseId },
+      { lexemeId: SCHOOL_SENSE.try.lexemeId, senseId: SCHOOL_SENSE.try.senseId },
       { lexemeId: SCHOOL_SENSE.success.lexemeId, senseId: SCHOOL_SENSE.success.senseId },
     ]);
     expect(
@@ -50,7 +50,7 @@ describe("Candidate V0 experience planner — School Challenge", () => {
     const strengthen = planExperience(
       planningInput({
         mode: "STRENGTHEN",
-        targets: [schoolAbilityTarget()],
+        targets: [schoolTryTarget()],
         runtimeCapabilities: [CHOICE_DISTINGUISH],
       }),
     );
@@ -63,7 +63,7 @@ describe("Candidate V0 experience planner — School Challenge", () => {
     const retrieve = planExperience(
       planningInput({
         mode: "RETRIEVE",
-        targets: [schoolAbilityTarget()],
+        targets: [schoolTryTarget()],
         runtimeCapabilities: [TYPING_CAPABILITY],
       }),
     );

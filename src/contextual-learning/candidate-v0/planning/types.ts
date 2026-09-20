@@ -33,12 +33,24 @@ export type PlanExecutability =
   | "GUIDED_ONLY"
   | "UNSUPPORTED";
 
+export interface RejectedTargetRequirement {
+  variantId: string;
+  requestedTargetId: string;
+  lexemeId: string;
+  senseId: string;
+  field: "sense" | "focus" | "requiredRoleIds" | "requiredRelationIds";
+  requested: string | string[];
+  available: string | string[];
+  path: string;
+}
+
 export interface ExperiencePlanningTrace {
   requestedMode: CognitiveMode;
   requestedTargetIdentities: Array<{ lexemeId: string; senseId: string }>;
   consideredContextIds: ContextFrameId[];
   consideredVariantIds: string[];
   rejectedVariantReasons: Array<{ variantId: string; reason: string }>;
+  rejectedTargetRequirements: RejectedTargetRequirement[];
   selectedVariantId?: string;
   requiredCapabilityIds: string[];
   availableCapabilityIds: string[];

@@ -30,11 +30,11 @@ export function spoonTarget(): ExperienceTarget {
   };
 }
 
-export function schoolAbilityTarget(): ExperienceTarget {
+export function schoolTryTarget(): ExperienceTarget {
   return {
-    id: "target-ability",
-    sense: SCHOOL_SENSE.ability,
-    focus: "CONTEXT_INTERPRETATION",
+    id: "target-try",
+    sense: SCHOOL_SENSE.try,
+    focus: "DISCRIMINATION",
   };
 }
 

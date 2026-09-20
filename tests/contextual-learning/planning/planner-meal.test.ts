@@ -106,11 +106,21 @@ describe("Candidate V0 experience planner — Meal", () => {
         },
       ],
     });
-    expect(planned.ok).toBe(true);
-    if (!planned.ok) {
-      throw new Error(planned.error.message);
+    expect(planned.ok).toBe(false);
+    if (planned.ok) {
+      throw new Error("universal suitable_for must not match a frame fact");
     }
-    expect(JSON.stringify(planned.plan)).not.toContain("UNIVERSAL_SUITABLE_FOR");
-    expect(planned.plan.mode).toBe("BUILD");
+    expect(planned.error.code).toBe(
+      PlanningErrorCode.PLAN_TARGET_REQUIREMENT_MISMATCH,
+    );
+    expect(planned.trace.rejectedTargetRequirements[0]?.field).toBe(
+      "requiredRelationIds",
+    );
+    expect(planned.trace.rejectedTargetRequirements[0]?.requested).toEqual([
+      "UNIVERSAL_SUITABLE_FOR",
+    ]);
+    expect(planned.trace.rejectedTargetRequirements[0]?.available).toEqual([
+      "SUITABLE_FOR",
+    ]);
   });
 });

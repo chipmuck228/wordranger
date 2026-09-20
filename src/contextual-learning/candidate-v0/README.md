@@ -202,6 +202,8 @@ Registry insertion order is not a selection rule.
 | School Challenge | none as verified learning | `CLAIM_CHOICE` stays unsupported; Guided presentation is `GUIDED_ONLY` and cannot verify BUILD/STRENGTHEN/PROBE/RETRIEVE |
 | Borrowing-Sharing | none as verified learning | contextual `RELATION_CHOICE` stays unsupported; Guided observation is not relational assessment |
 
+Target admission is structured, not sense-only. V0 requires exact `focus` equality, and every requested `requiredRoleIds` / `requiredRelationIds` value must already be present on a covering plan target. Input targets are never rewritten onto the plan. A mismatch returns `PLAN_TARGET_REQUIREMENT_MISMATCH` and the rejected requirement is recorded on the trace.
+
 `SUITABLE_FOR` remains a frame fact, not a universal lexical truth. Requester/owner perspectives must both be requested for borrow/lend variants.
 
 A Guided-only plan may be structurally executable but produces no frozen Evidence. The planner returns `PLAN_GUIDED_ONLY_CANNOT_VERIFY_MODE` instead of treating acknowledgement as learning.

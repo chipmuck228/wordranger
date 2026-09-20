@@ -6,6 +6,7 @@
  */
 
 export { PlanningErrorCode } from "./errors";
+export { idsCovered, matchRequestedTargetsToPlan } from "./match-targets";
 export { planExperience } from "./plan-experience";
 export {
   comparePlanVariants,
@@ -19,4 +20,5 @@ export type {
   ExperiencePlanningResult,
   ExperiencePlanningTrace,
   PlanExecutability,
+  RejectedTargetRequirement,
 } from "./types";
