@@ -46,6 +46,8 @@ export interface PublicProbeRoutingItem {
   summary: string;
 }
 
+export type ContextLabTaskPresentationMode = "SCENE_TARGET" | "TASK_ONLY";
+
 export type ContextLabCurrentScreen =
   | {
       kind: "PROBE_INTRO";
@@ -76,6 +78,13 @@ export type ContextLabCurrentScreen =
       task: PublicLearningTask;
       context: PublicContextPresentation;
       progress: ContextLabProgress;
+      presentationMode?: ContextLabTaskPresentationMode;
+    }
+  | {
+      kind: "PROBE_TASK_RECORDED";
+      handle: ContextLabRunHandle;
+      progress: ContextLabProgress;
+      message: string;
     }
   | {
       kind: "FROZEN_TASK_RECORDED";
@@ -124,6 +133,7 @@ export type ContextLabErrorCode =
 export const CONTEXT_LAB_HEADING_ID = "context-lab-heading";
 
 export const CONTEXT_LAB_RECORDED_MESSAGE = "这次练习已记录。";
+export const CONTEXT_LAB_PROBE_RECORDED_MESSAGE = "这次回答已记录，请继续。";
 export const CONTEXT_LAB_BOUNDARY_MESSAGE =
   "语境体验已到达现有学习任务的交接点。\n下一阶段会通过 WordRanger 原有提交与证据流程完成这道题。";
 

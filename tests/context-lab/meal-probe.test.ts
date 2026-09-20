@@ -3,7 +3,7 @@ import { EvidenceOutcome } from "@/domain/learning/evidence.types";
 import { CONTEXT_LAB_ERROR_CODES } from "@/components/context-lab/types";
 import { V1_PLACEHOLDER_USER_ID } from "@/server/auth/v1-user";
 import { serializeContextLabRunState } from "@/server/context-lab/context-lab-run-state";
-import { routingResultsForProbe } from "@/server/context-lab/meal-probe-orchestration";
+import { nextProbeSkill, routingResultsForProbe } from "@/server/context-lab/meal-probe-orchestration";
 import {
   collectKeys,
   createMealLabHarness,
@@ -13,6 +13,9 @@ import type { ContextLabCurrentScreen } from "@/components/context-lab/types";
 import type { MealContextLabController } from "@/server/context-lab/meal-context-lab-controller";
 import type { InMemoryLearningTaskRepository } from "@/server/tasks/in-memory-learning-task-repository";
 import type { InMemoryLearningRepository } from "@/server/learning/in-memory-learning-repository";
+import { LearningTaskType } from "@/domain/tasks/task-type";
+import { AnswerMode, PromptMode } from "@/domain/learning/evidence.types";
+import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 
 const OTHER_USER = "00000000-0000-4000-8000-000000000099";
 const LEMMAS = ["soup", "bowl", "spoon", "fork"] as const;
@@ -28,6 +31,45 @@ function assertKind<K extends ContextLabCurrentScreen["kind"]>(
   if (screen.kind !== kind) {
     throw new Error(`expected ${kind}, got ${screen.kind}`);
   }
+}
+
+function visibleProbeText(screen: ContextLabCurrentScreen): string {
+  if (screen.kind === "ERROR") {
+    return `${screen.title} ${screen.message}`;
+  }
+  const parts: string[] = [];
+  if ("context" in screen) {
+    parts.push(
+      screen.context.title,
+      screen.context.settingLabel,
+      screen.context.instruction,
+      ...screen.context.entities.map((entity) => entity.label),
+      screen.context.relationCaption ?? "",
+      ...(screen.context.contrastCaptions ?? []).map((item) => item.caption),
+    );
+  }
+  if (screen.kind === "FROZEN_TASK_PREVIEW") {
+    const prompt = screen.task.prompt;
+    if (prompt.kind === "MEANING_TEXT" || prompt.kind === "LEXEME_TEXT") {
+      parts.push(prompt.text);
+    }
+    if (screen.task.responseContract.kind === "CHOICE") {
+      parts.push(
+        ...screen.task.responseContract.options.map((option) => option.content.text),
+      );
+    }
+  }
+  if (screen.kind === "PROBE_SUMMARY") {
+    parts.push(...screen.items.map((item) => `${item.label}${item.summary}`));
+  }
+  if (screen.kind === "PROBE_TASK_RECORDED") {
+    parts.push(screen.message);
+  }
+  return parts.join("\n");
+}
+
+function evidenceCount(learning: InMemoryLearningRepository) {
+  return learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length;
 }
 
 async function issueCurrentTask(
@@ -47,6 +89,7 @@ async function continueFrom(
 ) {
   if (
     screen.kind !== "PROBE_INTRO" &&
+    screen.kind !== "PROBE_TASK_RECORDED" &&
     screen.kind !== "FROZEN_TASK_RECORDED" &&
     screen.kind !== "PROBE_SUMMARY"
   ) {
@@ -105,42 +148,6 @@ async function submitTyping(
   });
 }
 
-function visibleProbeText(screen: ContextLabCurrentScreen): string {
-  if (screen.kind === "ERROR") {
-    return `${screen.title} ${screen.message}`;
-  }
-  const parts: string[] = [];
-  if ("context" in screen) {
-    parts.push(
-      screen.context.title,
-      screen.context.settingLabel,
-      screen.context.instruction,
-      ...screen.context.entities.map((entity) => entity.label),
-      screen.context.relationCaption ?? "",
-      ...(screen.context.contrastCaptions ?? []).map((item) => item.caption),
-    );
-  }
-  if (screen.kind === "FROZEN_TASK_PREVIEW") {
-    const prompt = screen.task.prompt;
-    if (prompt.kind === "MEANING_TEXT" || prompt.kind === "LEXEME_TEXT") {
-      parts.push(prompt.text);
-    }
-    if (screen.task.responseContract.kind === "CHOICE") {
-      parts.push(
-        ...screen.task.responseContract.options.map((option) => option.content.text),
-      );
-    }
-  }
-  if (screen.kind === "PROBE_SUMMARY") {
-    parts.push(...screen.items.map((item) => `${item.label}${item.summary}`));
-  }
-  return parts.join("\n");
-}
-
-function evidenceCount(learning: InMemoryLearningRepository) {
-  return learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length;
-}
-
 describe("Meal cold Probe orchestration", () => {
   it("starts with a Probe intro and does not leak teaching contrast", async () => {
     const { controller } = probeHarness();
@@ -154,137 +161,148 @@ describe("Meal cold Probe orchestration", () => {
     }
   });
 
-  it("issues only the first Probe task and hides future tasks", async () => {
+  it("issues active recall first with a scene-safe public payload", async () => {
     const { controller } = probeHarness();
-    const intro = await controller.start();
-    const first = await issueCurrentTask(controller, intro);
+    const first = await issueCurrentTask(controller, await controller.start());
     assertKind(first, "FROZEN_TASK_PREVIEW");
-    expect(first.task.responseContract.kind).toBe("CHOICE");
-    expect(first.progress).toEqual({ current: 1, total: 4, unit: "个物品" });
-    expect(first.task.prompt.kind === "MEANING_TEXT" ? first.task.prompt.text : "").toBe(
-      "这个物品对应哪个意思？",
-    );
-    expect(visibleProbeText(first)).not.toMatch(/spoon|fork|soup|bowl|\/spuːn\//i);
+    expect(first.presentationMode).toBe("SCENE_TARGET");
+    expect(first.task.targetSkill).toBe(VocabularySkill.ACTIVE_RECALL);
+    expect(first.task.taskType).toBe(LearningTaskType.ACTIVE_RECALL_TYPING);
+    expect(first.task.promptMode).toBe(PromptMode.MEANING_TO_WORD);
+    expect(first.task.answerMode).toBe(AnswerMode.TYPING);
+    expect(first.task.responseContract.kind).toBe("TEXT_INPUT");
+    expect(first.task.prompt).toEqual({
+      kind: "MEANING_TEXT",
+      text: "写出当前物品的英文单词",
+    });
+    expect(first.progress.current).toBe(1);
+    expect(visibleProbeText(first)).not.toMatch(/\bsoup\b|\bbowl\b|\bspoon\b|\bfork\b/i);
     expect(collectKeys(first).has("targets")).toBe(false);
-    expect(collectKeys(first).has("observations")).toBe(false);
     for (const field of FORBIDDEN_CLIENT_FIELDS) {
       expect(collectKeys(first).has(field)).toBe(false);
     }
   });
 
-  it("writes one Evidence through submitTaskAction and ignores a duplicate submit", async () => {
-    const { controller, learningTasks, learning } = probeHarness();
+  it("records Probe submissions without public outcome or correction", async () => {
+    const { controller, learning } = probeHarness();
     const first = await issueCurrentTask(controller, await controller.start());
-    assertKind(first, "FROZEN_TASK_PREVIEW");
-    const recorded = await submitChoice(controller, learningTasks, first, false);
-    assertKind(recorded, "FROZEN_TASK_RECORDED");
-    expect(evidenceCount(learning)).toBe(1);
-    const duplicate = await controller.submitFrozenTask({
-      runId: first.handle.runId,
-      revision: first.handle.revision,
-      taskId: first.task.id,
-      action: { kind: "CHOICE", optionId: "00000000-0000-4000-8000-000000000001" },
-    });
-    expect(duplicate.kind).toBe("ERROR");
-    expect(duplicate.kind === "ERROR" ? duplicate.code : "").toBe(
-      CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_STALE_RUN,
-    );
-    const retrySameTask = await controller.submitFrozenTask({
-      runId: recorded.handle.runId,
-      revision: recorded.handle.revision,
-      taskId: first.task.id,
-      action: { kind: "CHOICE", optionId: "00000000-0000-4000-8000-000000000001" },
-    });
-    expect(retrySameTask.kind).toBe("FROZEN_TASK_RECORDED");
+    const recorded = await submitTyping(controller, first, "nope");
+    assertKind(recorded, "PROBE_TASK_RECORDED");
+    expect(recorded.message).toBe("这次回答已记录，请继续。");
+    expect(JSON.stringify(recorded)).not.toContain("CORRECT");
+    expect(JSON.stringify(recorded)).not.toContain("INCORRECT");
+    expect(JSON.stringify(recorded)).not.toContain("ASSISTED");
+    expect(JSON.stringify(recorded)).not.toContain("答对了");
+    expect(JSON.stringify(recorded)).not.toContain("soup");
+    expect(collectKeys(recorded).has("feedback")).toBe(false);
+    expect(collectKeys(recorded).has("correction")).toBe(false);
+    expect(collectKeys(recorded).has("evidenceId")).toBe(false);
     expect(evidenceCount(learning)).toBe(1);
   });
 
-  it("rejects a stale revision and treats a foreign run like a missing run", async () => {
+  it("issues recognition only after a non-independent recall and keeps English LEXEME_TEXT", async () => {
     const { controller, learningTasks } = probeHarness();
     const first = await issueCurrentTask(controller, await controller.start());
+    const recorded = await submitTyping(controller, first, "nope");
+    const recognition = await continueFrom(controller, recorded);
+    assertKind(recognition, "FROZEN_TASK_PREVIEW");
+    expect(recognition.presentationMode).toBe("TASK_ONLY");
+    expect(recognition.task.targetSkill).toBe(VocabularySkill.MEANING_RECOGNITION);
+    expect(recognition.task.taskType).toBe(LearningTaskType.MEANING_CHOICE);
+    expect(recognition.task.promptMode).toBe(PromptMode.WORD_TO_MEANING);
+    expect(recognition.task.answerMode).toBe(AnswerMode.MULTIPLE_CHOICE);
+    expect(recognition.task.prompt).toEqual({ kind: "LEXEME_TEXT", text: "soup" });
+    expect(recognition.context.entities).toEqual([]);
+    expect(recognition.context.entities.some((entity) => entity.label === "汤")).toBe(
+      false,
+    );
+    const assigned = await learningTasks.getTaskForEvaluation(recognition.task.id);
+    expect(assigned?.task.publicTask.lexemeId).toBe(
+      assigned?.task.answerKey.targetLexemeId,
+    );
+    for (const field of FORBIDDEN_CLIENT_FIELDS) {
+      expect(collectKeys(recognition).has(field)).toBe(false);
+    }
+  });
+
+  it("skips recognition after independent recall and moves to the next target", async () => {
+    const { controller } = probeHarness();
+    const first = await issueCurrentTask(controller, await controller.start());
+    const recorded = await submitTyping(controller, first, "soup");
+    const second = await continueFrom(controller, recorded);
+    assertKind(second, "FROZEN_TASK_PREVIEW");
+    expect(second.progress.current).toBe(2);
+    expect(second.task.responseContract.kind).toBe("TEXT_INPUT");
+    expect(second.task.prompt.kind === "MEANING_TEXT" ? second.task.prompt.text : "").toBe(
+      "写出当前物品的英文单词",
+    );
+  });
+
+  it("writes one Evidence and rejects stale, foreign, and client-chosen next skill", async () => {
+    const { controller, learning } = probeHarness();
+    const first = await issueCurrentTask(controller, await controller.start());
     assertKind(first, "FROZEN_TASK_PREVIEW");
+    const recorded = await submitTyping(controller, first, "nope");
+    assertKind(recorded, "PROBE_TASK_RECORDED");
+    expect(evidenceCount(learning)).toBe(1);
     const stale = await controller.submitFrozenTask({
       runId: first.handle.runId,
-      revision: first.handle.revision - 1,
+      revision: first.handle.revision,
       taskId: first.task.id,
-      action: { kind: "CHOICE", optionId: (await choiceIds(learningTasks, first.task.id)).wrong },
+      action: { kind: "TEXT_INPUT", value: "again" },
     });
-    expect(stale.kind).toBe("ERROR");
     expect(stale.kind === "ERROR" ? stale.code : "").toBe(
       CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_STALE_RUN,
     );
-
-    const foreign = createMealLabHarness({
-      beginAt: "PROBE",
-      userId: OTHER_USER,
+    const retry = await controller.submitFrozenTask({
+      runId: recorded.handle.runId,
+      revision: recorded.handle.revision,
+      taskId: first.task.id,
+      action: { kind: "TEXT_INPUT", value: "again" },
     });
+    expect(retry.kind).toBe("PROBE_TASK_RECORDED");
+    expect(evidenceCount(learning)).toBe(1);
+
+    const foreign = createMealLabHarness({ beginAt: "PROBE", userId: OTHER_USER });
     const missing = await foreign.controller.submitFrozenTask({
       runId: first.handle.runId,
       revision: first.handle.revision,
       taskId: first.task.id,
-      action: { kind: "CHOICE", optionId: "option" },
+      action: { kind: "TEXT_INPUT", value: "x" },
     });
     const unknown = await controller.submitFrozenTask({
       runId: "00000000-0000-4000-8000-000000000404",
       revision: 0,
       taskId: first.task.id,
-      action: { kind: "CHOICE", optionId: "option" },
+      action: { kind: "TEXT_INPUT", value: "x" },
     });
-    expect(missing.kind).toBe("ERROR");
-    expect(unknown.kind).toBe("ERROR");
     expect(missing.kind === "ERROR" ? missing.code : "").toBe(
       unknown.kind === "ERROR" ? unknown.code : "",
     );
   });
 
-  it("skips recall after a failed recognition and enters recall after an independent recognition", async () => {
-    const { controller, learningTasks } = probeHarness();
-    const first = await issueCurrentTask(controller, await controller.start());
-    const failed = await submitChoice(controller, learningTasks, first, false);
-    const second = await continueFrom(controller, failed);
-    assertKind(second, "FROZEN_TASK_PREVIEW");
-    expect(second.progress.current).toBe(2);
-    expect(second.task.responseContract.kind).toBe("CHOICE");
-
-    const { controller: readyController, learningTasks: readyTasks } = probeHarness();
-    const readyFirst = await issueCurrentTask(readyController, await readyController.start());
-    const recognized = await submitChoice(readyController, readyTasks, readyFirst, true);
-    const recall = await continueFrom(readyController, recognized);
-    assertKind(recall, "FROZEN_TASK_PREVIEW");
-    expect(recall.progress.current).toBe(1);
-    expect(recall.task.responseContract.kind).toBe("TEXT_INPUT");
-    expect(recall.task.prompt.kind === "MEANING_TEXT" ? recall.task.prompt.text : "").toBe(
-      "写出这个物品的英文单词",
-    );
-  });
-
-  it("produces four public routing results without AnswerKey or Evidence internals", async () => {
+  it("produces four routing results and only hands off spoon BUILD", async () => {
     const { controller, learningTasks, repository } = probeHarness();
     let screen: ContextLabCurrentScreen = await controller.start();
     for (let index = 0; index < 4; index += 1) {
+      screen = await continueFrom(controller, screen);
+      screen = await submitTyping(controller, screen, "nope");
       screen = await continueFrom(controller, screen);
       screen = await submitChoice(controller, learningTasks, screen, false);
     }
     screen = await continueFrom(controller, screen);
     assertKind(screen, "PROBE_SUMMARY");
     expect(screen.items).toHaveLength(4);
-    expect(screen.items.map((item) => item.label)).toEqual(["汤", "碗", "勺子", "叉子"]);
     expect(screen.items.every((item) => item.summary === "建立情境记忆")).toBe(true);
     expect(screen.canHandoffToBuild).toBe(true);
-    expect(JSON.stringify(screen)).not.toContain("BUILD");
-    expect(JSON.stringify(screen)).not.toContain("INDEPENDENT_CORRECT");
-    for (const field of FORBIDDEN_CLIENT_FIELDS) {
-      expect(collectKeys(screen).has(field)).toBe(false);
-    }
+    expect(JSON.stringify(screen)).not.toContain("answerKey");
+    expect(JSON.stringify(screen)).not.toContain(EvidenceOutcome.INCORRECT);
 
     const stored = await repository.get({
       runId: screen.handle.runId,
       userId: V1_PLACEHOLDER_USER_ID,
     });
-    expect(stored?.probe).toBeTruthy();
-    const results = routingResultsForProbe(stored!.probe!);
-    expect(results).toHaveLength(4);
-    expect(results.every((result) => result.disposition === "BUILD")).toBe(true);
+    expect(routingResultsForProbe(stored!.probe!)).toHaveLength(4);
     const json = JSON.stringify(
       serializeContextLabRunState({
         experienceRun: stored!.experienceRun,
@@ -293,20 +311,7 @@ describe("Meal cold Probe orchestration", () => {
     );
     expect(json).not.toContain("answerKey");
     expect(json).not.toContain("exactAcceptedTexts");
-    expect(json).not.toContain("typedAnswer");
-    expect(json).not.toContain("expectedAnswer");
-    expect(json).not.toContain("StudentLexemeModel");
-  });
 
-  it("hands off only spoon BUILD to the existing teaching path", async () => {
-    const { controller, learningTasks } = probeHarness();
-    let screen: ContextLabCurrentScreen = await controller.start();
-    for (let index = 0; index < 4; index += 1) {
-      screen = await continueFrom(controller, screen);
-      screen = await submitChoice(controller, learningTasks, screen, false);
-    }
-    screen = await continueFrom(controller, screen);
-    assertKind(screen, "PROBE_SUMMARY");
     const teaching = await controller.continueProbe({
       runId: screen.handle.runId,
       revision: screen.handle.revision,
@@ -314,73 +319,52 @@ describe("Meal cold Probe orchestration", () => {
     });
     assertKind(teaching, "GUIDED");
     expect(teaching.context.settingLabel).toContain("教学阶段");
-    expect(teaching.teachingPhase).toBe(true);
+  });
 
-    const { controller: readyController, learningTasks: readyTasks } = probeHarness();
-    let ready: ContextLabCurrentScreen = await readyController.start();
+  it("routes independent recall to READY and does not hand off BUILD", async () => {
+    const { controller } = probeHarness();
+    let screen: ContextLabCurrentScreen = await controller.start();
     for (const lemma of LEMMAS) {
-      ready = await continueFrom(readyController, ready);
-      ready = await submitChoice(readyController, readyTasks, ready, true);
-      ready = await continueFrom(readyController, ready);
-      ready = await submitTyping(readyController, ready, lemma);
+      screen = await continueFrom(controller, screen);
+      screen = await submitTyping(controller, screen, lemma);
     }
-    ready = await continueFrom(readyController, ready);
-    assertKind(ready, "PROBE_SUMMARY");
-    expect(ready.items.every((item) => item.summary === "本次已能独立回答")).toBe(true);
-    expect(ready.canHandoffToBuild).toBe(false);
-    const refused = await readyController.continueProbe({
-      runId: ready.handle.runId,
-      revision: ready.handle.revision,
+    screen = await continueFrom(controller, screen);
+    assertKind(screen, "PROBE_SUMMARY");
+    expect(screen.items.every((item) => item.summary === "本次已能独立回答")).toBe(true);
+    expect(screen.canHandoffToBuild).toBe(false);
+    const refused = await controller.continueProbe({
+      runId: screen.handle.runId,
+      revision: screen.handle.revision,
       handoff: true,
     });
     expect(refused.kind).toBe("ERROR");
   });
 
-  it("routes independent recognition + failed recall to STRENGTHEN and does not fake a handoff", async () => {
+  it("routes failed recall + correct recognition to STRENGTHEN and refuses spoon STRENGTHEN handoff", async () => {
     const { controller, learningTasks } = probeHarness();
     let screen: ContextLabCurrentScreen = await controller.start();
-    screen = await continueFrom(controller, screen);
-    screen = await submitChoice(controller, learningTasks, screen, true);
-    screen = await continueFrom(controller, screen);
-    screen = await submitTyping(controller, screen, "nope");
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < 2; index += 1) {
+      screen = await continueFrom(controller, screen);
+      screen = await submitTyping(controller, screen, "nope");
       screen = await continueFrom(controller, screen);
       screen = await submitChoice(controller, learningTasks, screen, false);
     }
     screen = await continueFrom(controller, screen);
+    screen = await submitTyping(controller, screen, "nope");
+    screen = await continueFrom(controller, screen);
+    screen = await submitChoice(controller, learningTasks, screen, true);
+    screen = await continueFrom(controller, screen);
+    screen = await submitTyping(controller, screen, "nope");
+    screen = await continueFrom(controller, screen);
+    screen = await submitChoice(controller, learningTasks, screen, false);
+    screen = await continueFrom(controller, screen);
     assertKind(screen, "PROBE_SUMMARY");
-    expect(screen.items[0]?.summary).toBe("加强记忆连接");
-    expect(screen.items.slice(1).every((item) => item.summary === "建立情境记忆")).toBe(
-      true,
-    );
-    expect(screen.canHandoffToBuild).toBe(true);
-
-    const { controller: spoonController, learningTasks: spoonTasks } = probeHarness();
-    let spoonScreen: ContextLabCurrentScreen = await spoonController.start();
-    for (let index = 0; index < 2; index += 1) {
-      spoonScreen = await continueFrom(spoonController, spoonScreen);
-      spoonScreen = await submitChoice(spoonController, spoonTasks, spoonScreen, false);
-    }
-    spoonScreen = await continueFrom(spoonController, spoonScreen);
-    spoonScreen = await submitChoice(spoonController, spoonTasks, spoonScreen, true);
-    spoonScreen = await continueFrom(spoonController, spoonScreen);
-    spoonScreen = await submitTyping(spoonController, spoonScreen, "nope");
-    spoonScreen = await continueFrom(spoonController, spoonScreen);
-    spoonScreen = await submitChoice(spoonController, spoonTasks, spoonScreen, false);
-    spoonScreen = await continueFrom(spoonController, spoonScreen);
-    assertKind(spoonScreen, "PROBE_SUMMARY");
-    expect(spoonScreen.items[2]?.summary).toBe("加强记忆连接");
-    expect(spoonScreen.canHandoffToBuild).toBe(false);
-    expect(spoonScreen.pendingMessage).toContain("强化体验将在下一步实现");
-    const noHandoff = await spoonController.continueProbe({
-      runId: spoonScreen.handle.runId,
-      revision: spoonScreen.handle.revision,
-      handoff: true,
-    });
-    expect(noHandoff.kind).toBe("ERROR");
+    expect(screen.items[2]?.summary).toBe("加强记忆连接");
+    expect(screen.canHandoffToBuild).toBe(false);
+    expect(screen.pendingMessage).toContain("强化体验将在下一步实现");
   });
 
-  it("does not accept a client-supplied next target or disposition", async () => {
+  it("does not accept a client-supplied next skill or disposition", async () => {
     const { controller } = probeHarness();
     const intro = await controller.start();
     assertKind(intro, "PROBE_INTRO");
@@ -388,36 +372,65 @@ describe("Meal cold Probe orchestration", () => {
       runId: intro.handle.runId,
       revision: intro.handle.revision,
       taskId: "not-issued",
-      action: { kind: "CHOICE", optionId: "x" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
     });
     expect(skipped.kind).toBe("ERROR");
-    const extra = await controller.submitFrozenTask({
-      runId: intro.handle.runId,
-      revision: intro.handle.revision,
-      taskId: "not-issued",
-      action: { kind: "CHOICE", optionId: "x" },
-      ...({ disposition: "BUILD", userId: "attacker" } as object),
-    } as never);
-    expect(extra.kind).toBe("ERROR");
   });
 
-  it("refresh convention is a new experimental run, not probe restore", async () => {
-    const { controller, learningTasks } = probeHarness();
+  it("refresh convention is a new experimental run", async () => {
+    const { controller } = probeHarness();
     const first = await issueCurrentTask(controller, await controller.start());
     assertKind(first, "FROZEN_TASK_PREVIEW");
-    await submitChoice(controller, learningTasks, first, false);
+    await submitTyping(controller, first, "nope");
     const again = await controller.start();
     assertKind(again, "PROBE_INTRO");
     expect(again.handle.runId).not.toBe(first.handle.runId);
-    expect(again.progress.current).toBe(0);
   });
 
-  it("keeps READY from being treated as a mastery write", async () => {
-    const result = {
-      disposition: "READY",
-      reason: "PROBE_INDEPENDENT_RECOGNITION_AND_RECALL",
-    };
-    expect(result.reason).not.toMatch(/mastery/i);
-    expect(EvidenceOutcome.INDEPENDENT_CORRECT).toBe("INDEPENDENT_CORRECT");
+  it("keeps BUILD recorded feedback for the teaching path", async () => {
+    const { controller } = createMealLabHarness({ beginAt: "BUILD" });
+    let screen: ContextLabCurrentScreen = await controller.start();
+    for (let index = 0; index < 3; index += 1) {
+      if (screen.kind !== "GUIDED") {
+        throw new Error("guided");
+      }
+      screen = await controller.acknowledge({
+        runId: screen.handle.runId,
+        revision: screen.handle.revision,
+        activityId: screen.activity.id,
+      });
+    }
+    assertKind(screen, "FROZEN_TASK_PREVIEW");
+    const recorded = await controller.submitFrozenTask({
+      runId: screen.handle.runId,
+      revision: screen.handle.revision,
+      taskId: screen.task.id,
+      action: { kind: "TEXT_INPUT", value: "spoon" },
+    });
+    assertKind(recorded, "FROZEN_TASK_RECORDED");
+    expect(recorded.feedback.status).toBe("CORRECT");
+  });
+});
+
+describe("nextProbeSkill", () => {
+  it("always starts a target on ACTIVE_RECALL", () => {
+    const next = nextProbeSkill({
+      phase: "PROBE_INTRO",
+      targets: [
+        {
+          target: { lexemeId: "a", senseId: "a#1" },
+          sceneClusterId: "meal",
+          roleId: "FOOD",
+          entityId: "home-soup",
+          displayLabel: "汤",
+          probeSkills: ["MEANING_RECOGNITION", "ACTIVE_RECALL"],
+        },
+      ],
+      currentTargetIndex: 0,
+      currentSkill: null,
+      issued: null,
+      observations: [],
+    });
+    expect(next).toEqual({ targetIndex: 0, skill: "ACTIVE_RECALL" });
   });
 });

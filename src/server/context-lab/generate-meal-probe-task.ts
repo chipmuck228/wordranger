@@ -1,11 +1,12 @@
 import "server-only";
 
-import { PromptMode } from "@/domain/learning/evidence.types";
+import { AnswerMode, PromptMode } from "@/domain/learning/evidence.types";
 import type { LearningNeed } from "@/domain/learning/learning-need";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import { DefaultTaskGenerator } from "@/domain/tasks/default-task-generator";
 import type { GeneratedLearningTask } from "@/domain/tasks/generated-learning-task";
 import { SeededRandomSource } from "@/domain/tasks/random-source";
+import { LearningTaskType } from "@/domain/tasks/task-type";
 import { contextLabFrozenTaskId } from "./context-lab-frozen-task-id";
 import type {
   ContextualProbeSkill,
@@ -13,8 +14,7 @@ import type {
 } from "@/contextual-learning/candidate-v0/probe/types";
 import { bundledVocabularyRepository } from "@/server/runtime/bundled-vocabulary";
 
-const RECOGNITION_PROMPT = "这个物品对应哪个意思？";
-const RECALL_PROMPT = "写出这个物品的英文单词";
+const RECALL_PROMPT = "写出当前物品的英文单词";
 
 export async function generateMealProbeTask(input: {
   runId: string;
@@ -24,7 +24,8 @@ export async function generateMealProbeTask(input: {
   targetLemma: string;
   now: string;
 }): Promise<
-  { ok: true; task: GeneratedLearningTask } | { ok: false; reason: "PROBE_TASK_UNAVAILABLE" }
+  | { ok: true; task: GeneratedLearningTask }
+  | { ok: false; reason: "PROBE_TASK_UNAVAILABLE" | "PROBE_TASK_SEMANTIC_MISMATCH" }
 > {
   const lexemeId = input.target.target.lexemeId;
   const taskId = contextLabFrozenTaskId(input.runId, `probe:${lexemeId}:${input.skill}`);
@@ -41,23 +42,23 @@ export async function generateMealProbeTask(input: {
   if (created.status !== "GENERATED") {
     return { ok: false, reason: "PROBE_TASK_UNAVAILABLE" };
   }
-  const rewritten = hideEnglishForm({
-    task: {
-      ...created.value,
-      publicTask: { ...created.value.publicTask, id: taskId },
-      answerKey: { ...created.value.answerKey, taskId },
-    },
-    skill: input.skill,
-  });
-  if (
-    leaksEnglishForm(rewritten, input.skill, [
-      input.targetLemma,
-      ...input.siblingLemmas,
-    ])
-  ) {
-    return { ok: false, reason: "PROBE_TASK_UNAVAILABLE" };
+  const stamped: GeneratedLearningTask = {
+    ...created.value,
+    publicTask: { ...created.value.publicTask, id: taskId, hints: [] },
+    answerKey: { ...created.value.answerKey, taskId },
+  };
+  const prepared =
+    input.skill === "ACTIVE_RECALL" ? sceneSafeRecallTask(stamped) : stamped;
+  if (!matchesFrozenProbeContract(prepared, input.skill, lexemeId, input.targetLemma)) {
+    return { ok: false, reason: "PROBE_TASK_SEMANTIC_MISMATCH" };
   }
-  return { ok: true, task: rewritten };
+  if (
+    input.skill === "ACTIVE_RECALL" &&
+    leaksEnglishForm(prepared, [input.targetLemma, ...input.siblingLemmas])
+  ) {
+    return { ok: false, reason: "PROBE_TASK_SEMANTIC_MISMATCH" };
+  }
+  return { ok: true, task: prepared };
 }
 
 function probeNeed(
@@ -82,25 +83,51 @@ function probeNeed(
   };
 }
 
-function hideEnglishForm(input: {
-  task: GeneratedLearningTask;
-  skill: ContextualProbeSkill;
-}): GeneratedLearningTask {
-  const promptText =
-    input.skill === "MEANING_RECOGNITION" ? RECOGNITION_PROMPT : RECALL_PROMPT;
+function sceneSafeRecallTask(task: GeneratedLearningTask): GeneratedLearningTask {
   return {
-    ...input.task,
+    ...task,
     publicTask: {
-      ...input.task.publicTask,
-      prompt: { kind: "MEANING_TEXT", text: promptText },
+      ...task.publicTask,
+      prompt: { kind: "MEANING_TEXT", text: RECALL_PROMPT },
       hints: [],
     },
   };
 }
 
-function leaksEnglishForm(
+function matchesFrozenProbeContract(
   task: GeneratedLearningTask,
   skill: ContextualProbeSkill,
+  lexemeId: string,
+  lemma: string,
+): boolean {
+  const publicTask = task.publicTask;
+  if (publicTask.lexemeId !== lexemeId || task.answerKey.targetLexemeId !== lexemeId) {
+    return false;
+  }
+  if (skill === "ACTIVE_RECALL") {
+    return (
+      publicTask.targetSkill === VocabularySkill.ACTIVE_RECALL &&
+      publicTask.taskType === LearningTaskType.ACTIVE_RECALL_TYPING &&
+      publicTask.promptMode === PromptMode.MEANING_TO_WORD &&
+      publicTask.answerMode === AnswerMode.TYPING &&
+      publicTask.responseContract.kind === "TEXT_INPUT" &&
+      publicTask.prompt.kind === "MEANING_TEXT" &&
+      publicTask.prompt.text === RECALL_PROMPT
+    );
+  }
+  return (
+    publicTask.targetSkill === VocabularySkill.MEANING_RECOGNITION &&
+    publicTask.taskType === LearningTaskType.MEANING_CHOICE &&
+    publicTask.promptMode === PromptMode.WORD_TO_MEANING &&
+    publicTask.answerMode === AnswerMode.MULTIPLE_CHOICE &&
+    publicTask.responseContract.kind === "CHOICE" &&
+    publicTask.prompt.kind === "LEXEME_TEXT" &&
+    publicTask.prompt.text.trim().toLowerCase() === lemma.trim().toLowerCase()
+  );
+}
+
+function leaksEnglishForm(
+  task: GeneratedLearningTask,
   lemmas: readonly string[],
 ): boolean {
   const banned = lemmas
@@ -120,13 +147,7 @@ function leaksEnglishForm(
     }
   }
   const joined = texts.join("\n").toLowerCase();
-  if (banned.some((lemma) => wordBoundaryHas(joined, lemma))) {
-    return true;
-  }
-  if (skill === "MEANING_RECOGNITION" && /[A-Za-z]{3,}/.test(joined)) {
-    return true;
-  }
-  return false;
+  return banned.some((lemma) => wordBoundaryHas(joined, lemma));
 }
 
 function wordBoundaryHas(haystack: string, lemma: string): boolean {

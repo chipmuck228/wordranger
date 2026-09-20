@@ -27,58 +27,99 @@ function observation(
 }
 
 describe("resolveProbeDisposition", () => {
-  it("routes recognition incorrect to BUILD", () => {
+  it("routes independent recall to READY without recognition", () => {
     const result = resolveProbeDisposition({
       target,
-      observations: [observation("MEANING_RECOGNITION", EvidenceOutcome.INCORRECT)],
+      observations: [observation("ACTIVE_RECALL", EvidenceOutcome.INDEPENDENT_CORRECT)],
     });
-    expect(result.disposition).toBe("BUILD");
+    expect(result.disposition).toBe("READY");
+    expect(result.reason).toBe("PROBE_INDEPENDENT_RECALL");
+    expect(result.reason).not.toMatch(/mastery/i);
   });
 
-  it("routes recognition assisted to STRENGTHEN", () => {
+  it("returns UNRESOLVED when independent recall is followed by recognition", () => {
     const result = resolveProbeDisposition({
       target,
       observations: [
+        observation("ACTIVE_RECALL", EvidenceOutcome.INDEPENDENT_CORRECT),
+        observation("MEANING_RECOGNITION", EvidenceOutcome.INDEPENDENT_CORRECT),
+      ],
+    });
+    expect(result.disposition).toBe("UNRESOLVED");
+    expect(result.reason).toBe("PROBE_RECOGNITION_AFTER_INDEPENDENT_RECALL");
+  });
+
+  it("routes failed recall + independent recognition to STRENGTHEN", () => {
+    const result = resolveProbeDisposition({
+      target,
+      observations: [
+        observation("ACTIVE_RECALL", EvidenceOutcome.INCORRECT),
+        observation("MEANING_RECOGNITION", EvidenceOutcome.INDEPENDENT_CORRECT),
+      ],
+    });
+    expect(result.disposition).toBe("STRENGTHEN");
+  });
+
+  it("routes timeout recall + assisted recognition to STRENGTHEN", () => {
+    const result = resolveProbeDisposition({
+      target,
+      observations: [
+        observation("ACTIVE_RECALL", EvidenceOutcome.TIMEOUT),
         observation("MEANING_RECOGNITION", EvidenceOutcome.ASSISTED_CORRECT),
       ],
     });
     expect(result.disposition).toBe("STRENGTHEN");
   });
 
-  it("routes independent recognition + recall wrong to STRENGTHEN", () => {
+  it("routes failed recall + failed recognition to BUILD", () => {
     const result = resolveProbeDisposition({
       target,
       observations: [
-        observation("MEANING_RECOGNITION", EvidenceOutcome.INDEPENDENT_CORRECT),
         observation("ACTIVE_RECALL", EvidenceOutcome.INCORRECT),
+        observation("MEANING_RECOGNITION", EvidenceOutcome.INCORRECT),
       ],
     });
-    expect(result.disposition).toBe("STRENGTHEN");
+    expect(result.disposition).toBe("BUILD");
   });
 
-  it("routes two independent outcomes to READY without claiming mastery", () => {
+  it("routes skipped recall + timeout recognition to BUILD", () => {
     const result = resolveProbeDisposition({
       target,
       observations: [
-        observation("MEANING_RECOGNITION", EvidenceOutcome.INDEPENDENT_CORRECT),
-        observation("ACTIVE_RECALL", EvidenceOutcome.INDEPENDENT_CORRECT),
+        observation("ACTIVE_RECALL", EvidenceOutcome.SKIPPED),
+        observation("MEANING_RECOGNITION", EvidenceOutcome.TIMEOUT),
       ],
     });
-    expect(result.disposition).toBe("READY");
-    expect(result.reason).not.toMatch(/mastery/i);
-    expect(JSON.stringify(result)).not.toContain("masteryStage");
+    expect(result.disposition).toBe("BUILD");
   });
 
-  it("returns UNRESOLVED for missing or conflicting observations", () => {
-    expect(
-      resolveProbeDisposition({ target, observations: [] }).disposition,
-    ).toBe("UNRESOLVED");
+  it("returns UNRESOLVED when recall is missing", () => {
     expect(
       resolveProbeDisposition({
         target,
         observations: [
-          observation("MEANING_RECOGNITION", EvidenceOutcome.INDEPENDENT_CORRECT),
-          observation("MEANING_RECOGNITION", EvidenceOutcome.INCORRECT, {
+          observation("MEANING_RECOGNITION", EvidenceOutcome.INCORRECT),
+        ],
+      }).disposition,
+    ).toBe("UNRESOLVED");
+  });
+
+  it("returns UNRESOLVED when failed recall has no recognition", () => {
+    expect(
+      resolveProbeDisposition({
+        target,
+        observations: [observation("ACTIVE_RECALL", EvidenceOutcome.INCORRECT)],
+      }).reason,
+    ).toBe("PROBE_MISSING_RECOGNITION_AFTER_FAILED_RECALL");
+  });
+
+  it("returns UNRESOLVED for conflicting task IDs", () => {
+    expect(
+      resolveProbeDisposition({
+        target,
+        observations: [
+          observation("ACTIVE_RECALL", EvidenceOutcome.INCORRECT),
+          observation("ACTIVE_RECALL", EvidenceOutcome.INCORRECT, {
             taskId: "other",
           }),
         ],
@@ -90,7 +131,7 @@ describe("resolveProbeDisposition", () => {
     const result = resolveProbeDisposition({
       target,
       observations: [
-        observation("MEANING_RECOGNITION", EvidenceOutcome.INCORRECT, {
+        observation("ACTIVE_RECALL", EvidenceOutcome.INCORRECT, {
           target: { lexemeId: "other", senseId: target.senseId },
         }),
       ],
@@ -100,7 +141,7 @@ describe("resolveProbeDisposition", () => {
 
   it("does not mutate frozen observation objects", () => {
     const observations = [
-      observation("MEANING_RECOGNITION", EvidenceOutcome.INCORRECT),
+      observation("ACTIVE_RECALL", EvidenceOutcome.INDEPENDENT_CORRECT),
     ];
     const before = structuredClone(observations);
     resolveProbeDisposition({ target, observations });
@@ -112,7 +153,10 @@ describe("planningIntentFromProbeDisposition", () => {
   it("converts BUILD and STRENGTHEN and refuses READY/UNRESOLVED", () => {
     const build = resolveProbeDisposition({
       target,
-      observations: [observation("MEANING_RECOGNITION", EvidenceOutcome.INCORRECT)],
+      observations: [
+        observation("ACTIVE_RECALL", EvidenceOutcome.INCORRECT),
+        observation("MEANING_RECOGNITION", EvidenceOutcome.INCORRECT),
+      ],
     });
     expect(planningIntentFromProbeDisposition(build, target)).toEqual({
       ok: true,
@@ -121,7 +165,8 @@ describe("planningIntentFromProbeDisposition", () => {
     const strengthen = resolveProbeDisposition({
       target,
       observations: [
-        observation("MEANING_RECOGNITION", EvidenceOutcome.ASSISTED_CORRECT),
+        observation("ACTIVE_RECALL", EvidenceOutcome.INCORRECT),
+        observation("MEANING_RECOGNITION", EvidenceOutcome.INDEPENDENT_CORRECT),
       ],
     });
     expect(planningIntentFromProbeDisposition(strengthen, target)).toEqual({
@@ -130,10 +175,7 @@ describe("planningIntentFromProbeDisposition", () => {
     });
     const ready = resolveProbeDisposition({
       target,
-      observations: [
-        observation("MEANING_RECOGNITION", EvidenceOutcome.INDEPENDENT_CORRECT),
-        observation("ACTIVE_RECALL", EvidenceOutcome.INDEPENDENT_CORRECT),
-      ],
+      observations: [observation("ACTIVE_RECALL", EvidenceOutcome.INDEPENDENT_CORRECT)],
     });
     expect(planningIntentFromProbeDisposition(ready, target).ok).toBe(false);
     expect(

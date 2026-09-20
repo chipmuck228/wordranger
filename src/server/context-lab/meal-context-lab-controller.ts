@@ -74,9 +74,10 @@ import { HOME_BREAKFAST_FRAME_ID } from "./meal-presentation-map";
 import {
   presentFrozenTaskScreen,
   presentGuidedScreen,
+  presentProbeFrozenTaskScreen,
   presentProbeIntroScreen,
+  presentProbeRecordedScreen,
   presentProbeSummaryScreen,
-  presentProbeTaskContext,
   presentRecordedScreen,
   progressForIssuedRun,
 } from "./present-context-lab-screen";
@@ -845,15 +846,7 @@ export class MealContextLabController {
       });
     }
     if (probe.phase === "PROBE_FEEDBACK_RECORDED") {
-      return presentRecordedScreen({
-        handle,
-        feedback: {
-          status: publicOutcomeStatus(probe.lastOutcome),
-          message: publicOutcomeMessage(probe.lastOutcome),
-        },
-        progress,
-        continueAvailable: true,
-      });
+      return presentProbeRecordedScreen({ handle, progress });
     }
     return notFoundRunScreen();
   }
@@ -872,17 +865,16 @@ export class MealContextLabController {
         recoverable: false,
       });
     }
-    return {
-      kind: "FROZEN_TASK_PREVIEW",
+    return presentProbeFrozenTaskScreen({
       handle: { runId: record.id, revision: record.revision },
       task: assigned.task.publicTask,
-      context: presentProbeTaskContext(probe.issued.entityId),
+      skill: probe.issued.skill,
+      entityId: probe.issued.entityId,
       progress: {
         current: probe.currentTargetIndex + 1,
         total: probe.targets.length,
-        unit: "个物品",
       },
-    };
+    });
   }
 
   private async advanceProbe(
@@ -981,17 +973,16 @@ export class MealContextLabController {
         ? staleRunScreen()
         : notFoundRunScreen();
     }
-    return {
-      kind: "FROZEN_TASK_PREVIEW",
+    return presentProbeFrozenTaskScreen({
       handle: { runId: record.id, revision: saved.revision },
       task: bound.task.publicTask,
-      context: presentProbeTaskContext(target.entityId),
+      skill: next.skill,
+      entityId: target.entityId,
       progress: {
         current: next.targetIndex + 1,
         total: probe.targets.length,
-        unit: "个物品",
       },
-    };
+    });
   }
 
   private async submitProbeTask(
@@ -1088,15 +1079,12 @@ export class MealContextLabController {
       if (!saved.ok) {
         return this.reconcileProbeAfterEvidence(record, input.taskId);
       }
-      return presentRecordedScreen({
+      return presentProbeRecordedScreen({
         handle: { runId: record.id, revision: saved.revision },
-        feedback: contextLabFeedbackFromEvaluation(submitted.evaluation),
         progress: {
           current: nextProbe.currentTargetIndex + 1,
           total: nextProbe.targets.length,
-          unit: "个物品",
         },
-        continueAvailable: true,
       });
     } catch (error) {
       if (
@@ -1169,15 +1157,12 @@ export class MealContextLabController {
       });
       return again ? this.presentStoredRun(again) : staleRunScreen();
     }
-    return presentRecordedScreen({
+    return presentProbeRecordedScreen({
       handle: { runId: latest.id, revision: saved.revision },
-      feedback: contextLabFeedbackFromEvidence(evidence),
       progress: {
         current: nextProbe.currentTargetIndex + 1,
         total: nextProbe.targets.length,
-        unit: "个物品",
       },
-      continueAvailable: true,
     });
   }
 
@@ -1380,36 +1365,6 @@ function lemmaForTarget(lexemeId: string): string {
     }
   }
   return "";
-}
-
-function publicOutcomeStatus(
-  outcome: MealProbeOrchestration["lastOutcome"],
-): "CORRECT" | "ASSISTED" | "INCORRECT" | "SKIPPED" | "TIMEOUT" {
-  if (outcome === "INDEPENDENT_CORRECT") {
-    return "CORRECT";
-  }
-  if (outcome === "ASSISTED_CORRECT") {
-    return "ASSISTED";
-  }
-  if (outcome === "SKIPPED" || outcome === "TIMEOUT") {
-    return outcome;
-  }
-  return "INCORRECT";
-}
-
-function publicOutcomeMessage(
-  outcome: MealProbeOrchestration["lastOutcome"],
-): string {
-  if (outcome === "INDEPENDENT_CORRECT" || outcome === "ASSISTED_CORRECT") {
-    return "答对了！";
-  }
-  if (outcome === "SKIPPED") {
-    return "这题已跳过。";
-  }
-  if (outcome === "TIMEOUT") {
-    return "这题已超时。";
-  }
-  return "回答不正确。";
 }
 
 function persistErrorMessage(error: unknown): string {

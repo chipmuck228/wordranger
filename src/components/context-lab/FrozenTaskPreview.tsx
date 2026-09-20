@@ -16,9 +16,19 @@ export function FrozenTaskPreview({
       | { kind: "CHOICE"; optionId: string },
   ) => void;
 }) {
+  const showScene = screen.presentationMode !== "TASK_ONLY";
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-6">
-      <MealSceneCard context={screen.context} />
+    <div
+      data-presentation-mode={screen.presentationMode ?? "SCENE_TARGET"}
+      className="flex min-w-0 flex-1 flex-col gap-6"
+    >
+      {showScene ? (
+        <MealSceneCard context={screen.context} />
+      ) : (
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          {screen.context.instruction}
+        </p>
+      )}
       {screen.task.responseContract.kind === "CHOICE" ? (
         <ChoiceTaskRenderer
           task={screen.task}

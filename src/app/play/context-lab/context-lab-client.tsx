@@ -8,6 +8,7 @@ import { ContextLabShell } from "@/components/context-lab/ContextLabShell";
 import { FrozenTaskPreview } from "@/components/context-lab/FrozenTaskPreview";
 import { GuidedActivityPanel } from "@/components/context-lab/GuidedActivityPanel";
 import { ProbeIntroPanel } from "@/components/context-lab/ProbeIntroPanel";
+import { ProbeRecordedNotice } from "@/components/context-lab/ProbeRecordedNotice";
 import { ProbeSummaryPanel } from "@/components/context-lab/ProbeSummaryPanel";
 import { withClientGameTimeout } from "@/components/game/shared/bounded-game-operation";
 import {
@@ -25,6 +26,7 @@ type PresentationState =
   | "TRANSITIONING"
   | "FROZEN_TASK_PREVIEW"
   | "FROZEN_TASK_RECORDED"
+  | "PROBE_TASK_RECORDED"
   | "PROBE_INTRO"
   | "PROBE_SUMMARY"
   | "ERROR";
@@ -253,6 +255,7 @@ export function ContextLabClient({
       !continueProbe ||
       !screen ||
       (screen.kind !== "PROBE_INTRO" &&
+        screen.kind !== "PROBE_TASK_RECORDED" &&
         screen.kind !== "FROZEN_TASK_RECORDED" &&
         screen.kind !== "PROBE_SUMMARY")
     ) {
@@ -461,6 +464,22 @@ export function ContextLabClient({
             />
           </>
         ) : null}
+        {screen?.kind === "PROBE_TASK_RECORDED" ? (
+          <>
+            <ContextLabHeader
+              title="早餐时间"
+              settingLabel="先看看你已经会了哪些词"
+              progress={screen.progress}
+            />
+            <ProbeRecordedNotice
+              screen={screen}
+              disabled={busy || transitioning}
+              onContinue={() => {
+                void continueProbeIntent(false);
+              }}
+            />
+          </>
+        ) : null}
         {screen?.kind === "FROZEN_TASK_RECORDED" ? (
           <>
             <ContextLabHeader
@@ -504,6 +523,9 @@ function liveAnnouncement(screen: ContextLabCurrentScreen | null): string {
   if (screen.kind === "FROZEN_TASK_PREVIEW") {
     return `第 ${screen.progress.current} 个物品，共 ${screen.progress.total} 个物品。`;
   }
+  if (screen.kind === "PROBE_TASK_RECORDED") {
+    return screen.message;
+  }
   if (screen.kind === "FROZEN_TASK_RECORDED") {
     return `${screen.feedback.message} ${screen.recordedMessage}`;
   }
@@ -529,6 +551,9 @@ function stateFor(
   }
   if (screen.kind === "FROZEN_TASK_RECORDED") {
     return "FROZEN_TASK_RECORDED";
+  }
+  if (screen.kind === "PROBE_TASK_RECORDED") {
+    return "PROBE_TASK_RECORDED";
   }
   if (screen.kind === "PROBE_INTRO") {
     return "PROBE_INTRO";

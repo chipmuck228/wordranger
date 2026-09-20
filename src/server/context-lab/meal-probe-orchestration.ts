@@ -58,15 +58,16 @@ export function nextProbeSkill(
       item.target.lexemeId === target.target.lexemeId &&
       item.target.senseId === target.target.senseId,
     );
+    const recall = observed.find((item) => item.skill === "ACTIVE_RECALL");
+    if (!recall) {
+      return { targetIndex: index, skill: "ACTIVE_RECALL" };
+    }
+    if (recall.outcome === EvidenceOutcome.INDEPENDENT_CORRECT) {
+      continue;
+    }
     const recognition = observed.find((item) => item.skill === "MEANING_RECOGNITION");
     if (!recognition) {
       return { targetIndex: index, skill: "MEANING_RECOGNITION" };
-    }
-    if (recognition.outcome === EvidenceOutcome.INDEPENDENT_CORRECT) {
-      const recall = observed.find((item) => item.skill === "ACTIVE_RECALL");
-      if (!recall) {
-        return { targetIndex: index, skill: "ACTIVE_RECALL" };
-      }
     }
   }
   return "SUMMARY";

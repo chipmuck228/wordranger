@@ -3,6 +3,7 @@
  * Status: Candidate / Experimental / Not a Standard.
  *
  * Maps frozen EvidenceOutcome observations to a Candidate disposition.
+ * Recall is first. Recognition is only expected after a non-independent recall.
  * Does not grade, mutate Evidence, or write learner state.
  */
 
@@ -22,6 +23,7 @@ const FAILED = new Set<EvidenceOutcome>([
   EvidenceOutcome.SKIPPED,
   EvidenceOutcome.TIMEOUT,
 ]);
+const RECOGNIZED = new Set<EvidenceOutcome>([INDEPENDENT, ASSISTED]);
 
 export function resolveProbeDisposition(input: {
   target: LexemeSenseRef;
@@ -30,6 +32,14 @@ export function resolveProbeDisposition(input: {
   const target = { lexemeId: input.target.lexemeId, senseId: input.target.senseId };
   const observations = input.observations.map((item) => ({ ...item, target: { ...item.target } }));
 
+  const unexpected = observations.find(
+    (item) =>
+      item.skill !== "ACTIVE_RECALL" && item.skill !== "MEANING_RECOGNITION",
+  );
+  if (unexpected) {
+    return unresolved(target, observations, "PROBE_UNEXPECTED_OBSERVATION_SKILL");
+  }
+
   const mismatch = observations.find(
     (item) => !sameLexemeSense(item.target, target) || !item.taskId.trim(),
   );
@@ -37,36 +47,46 @@ export function resolveProbeDisposition(input: {
     return unresolved(target, observations, "PROBE_TARGET_TASK_MISMATCH");
   }
 
-  const recognition = uniqueSkill(observations, "MEANING_RECOGNITION");
   const recall = uniqueSkill(observations, "ACTIVE_RECALL");
-  if (recognition === "CONFLICT" || recall === "CONFLICT") {
+  const recognition = uniqueSkill(observations, "MEANING_RECOGNITION");
+  if (recall === "CONFLICT" || recognition === "CONFLICT") {
     return unresolved(target, observations, "PROBE_CONFLICTING_OUTCOMES");
   }
 
-  if (!recognition) {
-    return unresolved(target, observations, "PROBE_MISSING_RECOGNITION");
-  }
-
-  if (FAILED.has(recognition.outcome)) {
-    return resolved(target, observations, "BUILD", "PROBE_RECOGNITION_FAILED");
-  }
-  if (recognition.outcome === ASSISTED) {
-    return resolved(target, observations, "STRENGTHEN", "PROBE_RECOGNITION_ASSISTED");
-  }
-  if (recognition.outcome !== INDEPENDENT) {
-    return unresolved(target, observations, "PROBE_UNMAPPED_RECOGNITION_OUTCOME");
-  }
-
   if (!recall) {
-    return unresolved(target, observations, "PROBE_MISSING_RECALL_AFTER_INDEPENDENT_RECOGNITION");
+    return unresolved(target, observations, "PROBE_MISSING_RECALL");
   }
+
   if (recall.outcome === INDEPENDENT) {
-    return resolved(target, observations, "READY", "PROBE_INDEPENDENT_RECOGNITION_AND_RECALL");
+    if (recognition) {
+      return unresolved(
+        target,
+        observations,
+        "PROBE_RECOGNITION_AFTER_INDEPENDENT_RECALL",
+      );
+    }
+    return resolved(target, observations, "READY", "PROBE_INDEPENDENT_RECALL");
   }
-  if (recall.outcome === ASSISTED || FAILED.has(recall.outcome)) {
-    return resolved(target, observations, "STRENGTHEN", "PROBE_RECALL_NOT_INDEPENDENT");
+
+  if (recall.outcome !== ASSISTED && !FAILED.has(recall.outcome)) {
+    return unresolved(target, observations, "PROBE_UNMAPPED_RECALL_OUTCOME");
   }
-  return unresolved(target, observations, "PROBE_UNMAPPED_RECALL_OUTCOME");
+
+  if (!recognition) {
+    return unresolved(
+      target,
+      observations,
+      "PROBE_MISSING_RECOGNITION_AFTER_FAILED_RECALL",
+    );
+  }
+
+  if (RECOGNIZED.has(recognition.outcome)) {
+    return resolved(target, observations, "STRENGTHEN", "PROBE_RECALL_WEAK_RECOGNITION_HELD");
+  }
+  if (FAILED.has(recognition.outcome)) {
+    return resolved(target, observations, "BUILD", "PROBE_RECALL_AND_RECOGNITION_FAILED");
+  }
+  return unresolved(target, observations, "PROBE_UNMAPPED_RECOGNITION_OUTCOME");
 }
 
 function uniqueSkill(

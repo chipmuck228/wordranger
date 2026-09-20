@@ -375,8 +375,8 @@ describe("Context Lab client presentation", () => {
     expect(screen.queryByText(/spoon|\/spuːn\/|掌握|分数|mastery/i)).toBeNull();
     await user.click(screen.getByRole("button", { name: "开始检查" }));
     expect(await screen.findByText("1 / 4 个物品")).toBeTruthy();
-    expect(screen.getByText("这个物品对应哪个意思？")).toBeTruthy();
+    expect(screen.getByText("写出当前物品的英文单词")).toBeTruthy();
     expect(screen.queryByText("勺子 → 适合舀汤")).toBeNull();
-    expect(document.body.textContent).not.toMatch(/\bspoon\b/);
+    expect(document.body.textContent).not.toMatch(/\bsoup\b|\bspoon\b/);
   });
 });

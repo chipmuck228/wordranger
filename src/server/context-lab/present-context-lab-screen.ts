@@ -11,15 +11,18 @@ import type { ResolvedContextSnapshot } from "@/contextual-learning/candidate-v0
 import type { ExperienceRun } from "@/contextual-learning/candidate-v0/execution/types";
 import {
   CONTEXT_LAB_ERROR_CODES,
+  CONTEXT_LAB_PROBE_RECORDED_MESSAGE,
   CONTEXT_LAB_RECORDED_MESSAGE,
   type ContextLabCurrentScreen,
   type ContextLabErrorCode,
   type ContextLabProgress,
   type ContextLabRunHandle,
   type ContextLabTaskFeedback,
+  type ContextLabTaskPresentationMode,
   type PublicContextPresentation,
   type PublicProbeRoutingItem,
 } from "@/components/context-lab/types";
+import type { ContextualProbeSkill } from "@/contextual-learning/candidate-v0/probe/types";
 import { errorScreen } from "./context-lab-errors";
 import {
   contrastCaptionFor,
@@ -108,15 +111,69 @@ export function presentProbeIntroScreen(input: {
   };
 }
 
-export function presentProbeTaskContext(highlightedEntityId: string): PublicContextPresentation {
+export function presentProbeRecordedScreen(input: {
+  handle: ContextLabRunHandle;
+  progress: ContextLabProgress;
+}): ContextLabCurrentScreen {
+  return {
+    kind: "PROBE_TASK_RECORDED",
+    handle: input.handle,
+    progress: withProbeUnit(input.progress),
+    message: CONTEXT_LAB_PROBE_RECORDED_MESSAGE,
+  };
+}
+
+export function presentProbeFrozenTaskScreen(input: {
+  handle: ContextLabRunHandle;
+  task: PublicLearningTask;
+  skill: ContextualProbeSkill;
+  entityId: string;
+  progress: ContextLabProgress;
+}): ContextLabCurrentScreen {
+  const presentationMode: ContextLabTaskPresentationMode =
+    input.skill === "ACTIVE_RECALL" ? "SCENE_TARGET" : "TASK_ONLY";
+  return {
+    kind: "FROZEN_TASK_PREVIEW",
+    handle: input.handle,
+    task: input.task,
+    context:
+      presentationMode === "SCENE_TARGET"
+        ? presentProbeRecallContext(input.entityId)
+        : presentProbeRecognitionContext(),
+    progress: withProbeUnit(input.progress),
+    presentationMode,
+  };
+}
+
+export function presentProbeRecallContext(
+  highlightedEntityId: string,
+): PublicContextPresentation {
   const frameCopy = homeBreakfastFrameCopy();
   return {
     title: frameCopy.title,
     settingLabel: "先看看你已经会了哪些词",
-    instruction: "根据当前物品作答。还没有开始教学。",
+    instruction: "写出当前物品的英文单词。还没有开始教学。",
     entities: probeSceneEntities(),
     highlightedEntityIds: [highlightedEntityId],
   };
+}
+
+export function presentProbeRecognitionContext(): PublicContextPresentation {
+  const frameCopy = homeBreakfastFrameCopy();
+  return {
+    title: frameCopy.title,
+    settingLabel: "看看这个英文词表示什么",
+    instruction: "这是检查，不是教学。",
+    entities: [],
+    highlightedEntityIds: [],
+  };
+}
+
+/** @deprecated Use presentProbeRecallContext / presentProbeRecognitionContext. */
+export function presentProbeTaskContext(
+  highlightedEntityId: string,
+): PublicContextPresentation {
+  return presentProbeRecallContext(highlightedEntityId);
 }
 
 export function presentProbeSummaryScreen(input: {
