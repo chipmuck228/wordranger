@@ -18,6 +18,7 @@ import {
   type ContextLabRunHandle,
   type ContextLabTaskFeedback,
   type PublicContextPresentation,
+  type PublicProbeRoutingItem,
 } from "@/components/context-lab/types";
 import { errorScreen } from "./context-lab-errors";
 import {
@@ -44,8 +45,12 @@ export function presentGuidedScreen(input: {
     kind: "GUIDED",
     handle: input.handle,
     activity: input.activity,
-    context,
+    context: {
+      ...context,
+      settingLabel: "教学阶段：建立勺子的情境记忆",
+    },
     progress: input.progress,
+    teachingPhase: true,
   };
 }
 
@@ -72,6 +77,7 @@ export function presentRecordedScreen(input: {
   handle: ContextLabRunHandle;
   feedback: ContextLabTaskFeedback;
   progress: ContextLabProgress;
+  continueAvailable?: boolean;
 }): ContextLabCurrentScreen {
   return {
     kind: "FROZEN_TASK_RECORDED",
@@ -79,7 +85,71 @@ export function presentRecordedScreen(input: {
     feedback: input.feedback,
     recordedMessage: CONTEXT_LAB_RECORDED_MESSAGE,
     progress: input.progress,
+    continueAvailable: input.continueAvailable,
   };
+}
+
+export function presentProbeIntroScreen(input: {
+  handle: ContextLabRunHandle;
+  progress: ContextLabProgress;
+}): ContextLabCurrentScreen {
+  const frameCopy = homeBreakfastFrameCopy();
+  return {
+    kind: "PROBE_INTRO",
+    handle: input.handle,
+    context: {
+      title: frameCopy.title,
+      settingLabel: "先看看你已经会了哪些词",
+      instruction: "桌上有几件早餐物品。先检查，教学还没开始。",
+      entities: probeSceneEntities(),
+      highlightedEntityIds: [],
+    },
+    progress: withProbeUnit(input.progress),
+  };
+}
+
+export function presentProbeTaskContext(highlightedEntityId: string): PublicContextPresentation {
+  const frameCopy = homeBreakfastFrameCopy();
+  return {
+    title: frameCopy.title,
+    settingLabel: "先看看你已经会了哪些词",
+    instruction: "根据当前物品作答。还没有开始教学。",
+    entities: probeSceneEntities(),
+    highlightedEntityIds: [highlightedEntityId],
+  };
+}
+
+export function presentProbeSummaryScreen(input: {
+  handle: ContextLabRunHandle;
+  progress: ContextLabProgress;
+  items: PublicProbeRoutingItem[];
+  canHandoffToBuild: boolean;
+  pendingMessage: string | null;
+}): ContextLabCurrentScreen {
+  const frameCopy = homeBreakfastFrameCopy();
+  return {
+    kind: "PROBE_SUMMARY",
+    handle: input.handle,
+    context: {
+      title: frameCopy.title,
+      settingLabel: "先看看你已经会了哪些词",
+      instruction: "这是这次检查的下一步建议，不是永久掌握程度。",
+      entities: probeSceneEntities(),
+      highlightedEntityIds: [],
+    },
+    progress: withProbeUnit(input.progress),
+    items: input.items,
+    canHandoffToBuild: input.canHandoffToBuild,
+    pendingMessage: input.pendingMessage,
+  };
+}
+
+function probeSceneEntities(): PublicContextPresentation["entities"] {
+  return HOME_BREAKFAST_SCENE_ENTITY_IDS.map((entityId) => mappedMealEntity(entityId)!);
+}
+
+function withProbeUnit(progress: ContextLabProgress): ContextLabProgress {
+  return { ...progress, unit: progress.unit ?? "个物品" };
 }
 
 export function progressForIssuedRun(run: ExperienceRun): ContextLabProgress {

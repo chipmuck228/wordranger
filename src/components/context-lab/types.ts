@@ -32,6 +32,7 @@ export interface PublicContextPresentation {
 export interface ContextLabProgress {
   current: number;
   total: number;
+  unit?: string;
 }
 
 export interface ContextLabRunHandle {
@@ -39,13 +40,35 @@ export interface ContextLabRunHandle {
   revision: number;
 }
 
+export interface PublicProbeRoutingItem {
+  entityId: string;
+  label: string;
+  summary: string;
+}
+
 export type ContextLabCurrentScreen =
+  | {
+      kind: "PROBE_INTRO";
+      handle: ContextLabRunHandle;
+      context: PublicContextPresentation;
+      progress: ContextLabProgress;
+    }
+  | {
+      kind: "PROBE_SUMMARY";
+      handle: ContextLabRunHandle;
+      context: PublicContextPresentation;
+      progress: ContextLabProgress;
+      items: PublicProbeRoutingItem[];
+      canHandoffToBuild: boolean;
+      pendingMessage: string | null;
+    }
   | {
       kind: "GUIDED";
       handle: ContextLabRunHandle;
       activity: PublicGuidedActivity;
       context: PublicContextPresentation;
       progress: ContextLabProgress;
+      teachingPhase?: boolean;
     }
   | {
       kind: "FROZEN_TASK_PREVIEW";
@@ -60,6 +83,7 @@ export type ContextLabCurrentScreen =
       feedback: ContextLabTaskFeedback;
       recordedMessage: string;
       progress: ContextLabProgress;
+      continueAvailable?: boolean;
     }
   | {
       kind: "ERROR";

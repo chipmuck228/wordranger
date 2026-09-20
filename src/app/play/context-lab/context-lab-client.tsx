@@ -7,6 +7,8 @@ import { ContextLabRecordedNotice } from "@/components/context-lab/ContextLabRec
 import { ContextLabShell } from "@/components/context-lab/ContextLabShell";
 import { FrozenTaskPreview } from "@/components/context-lab/FrozenTaskPreview";
 import { GuidedActivityPanel } from "@/components/context-lab/GuidedActivityPanel";
+import { ProbeIntroPanel } from "@/components/context-lab/ProbeIntroPanel";
+import { ProbeSummaryPanel } from "@/components/context-lab/ProbeSummaryPanel";
 import { withClientGameTimeout } from "@/components/game/shared/bounded-game-operation";
 import {
   CONTEXT_LAB_ERROR_CODES,
@@ -23,6 +25,8 @@ type PresentationState =
   | "TRANSITIONING"
   | "FROZEN_TASK_PREVIEW"
   | "FROZEN_TASK_RECORDED"
+  | "PROBE_INTRO"
+  | "PROBE_SUMMARY"
   | "ERROR";
 
 export interface ContextLabClientOps {
@@ -38,8 +42,15 @@ export interface ContextLabClientOps {
     runId: string;
     revision: number;
     taskId: string;
-    action: { kind: "TEXT_INPUT"; value: string };
+    action:
+      | { kind: "TEXT_INPUT"; value: string }
+      | { kind: "CHOICE"; optionId: string };
     responseTimeMs?: number | null;
+  }) => Promise<ContextLabCurrentScreen>;
+  continueProbe?: (input: {
+    runId: string;
+    revision: number;
+    handoff?: boolean;
   }) => Promise<ContextLabCurrentScreen>;
 }
 
@@ -49,6 +60,7 @@ export function ContextLabClient({
   restart,
   loadCurrent,
   submitFrozenTask,
+  continueProbe,
   initialScreen,
 }: ContextLabClientOps & {
   initialScreen?: ContextLabCurrentScreen;
@@ -233,10 +245,62 @@ export function ContextLabClient({
     }
   }
 
-  async function submitFrozenIntent(intent: {
-    kind: "TEXT_INPUT";
-    value: string;
-  }): Promise<void> {
+  async function continueProbeIntent(handoff = false): Promise<void> {
+    if (
+      busy ||
+      mutationRef.current ||
+      transitioningRef.current ||
+      !continueProbe ||
+      !screen ||
+      (screen.kind !== "PROBE_INTRO" &&
+        screen.kind !== "FROZEN_TASK_RECORDED" &&
+        screen.kind !== "PROBE_SUMMARY")
+    ) {
+      return;
+    }
+    mutationRef.current = true;
+    setBusy(true);
+    setActionError(null);
+    const requestId = ++requestIdRef.current;
+    try {
+      const outcome = await withClientGameTimeout(
+        continueProbe({
+          runId: screen.handle.runId,
+          revision: screen.handle.revision,
+          handoff,
+        }),
+      );
+      if (requestId !== requestIdRef.current) {
+        mutationRef.current = false;
+        return;
+      }
+      setBusy(false);
+      mutationRef.current = false;
+      if (outcome.timedOut) {
+        setActionError(CONTEXT_LAB_NETWORK_MESSAGE);
+        return;
+      }
+      if (outcome.value.kind === "ERROR") {
+        applyScreen(outcome.value);
+        return;
+      }
+      revealScreen(outcome.value);
+    } catch {
+      if (requestId !== requestIdRef.current) {
+        mutationRef.current = false;
+        return;
+      }
+      setBusy(false);
+      mutationRef.current = false;
+      setActionError(CONTEXT_LAB_NETWORK_MESSAGE);
+    }
+  }
+
+  async function submitFrozenIntent(
+    intent:
+      | { kind: "TEXT_INPUT"; value: string }
+      | { kind: "CHOICE"; optionId: string },
+  ): Promise<void> {
     if (
       busy ||
       mutationRef.current ||
@@ -300,7 +364,10 @@ export function ContextLabClient({
   }
 
   const headerContext =
-    screen?.kind === "GUIDED" || screen?.kind === "FROZEN_TASK_PREVIEW"
+    screen?.kind === "GUIDED" ||
+    screen?.kind === "FROZEN_TASK_PREVIEW" ||
+    screen?.kind === "PROBE_INTRO" ||
+    screen?.kind === "PROBE_SUMMARY"
       ? screen.context
       : undefined;
 
@@ -329,6 +396,38 @@ export function ContextLabClient({
         ) : null}
         {screen?.kind === "ERROR" ? (
           <ContextLabErrorState screen={screen} />
+        ) : null}
+        {screen?.kind === "PROBE_INTRO" ? (
+          <>
+            <ContextLabHeader
+              title={screen.context.title}
+              settingLabel={screen.context.settingLabel}
+              progress={screen.progress}
+            />
+            <ProbeIntroPanel
+              screen={screen}
+              disabled={busy || transitioning}
+              onContinue={() => {
+                void continueProbeIntent(false);
+              }}
+            />
+          </>
+        ) : null}
+        {screen?.kind === "PROBE_SUMMARY" ? (
+          <>
+            <ContextLabHeader
+              title={screen.context.title}
+              settingLabel={screen.context.settingLabel}
+              progress={screen.progress}
+            />
+            <ProbeSummaryPanel
+              screen={screen}
+              disabled={busy || transitioning}
+              onHandoff={() => {
+                void continueProbeIntent(true);
+              }}
+            />
+          </>
         ) : null}
         {screen?.kind === "GUIDED" ? (
           <>
@@ -371,7 +470,17 @@ export function ContextLabClient({
               }
               progress={screen.progress}
             />
-            <ContextLabRecordedNotice screen={screen} />
+            <ContextLabRecordedNotice
+              screen={screen}
+              disabled={busy || transitioning}
+              onContinue={
+                screen.continueAvailable
+                  ? () => {
+                      void continueProbeIntent(false);
+                    }
+                  : undefined
+              }
+            />
           </>
         ) : null}
       </div>
@@ -386,8 +495,14 @@ function liveAnnouncement(screen: ContextLabCurrentScreen | null): string {
   if (screen.kind === "ERROR") {
     return screen.title;
   }
+  if (screen.kind === "PROBE_INTRO") {
+    return "先看看你已经会了哪些词。教学还没开始。";
+  }
+  if (screen.kind === "PROBE_SUMMARY") {
+    return "这次检查的下一步建议。";
+  }
   if (screen.kind === "FROZEN_TASK_PREVIEW") {
-    return `第 ${screen.progress.current} 步，共 ${screen.progress.total} 步。请输入英文单词。`;
+    return `第 ${screen.progress.current} 个物品，共 ${screen.progress.total} 个物品。`;
   }
   if (screen.kind === "FROZEN_TASK_RECORDED") {
     return `${screen.feedback.message} ${screen.recordedMessage}`;
@@ -414,6 +529,12 @@ function stateFor(
   }
   if (screen.kind === "FROZEN_TASK_RECORDED") {
     return "FROZEN_TASK_RECORDED";
+  }
+  if (screen.kind === "PROBE_INTRO") {
+    return "PROBE_INTRO";
+  }
+  if (screen.kind === "PROBE_SUMMARY") {
+    return "PROBE_SUMMARY";
   }
   return "GUIDED_STEP";
 }

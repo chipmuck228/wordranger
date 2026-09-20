@@ -27,9 +27,10 @@ export function ContextLabHeader({
         </div>
         <p
           className="text-muted-foreground shrink-0 pt-1 text-sm tabular-nums"
-          aria-label={`进度 ${progress.current} / ${progress.total}`}
+          aria-label={`进度 ${progress.current} / ${progress.total}${progress.unit ? ` ${progress.unit}` : ""}`}
         >
           {progress.current} / {progress.total}
+          {progress.unit ? ` ${progress.unit}` : ""}
         </p>
       </div>
     </header>

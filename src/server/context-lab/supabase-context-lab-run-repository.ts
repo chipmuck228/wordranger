@@ -47,7 +47,10 @@ export class SupabaseContextLabRunRepository implements ContextLabRunRepository 
         true,
       );
     }
-    const runState = serializeContextLabRunState(record.experienceRun);
+    const runState = serializeContextLabRunState({
+      experienceRun: record.experienceRun,
+      probe: record.probe ?? null,
+    });
     const { error } = await this.client.from("context_lab_runs").insert({
       id: record.id,
       user_id: record.userId,
@@ -110,12 +113,30 @@ export class SupabaseContextLabRunRepository implements ContextLabRunRepository 
     userId: string;
     expectedRevision: number;
     nextRun: ContextLabRunRecord["experienceRun"];
+    nextProbe?: ContextLabRunRecord["probe"];
     updatedAt: string;
   }): Promise<ContextLabSaveIfRevisionResult> {
     if (input.userId !== this.expectedUserId) {
       return { ok: false, reason: "NOT_FOUND" };
     }
-    const runState = serializeContextLabRunState(input.nextRun);
+    let probe = input.nextProbe;
+    if (probe === undefined) {
+      const existing = await this.get({
+        runId: input.runId,
+        userId: input.userId,
+      });
+      if (!existing) {
+        return { ok: false, reason: "NOT_FOUND" };
+      }
+      if (existing.revision !== input.expectedRevision) {
+        return { ok: false, reason: "REVISION_CONFLICT" };
+      }
+      probe = existing.probe;
+    }
+    const runState = serializeContextLabRunState({
+      experienceRun: input.nextRun,
+      probe: probe ?? null,
+    });
     const { data, error } = await this.client
       .from("context_lab_runs")
       .update({

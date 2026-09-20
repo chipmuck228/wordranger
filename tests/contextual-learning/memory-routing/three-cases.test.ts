@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { WeaknessType } from "@/domain/learning/weakness.types";
 import { lexemeIdFromCanonicalKey } from "@/lib/canonical-id";
-import { BUNDLED_LEXEME_BINDINGS } from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
+import {
+  BUNDLED_LEXEME_BINDINGS,
+  bundledBindingLexemeId,
+} from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
 import {
   BORROWING_SHARING_SCENE_CLUSTER,
   MEAL_SCENE_CLUSTER,
@@ -43,7 +46,9 @@ describe("three-case scene catalog and routing", () => {
       ].sort(),
     );
     const spoon = memberByFixture(MEAL_SCENE_CLUSTER.members, "lex-spoon");
-    expect(spoon.target.lexemeId).toBe(BUNDLED_LEXEME_BINDINGS.spoon.lexemeId);
+    expect(spoon.target.lexemeId).toBe(
+      bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.spoon),
+    );
     expect(spoon.target.lexemeId).toBe(lexemeIdFromCanonicalKey("lex-1311-1"));
     expect(spoon.target.lexemeId).toBe(
       lexemeIdFromCanonicalKey(BUNDLED_LEXEME_BINDINGS.spoon.canonicalKey),
@@ -104,9 +109,11 @@ describe("three-case scene catalog and routing", () => {
     expect(JSON.stringify(SCHOOL_CHALLENGE_SCENE_CLUSTER)).not.toContain(
       "has_general_ability",
     );
-    expect(ability.target.lexemeId).toBe(BUNDLED_LEXEME_BINDINGS.ability.lexemeId);
+    expect(ability.target.lexemeId).toBe(
+      bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.ability),
+    );
     expect(memberByFixture(SCHOOL_CHALLENGE_SCENE_CLUSTER.members, "lex-possible").target.lexemeId).toBe(
-      BUNDLED_LEXEME_BINDINGS.possible.lexemeId,
+      bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.possible),
     );
 
     const tryTarget = memberByFixture(

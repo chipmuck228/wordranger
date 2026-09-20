@@ -203,6 +203,7 @@ describe("Context Lab in-memory repository", () => {
         revision: 0,
         createdAt: "2026-09-20T00:00:00.000Z",
         updatedAt: "2026-09-20T00:00:00.000Z",
+        probe: null,
         experienceRun: {
           ...(loaded?.experienceRun as object),
           answerKey: { exactAcceptedTexts: ["spoon"] },

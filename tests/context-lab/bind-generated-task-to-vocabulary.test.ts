@@ -56,7 +56,7 @@ describe("bindGeneratedTaskToVocabulary", () => {
         protocolVersion: TASK_PROTOCOL_VERSION,
         generatorVersion: TASK_GENERATOR_VERSION,
         learningNeedId: "need",
-        lexemeId: "lex-fork",
+        lexemeId: "lex-not-in-catalog",
         targetSkill: VocabularySkill.ACTIVE_RECALL,
         taskType: LearningTaskType.ACTIVE_RECALL_TYPING,
         promptMode: PromptMode.MEANING_TO_WORD,
@@ -69,7 +69,7 @@ describe("bindGeneratedTaskToVocabulary", () => {
       },
       answerKey: {
         taskId: "00000000-0000-5000-8000-000000000098",
-        targetLexemeId: "lex-fork",
+        targetLexemeId: "lex-not-in-catalog",
         correctOptionIds: [],
         optionLexemeIds: {},
         exactAcceptedTexts: ["fork"],

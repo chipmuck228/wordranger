@@ -2,43 +2,26 @@ import "server-only";
 
 import type { GeneratedLearningTask } from "@/domain/tasks/generated-learning-task";
 import { lexemeIdFromCanonicalKey } from "@/lib/canonical-id";
+import {
+  findBundledLexemeBinding,
+  bundledBindingLexemeId,
+} from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
 import { bundledVocabularyRepository } from "@/server/runtime/bundled-vocabulary";
 
 /**
- * Meal Candidate fixtures use opaque IDs such as `lex-spoon`.
- * Frozen `learning_tasks.lexeme_id` is a UUID FK to `lexemes(id)`.
- * Bind only the known Meal BUILD typing target onto the bundled spoon lexeme.
+ * Bind a Candidate fixture lexeme onto bundled vocabulary.
+ * Identity is canonicalKey + live vocabulary lookup. Lemma is never identity.
  */
-const MEAL_FIXTURE_LEXEME_BINDINGS = [
-  {
-    fixtureLexemeId: "lex-spoon",
-    canonicalKey: "lex-1311-1",
-    lemma: "spoon",
-  },
-] as const;
-
 export function bindGeneratedTaskToVocabulary(
   task: GeneratedLearningTask,
 ): { ok: true; task: GeneratedLearningTask } | { ok: false; reason: "UNBOUND_LEXEME" } {
   const fixtureLexemeId = task.publicTask.lexemeId;
-  const binding = MEAL_FIXTURE_LEXEME_BINDINGS.find(
-    (item) => item.fixtureLexemeId === fixtureLexemeId,
-  );
-  if (!binding) {
-    if (isUuid(fixtureLexemeId)) {
-      return { ok: true, task };
-    }
+  const resolved = resolveContextualLexemeId(fixtureLexemeId);
+  if (!resolved) {
     return { ok: false, reason: "UNBOUND_LEXEME" };
   }
-
-  const lexeme = bundledVocabularyRepository().getLexemeByCanonicalKey(
-    binding.canonicalKey,
-  );
-  if (!lexeme || lexeme.lemma !== binding.lemma) {
-    return { ok: false, reason: "UNBOUND_LEXEME" };
-  }
-  if (lexeme.id !== lexemeIdFromCanonicalKey(binding.canonicalKey)) {
-    return { ok: false, reason: "UNBOUND_LEXEME" };
+  if (resolved === fixtureLexemeId) {
+    return { ok: true, task };
   }
 
   return {
@@ -46,32 +29,44 @@ export function bindGeneratedTaskToVocabulary(
     task: {
       publicTask: {
         ...task.publicTask,
-        lexemeId: lexeme.id,
+        lexemeId: resolved,
       },
       answerKey: {
         ...task.answerKey,
-        targetLexemeId: lexeme.id,
+        targetLexemeId: resolved,
       },
       generationTrace: {
         ...task.generationTrace,
-        targetLexemeId: lexeme.id,
-        candidateLexemeIds: [lexeme.id],
+        targetLexemeId: resolved,
+        candidateLexemeIds: [resolved],
       },
     },
   };
 }
 
 export function contextLabBoundLexemeId(fixtureLexemeId: string): string | null {
-  const binding = MEAL_FIXTURE_LEXEME_BINDINGS.find(
-    (item) => item.fixtureLexemeId === fixtureLexemeId,
-  );
+  return resolveContextualLexemeId(fixtureLexemeId);
+}
+
+export function resolveContextualLexemeId(fixtureOrUuid: string): string | null {
+  const binding = findBundledLexemeBinding(fixtureOrUuid);
   if (!binding) {
-    return isUuid(fixtureLexemeId) ? fixtureLexemeId : null;
+    return isUuid(fixtureOrUuid) ? fixtureOrUuid : null;
   }
+  const expectedId = bundledBindingLexemeId(binding);
   const lexeme = bundledVocabularyRepository().getLexemeByCanonicalKey(
     binding.canonicalKey,
   );
-  return lexeme?.lemma === binding.lemma ? lexeme.id : null;
+  if (!lexeme || lexeme.id !== expectedId) {
+    return null;
+  }
+  if (lexeme.id !== lexemeIdFromCanonicalKey(binding.canonicalKey)) {
+    return null;
+  }
+  if (lexeme.lemma !== binding.lemma) {
+    return null;
+  }
+  return lexeme.id;
 }
 
 function isUuid(value: string): boolean {

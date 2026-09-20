@@ -95,9 +95,9 @@ describe("Context Lab runtime policy", () => {
       { repository: isolated },
     );
     const screen = await runtime.createController().start();
-    expect(screen.kind).toBe("GUIDED");
-    if (screen.kind !== "GUIDED") {
-      throw new Error("guided");
+    expect(screen.kind === "PROBE_INTRO" || screen.kind === "GUIDED").toBe(true);
+    if (screen.kind !== "PROBE_INTRO" && screen.kind !== "GUIDED") {
+      throw new Error("started");
     }
     const fromIsolated = await isolated.get({
       runId: screen.handle.runId,

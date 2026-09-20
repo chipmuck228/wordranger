@@ -74,9 +74,28 @@ import { HOME_BREAKFAST_FRAME_ID } from "./meal-presentation-map";
 import {
   presentFrozenTaskScreen,
   presentGuidedScreen,
+  presentProbeIntroScreen,
+  presentProbeSummaryScreen,
+  presentProbeTaskContext,
   presentRecordedScreen,
   progressForIssuedRun,
 } from "./present-context-lab-screen";
+import { generateMealProbeTask } from "./generate-meal-probe-task";
+import { mealColdProbeTargets } from "./meal-probe-targets";
+import {
+  canHandoffSpoonBuild,
+  createMealProbeOrchestration,
+  nextProbeSkill,
+  publicDispositionLabel,
+  routingResultsForProbe,
+  spoonPendingMessage,
+  type MealProbeOrchestration,
+} from "./meal-probe-orchestration";
+import type { StudentAction } from "@/domain/tasks/student-action";
+import {
+  BUNDLED_LEXEME_BINDINGS,
+  bundledBindingLexemeId,
+} from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
 import { toGeneratedLearningTask } from "./to-generated-learning-task";
 
 const TYPING_CAPABILITY = FROZEN_RUNTIME_CAPABILITIES.find(
@@ -94,16 +113,16 @@ export interface MealContextLabControllerOptions {
   now?: () => string;
   createId?: () => string;
   planningInput?: ExperiencePlanningInput;
+  beginAt?: "PROBE" | "BUILD";
 }
 
 export interface SubmitContextLabFrozenTaskInput {
   runId: string;
   revision: number;
   taskId: string;
-  action: {
-    kind: "TEXT_INPUT";
-    value: string;
-  };
+  action:
+    | { kind: "TEXT_INPUT"; value: string }
+    | { kind: "CHOICE"; optionId: string };
   responseTimeMs?: number | null;
 }
 
@@ -116,6 +135,7 @@ export class MealContextLabController {
   private readonly now: () => string;
   private readonly createId: () => string;
   private readonly planningInput?: ExperiencePlanningInput;
+  private readonly beginAt: "PROBE" | "BUILD";
 
   constructor(options: MealContextLabControllerOptions) {
     this.repository = options.repository;
@@ -126,11 +146,15 @@ export class MealContextLabController {
     this.now = options.now ?? (() => new Date().toISOString());
     this.createId = options.createId ?? (() => crypto.randomUUID());
     this.planningInput = options.planningInput;
+    this.beginAt = options.beginAt ?? "PROBE";
   }
 
   async start(): Promise<ContextLabCurrentScreen> {
     if (!this.enabled) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.FEATURE_DISABLED);
+    }
+    if (this.beginAt === "PROBE") {
+      return this.startProbe();
     }
     const prepared = this.createIssuedRun();
     if ("screen" in prepared) {
@@ -143,6 +167,7 @@ export class MealContextLabController {
       schemaVersion: CONTEXT_LAB_RUN_SCHEMA_VERSION,
       experienceId: prepared.run.experienceId,
       experienceRun: prepared.run,
+      probe: null,
       revision: 0,
       createdAt,
       updatedAt: createdAt,
@@ -235,6 +260,7 @@ export class MealContextLabController {
         userId: this.userId,
         expectedRevision: input.revision,
         nextRun: issued.run,
+        nextProbe: record.probe,
         updatedAt: completedAt,
       }),
     );
@@ -266,6 +292,9 @@ export class MealContextLabController {
     });
     if (!record) {
       return notFoundRunScreen();
+    }
+    if (record.probe && isProbeSubmissionPhase(record.probe.phase)) {
+      return this.submitProbeTask(record, input);
     }
     if (record.userId !== this.userId) {
       return notFoundRunScreen();
@@ -304,7 +333,7 @@ export class MealContextLabController {
       });
     }
     const contract = assigned.task.publicTask.responseContract;
-    if (contract.kind !== "TEXT_INPUT") {
+    if (contract.kind !== "TEXT_INPUT" || input.action.kind !== "TEXT_INPUT") {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
         message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
         recoverable: true,
@@ -382,6 +411,44 @@ export class MealContextLabController {
     return this.presentStoredRun(record);
   }
 
+  async continueProbe(input: {
+    runId: string;
+    revision: number;
+    handoff?: boolean;
+  }): Promise<ContextLabCurrentScreen> {
+    if (!this.enabled) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.FEATURE_DISABLED);
+    }
+    const record = await this.repository.get({
+      runId: input.runId,
+      userId: this.userId,
+    });
+    if (!record) {
+      return notFoundRunScreen();
+    }
+    if (record.revision !== input.revision) {
+      return staleRunScreen();
+    }
+    if (!record.probe) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: true,
+      });
+    }
+    if (input.handoff) {
+      return this.handoffToBuild(record);
+    }
+    if (
+      record.probe.phase !== "PROBE_INTRO" &&
+      record.probe.phase !== "PROBE_FEEDBACK_RECORDED" &&
+      record.probe.phase !== "ROUTING_SUMMARY"
+    ) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: true,
+      });
+    }
+    return this.advanceProbe(record);
+  }
+
   private async assignIssuedTask(
     run: ExperienceRun,
     publicTask: PublicLearningTask,
@@ -457,6 +524,7 @@ export class MealContextLabController {
         userId: this.userId,
         expectedRevision: input.record.revision,
         nextRun: recorded.run,
+        nextProbe: input.record.probe,
         updatedAt: input.occurredAt,
       }),
     );
@@ -641,6 +709,12 @@ export class MealContextLabController {
   private async presentStoredRun(
     record: ContextLabRunRecord,
   ): Promise<ContextLabCurrentScreen> {
+    if (record.probe && record.probe.phase !== "BUILD_HANDOFF") {
+      if (record.probe.phase === "PROBE_TASK_ISSUED") {
+        return this.presentIssuedProbeTask(record);
+      }
+      return this.presentProbe(record);
+    }
     const run = record.experienceRun;
     const current = run.stepRuns[run.currentStepIndex];
     const progress = progressForIssuedRun(run);
@@ -706,6 +780,447 @@ export class MealContextLabController {
       });
     }
     return errorScreen(CONTEXT_LAB_ERROR_CODES.FROZEN_COMPILATION_FAILURE);
+  }
+
+  private async startProbe(): Promise<ContextLabCurrentScreen> {
+    const prepared = this.createUnissuedRun();
+    if ("screen" in prepared) {
+      return prepared.screen;
+    }
+    const createdAt = this.now();
+    const probe = createMealProbeOrchestration(mealColdProbeTargets());
+    await this.repository.create({
+      id: prepared.run.id,
+      userId: this.userId,
+      schemaVersion: CONTEXT_LAB_RUN_SCHEMA_VERSION,
+      experienceId: prepared.run.experienceId,
+      experienceRun: prepared.run,
+      probe,
+      revision: 0,
+      createdAt,
+      updatedAt: createdAt,
+    });
+    return presentProbeIntroScreen({
+      handle: { runId: prepared.run.id, revision: 0 },
+      progress: { current: 0, total: probe.targets.length },
+    });
+  }
+
+  private createUnissuedRun():
+    | { run: ExperienceRun }
+    | { screen: ContextLabCurrentScreen } {
+    const issued = this.createIssuedRun();
+    if ("screen" in issued) {
+      return issued;
+    }
+    return { run: resetIssuedRun(issued.run) };
+  }
+
+  private presentProbe(record: ContextLabRunRecord): ContextLabCurrentScreen {
+    const probe = record.probe;
+    if (!probe) {
+      return notFoundRunScreen();
+    }
+    const handle = { runId: record.id, revision: record.revision };
+    const progress = {
+      current: Math.min(probe.currentTargetIndex + 1, probe.targets.length),
+      total: probe.targets.length,
+      unit: "个物品",
+    };
+    if (probe.phase === "PROBE_INTRO") {
+      return presentProbeIntroScreen({ handle, progress: { current: 0, total: probe.targets.length } });
+    }
+    if (probe.phase === "ROUTING_SUMMARY" || probe.phase === "PROBE_COMPLETED") {
+      const results = routingResultsForProbe(probe);
+      return presentProbeSummaryScreen({
+        handle,
+        progress: { current: probe.targets.length, total: probe.targets.length },
+        items: results.map((result, index) => ({
+          entityId: probe.targets[index].entityId,
+          label: probe.targets[index].displayLabel,
+          summary: publicDispositionLabel(result.disposition),
+        })),
+        canHandoffToBuild: canHandoffSpoonBuild(results),
+        pendingMessage: spoonPendingMessage(results),
+      });
+    }
+    if (probe.phase === "PROBE_FEEDBACK_RECORDED") {
+      return presentRecordedScreen({
+        handle,
+        feedback: {
+          status: publicOutcomeStatus(probe.lastOutcome),
+          message: publicOutcomeMessage(probe.lastOutcome),
+        },
+        progress,
+        continueAvailable: true,
+      });
+    }
+    return notFoundRunScreen();
+  }
+
+  private async presentIssuedProbeTask(
+    record: ContextLabRunRecord,
+  ): Promise<ContextLabCurrentScreen> {
+    const probe = record.probe;
+    if (!probe?.issued) {
+      return notFoundRunScreen();
+    }
+    const assigned = await this.learningTasks.getTaskForEvaluation(probe.issued.taskId);
+    if (!assigned) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+        recoverable: false,
+      });
+    }
+    return {
+      kind: "FROZEN_TASK_PREVIEW",
+      handle: { runId: record.id, revision: record.revision },
+      task: assigned.task.publicTask,
+      context: presentProbeTaskContext(probe.issued.entityId),
+      progress: {
+        current: probe.currentTargetIndex + 1,
+        total: probe.targets.length,
+        unit: "个物品",
+      },
+    };
+  }
+
+  private async advanceProbe(
+    record: ContextLabRunRecord,
+  ): Promise<ContextLabCurrentScreen> {
+    const probe = record.probe;
+    if (!probe) {
+      return notFoundRunScreen();
+    }
+    const next = nextProbeSkill(probe);
+    if (next === "SUMMARY") {
+      const completed: MealProbeOrchestration = {
+        ...probe,
+        phase: "ROUTING_SUMMARY",
+        issued: null,
+        currentSkill: null,
+      };
+      const saved = await this.repository.saveIfRevision({
+        runId: record.id,
+        userId: this.userId,
+        expectedRevision: record.revision,
+        nextRun: record.experienceRun,
+        nextProbe: completed,
+        updatedAt: this.now(),
+      });
+      if (!saved.ok) {
+        return saved.reason === "REVISION_CONFLICT"
+          ? staleRunScreen()
+          : notFoundRunScreen();
+      }
+      return this.presentProbe({
+        ...record,
+        probe: completed,
+        revision: saved.revision,
+      });
+    }
+    const target = probe.targets[next.targetIndex];
+    const siblingLemmas = probe.targets
+      .filter((item) => item.target.lexemeId !== target.target.lexemeId)
+      .map((item) => lemmaForTarget(item.target.lexemeId));
+    const generated = await generateMealProbeTask({
+      runId: record.id,
+      target,
+      skill: next.skill,
+      siblingLemmas,
+      targetLemma: lemmaForTarget(target.target.lexemeId),
+      now: this.now(),
+    });
+    if (!generated.ok) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+        recoverable: false,
+      });
+    }
+    const bound = bindGeneratedTaskToVocabulary(generated.task);
+    if (!bound.ok) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+        recoverable: false,
+      });
+    }
+    const ensured = await ensureAssignedGeneratedTask({
+      tasks: this.learningTasks,
+      task: bound.task,
+      assignment: { userId: this.userId, sessionId: record.id },
+    });
+    if (!ensured.ok) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+        recoverable: false,
+      });
+    }
+    const nextProbe: MealProbeOrchestration = {
+      ...probe,
+      phase: "PROBE_TASK_ISSUED",
+      currentTargetIndex: next.targetIndex,
+      currentSkill: next.skill,
+      issued: {
+        taskId: bound.task.publicTask.id,
+        targetLexemeId: target.target.lexemeId,
+        senseId: target.target.senseId,
+        skill: next.skill,
+        entityId: target.entityId,
+      },
+    };
+    const saved = await this.repository.saveIfRevision({
+      runId: record.id,
+      userId: this.userId,
+      expectedRevision: record.revision,
+      nextRun: record.experienceRun,
+      nextProbe,
+      updatedAt: this.now(),
+    });
+    if (!saved.ok) {
+      return saved.reason === "REVISION_CONFLICT"
+        ? staleRunScreen()
+        : notFoundRunScreen();
+    }
+    return {
+      kind: "FROZEN_TASK_PREVIEW",
+      handle: { runId: record.id, revision: saved.revision },
+      task: bound.task.publicTask,
+      context: presentProbeTaskContext(target.entityId),
+      progress: {
+        current: next.targetIndex + 1,
+        total: probe.targets.length,
+        unit: "个物品",
+      },
+    };
+  }
+
+  private async submitProbeTask(
+    record: ContextLabRunRecord,
+    input: SubmitContextLabFrozenTaskInput,
+  ): Promise<ContextLabCurrentScreen> {
+    const probe = record.probe;
+    if (!probe) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+        recoverable: true,
+      });
+    }
+    if (record.revision !== input.revision) {
+      return staleRunScreen();
+    }
+    if (probe.phase === "PROBE_FEEDBACK_RECORDED") {
+      if (probe.observations.some((item) => item.taskId === input.taskId)) {
+        return this.presentProbe(record);
+      }
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+        recoverable: true,
+      });
+    }
+    if (probe.phase !== "PROBE_TASK_ISSUED" || !probe.issued) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+        recoverable: true,
+      });
+    }
+    if (probe.issued.taskId !== input.taskId) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+        recoverable: true,
+      });
+    }
+    const assigned = await this.learningTasks.getTaskForEvaluation(input.taskId);
+    if (!assigned) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+        recoverable: false,
+      });
+    }
+    const action = toStudentAction(input, this.now());
+    if (!action) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+        recoverable: true,
+      });
+    }
+    try {
+      const submitted = await withPersistenceTimeout(
+        submitTaskAction({
+          taskId: input.taskId,
+          action,
+          userId: this.userId,
+          sessionId: record.id,
+          gameId: CONTEXT_LAB_FROZEN_RENDERER_GAME_ID,
+          evidenceId: this.createId(),
+          learningTaskRepository: this.learningTasks,
+          learningRepository: this.learning,
+          now: action.occurredAt,
+          createId: this.createId,
+        }),
+      );
+      const nextProbe: MealProbeOrchestration = {
+        ...probe,
+        phase: "PROBE_FEEDBACK_RECORDED",
+        lastOutcome: submitted.evidence.outcome,
+        issued: null,
+        observations: [
+          ...probe.observations,
+          {
+            target: {
+              lexemeId: probe.issued.targetLexemeId,
+              senseId: probe.issued.senseId,
+            },
+            skill: probe.issued.skill,
+            taskId: input.taskId,
+            evidenceId: submitted.evidence.id,
+            outcome: submitted.evidence.outcome,
+          },
+        ],
+      };
+      const saved = await this.repository.saveIfRevision({
+        runId: record.id,
+        userId: this.userId,
+        expectedRevision: record.revision,
+        nextRun: record.experienceRun,
+        nextProbe,
+        updatedAt: this.now(),
+      });
+      if (!saved.ok) {
+        return this.reconcileProbeAfterEvidence(record, input.taskId);
+      }
+      return presentRecordedScreen({
+        handle: { runId: record.id, revision: saved.revision },
+        feedback: contextLabFeedbackFromEvaluation(submitted.evaluation),
+        progress: {
+          current: nextProbe.currentTargetIndex + 1,
+          total: nextProbe.targets.length,
+          unit: "个物品",
+        },
+        continueAvailable: true,
+      });
+    } catch (error) {
+      if (
+        error instanceof TaskProtocolError &&
+        error.code === "TASK_ALREADY_COMPLETED"
+      ) {
+        return this.reconcileProbeAfterEvidence(record, input.taskId);
+      }
+      if (error instanceof TaskProtocolError) {
+        return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
+          message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+          recoverable: true,
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async reconcileProbeAfterEvidence(
+    record: ContextLabRunRecord,
+    taskId: string,
+  ): Promise<ContextLabCurrentScreen> {
+    const latest =
+      (await this.repository.get({
+        runId: record.id,
+        userId: this.userId,
+      })) ?? record;
+    const probe = latest.probe;
+    if (!probe) {
+      return notFoundRunScreen();
+    }
+    if (probe.observations.some((item) => item.taskId === taskId)) {
+      return this.presentProbe(latest);
+    }
+    const evidence = await this.findTaskEvidence(latest, taskId);
+    if (!evidence || !probe.issued || probe.issued.taskId !== taskId) {
+      return staleRunScreen();
+    }
+    const nextProbe: MealProbeOrchestration = {
+      ...probe,
+      phase: "PROBE_FEEDBACK_RECORDED",
+      lastOutcome: evidence.outcome,
+      issued: null,
+      observations: [
+        ...probe.observations,
+        {
+          target: {
+            lexemeId: probe.issued.targetLexemeId,
+            senseId: probe.issued.senseId,
+          },
+          skill: probe.issued.skill,
+          taskId,
+          evidenceId: evidence.id,
+          outcome: evidence.outcome,
+        },
+      ],
+    };
+    const saved = await this.repository.saveIfRevision({
+      runId: latest.id,
+      userId: this.userId,
+      expectedRevision: latest.revision,
+      nextRun: latest.experienceRun,
+      nextProbe,
+      updatedAt: this.now(),
+    });
+    if (!saved.ok) {
+      const again = await this.repository.get({
+        runId: latest.id,
+        userId: this.userId,
+      });
+      return again ? this.presentStoredRun(again) : staleRunScreen();
+    }
+    return presentRecordedScreen({
+      handle: { runId: latest.id, revision: saved.revision },
+      feedback: contextLabFeedbackFromEvidence(evidence),
+      progress: {
+        current: nextProbe.currentTargetIndex + 1,
+        total: nextProbe.targets.length,
+        unit: "个物品",
+      },
+      continueAvailable: true,
+    });
+  }
+
+  private async handoffToBuild(
+    record: ContextLabRunRecord,
+  ): Promise<ContextLabCurrentScreen> {
+    const results = record.probe ? routingResultsForProbe(record.probe) : [];
+    if (!canHandoffSpoonBuild(results)) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: true,
+      });
+    }
+    const issued = issueCurrentStep({
+      run: record.experienceRun,
+      now: this.now(),
+      createId: frozenTaskCreateId(record.experienceRun),
+    });
+    if (!issued.ok) {
+      return errorScreen(mapIssueError(issued.error.code), {
+        detail: issued.error.code,
+      });
+    }
+    const nextProbe: MealProbeOrchestration = {
+      ...record.probe!,
+      phase: "BUILD_HANDOFF",
+    };
+    const saved = await this.repository.saveIfRevision({
+      runId: record.id,
+      userId: this.userId,
+      expectedRevision: record.revision,
+      nextRun: issued.run,
+      nextProbe,
+      updatedAt: this.now(),
+    });
+    if (!saved.ok) {
+      return saved.reason === "REVISION_CONFLICT"
+        ? staleRunScreen()
+        : notFoundRunScreen();
+    }
+    return this.toPublicScreen(issued.run, saved.revision, {
+      issuedActivity: issued.issuedActivity,
+      issuedTask: issued.issuedTask,
+    });
   }
 }
 
@@ -795,18 +1310,106 @@ function rejectMalformedSubmit(
     });
   }
   const actionKeys = Object.keys(input.action);
-  if (
-    actionKeys.some((key) => key !== "kind" && key !== "value") ||
-    input.action.kind !== "TEXT_INPUT" ||
-    typeof input.action.value !== "string" ||
-    input.action.value.trim().length === 0
-  ) {
+  const textOk =
+    input.action.kind === "TEXT_INPUT" &&
+    actionKeys.every((key) => key === "kind" || key === "value") &&
+    typeof input.action.value === "string" &&
+    input.action.value.trim().length > 0;
+  const choiceOk =
+    input.action.kind === "CHOICE" &&
+    actionKeys.every((key) => key === "kind" || key === "optionId") &&
+    typeof input.action.optionId === "string" &&
+    input.action.optionId.trim().length > 0;
+  if (!textOk && !choiceOk) {
     return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
       message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
       recoverable: true,
     });
   }
   return null;
+}
+
+function resetIssuedRun(run: ExperienceRun): ExperienceRun {
+  return {
+    ...run,
+    status: "READY",
+    currentStepIndex: 0,
+    stepRuns: run.stepRuns.map((step) => ({
+      stepId: step.stepId,
+      status: "PENDING",
+    })),
+    updatedAt: run.createdAt,
+  };
+}
+
+function isProbeSubmissionPhase(phase: MealProbeOrchestration["phase"]): boolean {
+  return phase === "PROBE_TASK_ISSUED" || phase === "PROBE_FEEDBACK_RECORDED";
+}
+
+function toStudentAction(
+  input: SubmitContextLabFrozenTaskInput,
+  occurredAt: string,
+): StudentAction | null {
+  if (input.action.kind === "TEXT_INPUT") {
+    return {
+      kind: "TEXT_INPUT",
+      value: input.action.value,
+      taskId: input.taskId,
+      occurredAt,
+      responseTimeMs: boundResponseTimeMs(input.responseTimeMs),
+      hintCount: 0,
+    };
+  }
+  if (input.action.kind === "CHOICE") {
+    return {
+      kind: "CHOICE",
+      optionId: input.action.optionId,
+      taskId: input.taskId,
+      occurredAt,
+      responseTimeMs: boundResponseTimeMs(input.responseTimeMs),
+      hintCount: 0,
+    };
+  }
+  return null;
+}
+
+function lemmaForTarget(lexemeId: string): string {
+  for (const binding of Object.values(BUNDLED_LEXEME_BINDINGS)) {
+    if (bundledBindingLexemeId(binding) === lexemeId) {
+      return binding.lemma;
+    }
+  }
+  return "";
+}
+
+function publicOutcomeStatus(
+  outcome: MealProbeOrchestration["lastOutcome"],
+): "CORRECT" | "ASSISTED" | "INCORRECT" | "SKIPPED" | "TIMEOUT" {
+  if (outcome === "INDEPENDENT_CORRECT") {
+    return "CORRECT";
+  }
+  if (outcome === "ASSISTED_CORRECT") {
+    return "ASSISTED";
+  }
+  if (outcome === "SKIPPED" || outcome === "TIMEOUT") {
+    return outcome;
+  }
+  return "INCORRECT";
+}
+
+function publicOutcomeMessage(
+  outcome: MealProbeOrchestration["lastOutcome"],
+): string {
+  if (outcome === "INDEPENDENT_CORRECT" || outcome === "ASSISTED_CORRECT") {
+    return "答对了！";
+  }
+  if (outcome === "SKIPPED") {
+    return "这题已跳过。";
+  }
+  if (outcome === "TIMEOUT") {
+    return "这题已超时。";
+  }
+  return "回答不正确。";
 }
 
 function persistErrorMessage(error: unknown): string {

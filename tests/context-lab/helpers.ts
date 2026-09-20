@@ -42,6 +42,7 @@ export function createMealLabHarness(options: {
   userId?: string;
   enabled?: boolean;
   createId?: () => string;
+  beginAt?: "PROBE" | "BUILD";
   repository?: InMemoryContextLabRunRepository;
   learningTasks?: InMemoryLearningTaskRepository;
   learning?: InMemoryLearningRepository;
@@ -58,6 +59,7 @@ export function createMealLabHarness(options: {
     enabled: options.enabled ?? true,
     now: () => "2026-09-20T00:00:00.000Z",
     createId: options.createId ?? (() => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`),
+    beginAt: options.beginAt ?? "BUILD",
   });
   const ops: ContextLabClientOps = {
     start: () => controller.start(),
@@ -65,6 +67,7 @@ export function createMealLabHarness(options: {
     restart: () => controller.restart(),
     loadCurrent: (input) => controller.loadCurrent(input),
     submitFrozenTask: (input) => controller.submitFrozenTask(input),
+    continueProbe: (input) => controller.continueProbe(input),
   };
   return { repository, learningTasks, learning, controller, ops };
 }

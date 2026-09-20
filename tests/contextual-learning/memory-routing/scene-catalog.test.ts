@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { loadVocabularyDataset } from "@/server/vocabulary/load-vocabulary-dataset";
 import { lexemeIdFromCanonicalKey } from "@/lib/canonical-id";
 import { lexemeSenseKey } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
-import { BUNDLED_LEXEME_BINDINGS } from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
+import {
+  BUNDLED_LEXEME_BINDINGS,
+  bundledBindingLexemeId,
+} from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
 import {
   MEAL_SCENE_CLUSTER,
   MEAL_UTENSIL_CONTRAST_CLUSTER,
@@ -42,7 +45,7 @@ describe("scene vocabulary catalog", () => {
   });
 
   it("allows the same spoon target to appear in two clusters", () => {
-    const spoonId = BUNDLED_LEXEME_BINDINGS.spoon.lexemeId;
+    const spoonId = bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.spoon);
     const mealSpoon = MEAL_SCENE_CLUSTER.members.find(
       (member) => member.target.lexemeId === spoonId,
     );
@@ -72,7 +75,10 @@ describe("scene vocabulary catalog", () => {
   });
 
   it("marks a polysemous member without senseId as AMBIGUOUS_SENSE", () => {
-    const plate = BUNDLED_LEXEME_BINDINGS.plate;
+    const plate = {
+      ...BUNDLED_LEXEME_BINDINGS.plate,
+      lexemeId: bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.plate),
+    };
     const ambiguous: SceneVocabularyCluster = {
       ...MEAL_SCENE_CLUSTER,
       id: "bogus-ambiguous",

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { loadContextLabPage } from "@/server/context-lab/load-context-lab-page";
 import {
   acknowledgeContextLabGuidedActivity,
+  continueContextLabProbe,
   loadCurrentMealContextLab,
   restartMealContextLab,
   startMealContextLab,
@@ -29,6 +30,7 @@ export default async function ContextLabPage() {
       restart={restartMealContextLab}
       loadCurrent={loadCurrentMealContextLab}
       submitFrozenTask={submitContextLabFrozenTask}
+      continueProbe={continueContextLabProbe}
     />
   );
 }

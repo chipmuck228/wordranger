@@ -3,7 +3,6 @@ import "server-only";
 import { CONTEXT_LAB_ERROR_CODES } from "@/components/context-lab/types";
 import { ContextLabError } from "./context-lab-errors";
 import {
-  assertNoAnswerKeyFields,
   parseContextLabRunRecord,
   serializeContextLabRunState,
 } from "./context-lab-run-state";
@@ -39,8 +38,14 @@ export class InMemoryContextLabRunRepository implements ContextLabRunRepository 
         true,
       );
     }
-    const stored = cloneRecord(record);
-    assertNoAnswerKeyFields(stored.experienceRun);
+    const stored = cloneRecord({
+      ...record,
+      probe: record.probe ?? null,
+    });
+    serializeContextLabRunState({
+      experienceRun: stored.experienceRun,
+      probe: stored.probe,
+    });
     this.rows.set(record.id, stored);
   }
 
@@ -58,7 +63,10 @@ export class InMemoryContextLabRunRepository implements ContextLabRunRepository 
       expectedUserId: input.userId,
       schemaVersion: stored.schemaVersion,
       experienceId: stored.experienceId,
-      runState: stored.experienceRun,
+      runState: serializeContextLabRunState({
+        experienceRun: stored.experienceRun,
+        probe: stored.probe ?? null,
+      }),
       revision: stored.revision,
       createdAt: stored.createdAt,
       updatedAt: stored.updatedAt,
@@ -70,6 +78,7 @@ export class InMemoryContextLabRunRepository implements ContextLabRunRepository 
     userId: string;
     expectedRevision: number;
     nextRun: ExperienceRunLike;
+    nextProbe?: ContextLabRunRecord["probe"];
     updatedAt: string;
   }): Promise<ContextLabSaveIfRevisionResult> {
     const stored = this.rows.get(input.runId);
@@ -79,8 +88,7 @@ export class InMemoryContextLabRunRepository implements ContextLabRunRepository 
     if (stored.revision !== input.expectedRevision) {
       return { ok: false, reason: "REVISION_CONFLICT" };
     }
-    const nextState = serializeContextLabRunState(input.nextRun);
-    if (nextState.id !== stored.id || nextState.experienceId !== stored.experienceId) {
+    if (input.nextRun.id !== stored.id || input.nextRun.experienceId !== stored.experienceId) {
       throw new ContextLabError(
         CONTEXT_LAB_ERROR_CODES.PLAN_VALIDATION_FAILURE,
         "Updated Context Lab run identity does not match the stored row",
@@ -89,7 +97,8 @@ export class InMemoryContextLabRunRepository implements ContextLabRunRepository 
     }
     const next: ContextLabRunRecord = {
       ...stored,
-      experienceRun: nextState,
+      experienceRun: input.nextRun,
+      probe: input.nextProbe !== undefined ? input.nextProbe : stored.probe ?? null,
       revision: input.expectedRevision + 1,
       updatedAt: input.updatedAt,
       schemaVersion: CONTEXT_LAB_RUN_SCHEMA_VERSION,
@@ -100,7 +109,10 @@ export class InMemoryContextLabRunRepository implements ContextLabRunRepository 
       expectedUserId: input.userId,
       schemaVersion: next.schemaVersion,
       experienceId: next.experienceId,
-      runState: next.experienceRun,
+      runState: serializeContextLabRunState({
+        experienceRun: next.experienceRun,
+        probe: next.probe,
+      }),
       revision: next.revision,
       createdAt: next.createdAt,
       updatedAt: next.updatedAt,

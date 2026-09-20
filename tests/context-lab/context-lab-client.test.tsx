@@ -362,4 +362,21 @@ describe("Context Lab client presentation", () => {
     ).toBeTruthy();
     expect(within(document.body).queryByText("汤")).toBeNull();
   });
+
+  it("shows Probe before teaching and keeps routing copy away from mastery language", async () => {
+    const harness = createMealLabHarness({ beginAt: "PROBE" });
+    const initialScreen = await harness.controller.start();
+    const user = userEvent.setup();
+    render(
+      <ContextLabClient {...harness.ops} initialScreen={initialScreen} />,
+    );
+    expect(screen.getByText("先看看你已经会了哪些词")).toBeTruthy();
+    expect(screen.queryByText("勺子 → 适合舀汤")).toBeNull();
+    expect(screen.queryByText(/spoon|\/spuːn\/|掌握|分数|mastery/i)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "开始检查" }));
+    expect(await screen.findByText("1 / 4 个物品")).toBeTruthy();
+    expect(screen.getByText("这个物品对应哪个意思？")).toBeTruthy();
+    expect(screen.queryByText("勺子 → 适合舀汤")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/\bspoon\b/);
+  });
 });

@@ -53,6 +53,35 @@ describe("scene vocabulary coverage auditor", () => {
     expect(JSON.stringify(second)).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
+  it("does not let unknown lexeme IDs occupy assigned or unassigned counts", () => {
+    const dataset = loadVocabularyDataset();
+    const invalid: SceneVocabularyCluster = {
+      ...MEAL_SCENE_CLUSTER,
+      id: "unknowns-only",
+      members: [
+        {
+          target: { lexemeId: "missing-a", senseId: "a#1" },
+          lexemeCanonicalKey: "lex-missing-a",
+          roleId: "EATING_TOOL",
+          roleDescription: "invalid",
+        },
+        {
+          target: { lexemeId: "missing-b", senseId: "b#1" },
+          lexemeCanonicalKey: "lex-missing-b",
+          roleId: "EATING_TOOL",
+          roleDescription: "invalid",
+        },
+      ],
+    };
+    const report = auditSceneVocabularyCoverage(dataset.lexemes, [invalid]);
+    expect(report.assignedLexemes).toBe(0);
+    expect(report.unassignedLexemes).toBe(report.totalLexemes);
+    expect(report.assignedLexemes + report.unassignedLexemes).toBe(
+      report.totalLexemes,
+    );
+    expect(report.invalidAssignments.length).toBeGreaterThan(0);
+  });
+
   it("fails closed on an invalid assignment", () => {
     const dataset = loadVocabularyDataset();
     const invalid: SceneVocabularyCluster = {

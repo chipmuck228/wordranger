@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ExperienceRun } from "@/contextual-learning/candidate-v0/execution/types";
+import type { MealProbeOrchestration } from "./meal-probe-orchestration";
 
 export const CONTEXT_LAB_RUN_SCHEMA_VERSION = "candidate-v0" as const;
 
@@ -10,6 +11,7 @@ export interface ContextLabRunRecord {
   schemaVersion: typeof CONTEXT_LAB_RUN_SCHEMA_VERSION;
   experienceId: string;
   experienceRun: ExperienceRun;
+  probe: MealProbeOrchestration | null;
   revision: number;
   createdAt: string;
   updatedAt: string;
@@ -32,6 +34,7 @@ export interface ContextLabRunRepository {
     userId: string;
     expectedRevision: number;
     nextRun: ExperienceRun;
+    nextProbe?: MealProbeOrchestration | null;
     updatedAt: string;
   }): Promise<ContextLabSaveIfRevisionResult>;
 }

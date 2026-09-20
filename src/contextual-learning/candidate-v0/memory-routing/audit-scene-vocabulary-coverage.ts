@@ -28,13 +28,15 @@ export function auditSceneVocabularyCoverage(
     orderedVocabulary,
   );
 
+  const knownIds = new Set(orderedVocabulary.map((lexeme) => lexeme.id));
   const assignedIds = new Set<string>();
   const clusterCounts: Record<string, number> = {};
   for (const cluster of orderedClusters) {
     clusterCounts[cluster.id] = cluster.members.length;
     for (const member of cluster.members) {
-      if (member.target.lexemeId) {
-        assignedIds.add(member.target.lexemeId);
+      const lexemeId = member.target.lexemeId;
+      if (lexemeId && knownIds.has(lexemeId)) {
+        assignedIds.add(lexemeId);
       }
     }
   }

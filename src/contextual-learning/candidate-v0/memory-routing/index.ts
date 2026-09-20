@@ -6,7 +6,13 @@
  */
 
 export { auditSceneVocabularyCoverage } from "./audit-scene-vocabulary-coverage";
-export { BUNDLED_LEXEME_BINDINGS, BUNDLED_SPOON_LEXEME_ID } from "./bundled-lexeme-bindings";
+export {
+  BUNDLED_LEXEME_BINDINGS,
+  BUNDLED_SPOON_LEXEME_ID,
+  bundledBindingLexemeId,
+  findBundledLexemeBinding,
+  listBundledLexemeBindings,
+} from "./bundled-lexeme-bindings";
 export { planningModeFromRoutingDecision } from "./planning-mode";
 export { routeContextualMemory } from "./route-contextual-memory";
 export {

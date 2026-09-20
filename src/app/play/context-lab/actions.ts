@@ -40,14 +40,27 @@ export async function loadCurrentMealContextLab(input: {
   return runController((controller) => controller.loadCurrent(input));
 }
 
+export async function continueContextLabProbe(input: {
+  runId: string;
+  revision: number;
+  handoff?: boolean;
+}): Promise<ContextLabCurrentScreen> {
+  return runController((controller) =>
+    controller.continueProbe({
+      runId: input.runId,
+      revision: input.revision,
+      handoff: input.handoff,
+    }),
+  );
+}
+
 export async function submitContextLabFrozenTask(input: {
   runId: string;
   revision: number;
   taskId: string;
-  action: {
-    kind: "TEXT_INPUT";
-    value: string;
-  };
+  action:
+    | { kind: "TEXT_INPUT"; value: string }
+    | { kind: "CHOICE"; optionId: string };
   responseTimeMs?: number | null;
 }): Promise<ContextLabCurrentScreen> {
   return runController((controller) =>

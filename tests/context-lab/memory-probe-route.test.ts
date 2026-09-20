@@ -35,7 +35,7 @@ describe("Context Lab memory probe gate", () => {
     });
     const seeded = createContextLabRuntime();
     const screen = await seeded.createController().start();
-    expect(screen.kind).toBe("GUIDED");
+    expect(screen.kind === "PROBE_INTRO" || screen.kind === "GUIDED").toBe(true);
     expect(getMemoryContextLabStoresForTests()).not.toBeNull();
 
     expect(isContextLabE2eProbeEnabled()).toBe(false);
@@ -46,8 +46,8 @@ describe("Context Lab memory probe gate", () => {
     expect(await getResponse.json()).toEqual({ ok: false });
     expect(await postResponse.json()).toEqual({ ok: false });
 
-    if (screen.kind !== "GUIDED") {
-      throw new Error("guided");
+    if (screen.kind !== "PROBE_INTRO" && screen.kind !== "GUIDED") {
+      throw new Error("started");
     }
     const stored = await seeded.contextRuns.get({
       runId: screen.handle.runId,

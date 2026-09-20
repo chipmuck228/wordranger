@@ -8,7 +8,10 @@
 import { MEAL_SENSE } from "../fixtures/meal/knowledge";
 import { SCHOOL_SENSE } from "../fixtures/school-challenge/knowledge";
 import { BORROW_SENSE } from "../fixtures/borrowing-sharing/knowledge";
-import { BUNDLED_LEXEME_BINDINGS } from "./bundled-lexeme-bindings";
+import {
+  BUNDLED_LEXEME_BINDINGS,
+  bundledBindingLexemeId,
+} from "./bundled-lexeme-bindings";
 import {
   BORROW_SCENE_ROLE_IDS,
   MEAL_SCENE_ROLE_IDS,
@@ -36,7 +39,7 @@ function member(
 ): SceneVocabularyMember {
   const binding = BUNDLED_LEXEME_BINDINGS[key];
   return {
-    target: { lexemeId: binding.lexemeId, senseId },
+    target: { lexemeId: bundledBindingLexemeId(binding), senseId },
     lexemeCanonicalKey: binding.canonicalKey,
     roleId,
     roleDescription,
