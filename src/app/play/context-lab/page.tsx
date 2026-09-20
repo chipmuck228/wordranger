@@ -5,6 +5,7 @@ import {
   loadCurrentMealContextLab,
   restartMealContextLab,
   startMealContextLab,
+  submitContextLabFrozenTask,
 } from "./actions";
 import { ContextLabClient } from "./context-lab-client";
 
@@ -27,6 +28,7 @@ export default async function ContextLabPage() {
       acknowledge={acknowledgeContextLabGuidedActivity}
       restart={restartMealContextLab}
       loadCurrent={loadCurrentMealContextLab}
+      submitFrozenTask={submitContextLabFrozenTask}
     />
   );
 }

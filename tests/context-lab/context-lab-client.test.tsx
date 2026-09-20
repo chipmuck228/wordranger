@@ -7,6 +7,26 @@ import { ContextLabClient } from "@/app/play/context-lab/context-lab-client";
 import { CONTEXT_LAB_ERROR_CODES } from "@/components/context-lab/types";
 import { createMealLabHarness } from "./helpers";
 
+async function acknowledgeUntilPreview(
+  harness: ReturnType<typeof createMealLabHarness>,
+) {
+  let screenState = await harness.controller.start();
+  for (let index = 0; index < 3; index += 1) {
+    if (screenState.kind !== "GUIDED") {
+      throw new Error("guided");
+    }
+    screenState = await harness.controller.acknowledge({
+      runId: screenState.handle.runId,
+      revision: screenState.handle.revision,
+      activityId: screenState.activity.id,
+    });
+  }
+  if (screenState.kind !== "FROZEN_TASK_PREVIEW") {
+    throw new Error("frozen");
+  }
+  return screenState;
+}
+
 beforeEach(() => {
   window.matchMedia = (query: string) =>
     ({
@@ -185,7 +205,7 @@ describe("Context Lab client presentation", () => {
     expect(screen.getByText("桌上有汤、碗、勺子和叉子。先看看这些物品。")).toBeTruthy();
   });
 
-  it("preview input remains presentation-only and is never sent", async () => {
+  it("frozen preview submits renderer intent only and does not grade locally", async () => {
     const harness = createMealLabHarness();
     let screenState = await harness.controller.start();
     if (screenState.kind !== "GUIDED") {
@@ -214,25 +234,85 @@ describe("Context Lab client presentation", () => {
     });
     const acknowledge = vi.fn(harness.ops.acknowledge);
     const restart = vi.fn(harness.ops.restart);
+    const submitFrozenTask = vi.fn(harness.ops.submitFrozenTask);
     const user = userEvent.setup();
     render(
       <ContextLabClient
         {...harness.ops}
         acknowledge={acknowledge}
         restart={restart}
+        submitFrozenTask={submitFrozenTask}
         initialScreen={preview}
       />,
     );
-    const input = screen.getByLabelText("英文答案预览");
+    expect(screen.getByLabelText("英文答案")).toBeTruthy();
+    expect(
+      document.querySelector("form")?.innerHTML,
+    ).toContain("英文答案");
+    const input = screen.getByLabelText("英文答案");
     await user.type(input, "spoon");
     expect((input as HTMLInputElement).value).toBe("spoon");
     expect(acknowledge).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "提交功能将在下一阶段接入" }));
+    await user.click(screen.getByRole("button", { name: "提交" }));
+    expect(submitFrozenTask).toHaveBeenCalledTimes(1);
+    expect(submitFrozenTask.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        runId: preview.kind === "FROZEN_TASK_PREVIEW" ? preview.handle.runId : "",
+        revision: preview.kind === "FROZEN_TASK_PREVIEW" ? preview.handle.revision : -1,
+        taskId: preview.kind === "FROZEN_TASK_PREVIEW" ? preview.task.id : "",
+        action: { kind: "TEXT_INPUT", value: "spoon" },
+      }),
+    );
+    expect(submitFrozenTask.mock.calls[0]?.[0]).not.toHaveProperty("userId");
+    expect(submitFrozenTask.mock.calls[0]?.[0]).not.toHaveProperty("sessionId");
+    expect(submitFrozenTask.mock.calls[0]?.[0]).not.toHaveProperty("gameId");
+    expect(submitFrozenTask.mock.calls[0]?.[0]).not.toHaveProperty("isCorrect");
     expect(acknowledge).not.toHaveBeenCalled();
-    expect(restart).not.toHaveBeenCalled();
+    expect(await screen.findByText("答对了！")).toBeTruthy();
+    expect(screen.getByText("这次练习已记录。")).toBeTruthy();
+    expect(screen.queryByText(/已经掌握|永远记住了|学习完成|能力提升/)).toBeNull();
+  });
+
+  it("submit disables immediately and network failure keeps the typed value", async () => {
+    const harness = createMealLabHarness();
+    const preview = await acknowledgeUntilPreview(harness);
+    let release: ((error: Error) => void) | undefined;
+    const submitFrozenTask = vi.fn(
+      () =>
+        new Promise<never>((_, reject) => {
+          release = reject;
+        }),
+    );
+    render(
+      <ContextLabClient
+        {...harness.ops}
+        submitFrozenTask={submitFrozenTask}
+        initialScreen={preview}
+      />,
+    );
+    const input = screen.getByLabelText("英文答案") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "spoon" } });
+    fireEvent.click(screen.getByRole("button", { name: "提交" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交" }));
+    expect(submitFrozenTask).toHaveBeenCalledTimes(1);
     expect(
-      document.querySelector('[data-pilot-state="FROZEN_TASK_HANDOFF_READY"]'),
-    ).toBeTruthy();
+      (await screen.findByRole("button", { name: "提交" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    release?.(new Error("network down"));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect((screen.getByLabelText("英文答案") as HTMLInputElement).value).toBe("spoon");
+  });
+
+  it("restart after a recorded task creates a new run", async () => {
+    const harness = createMealLabHarness();
+    const preview = await acknowledgeUntilPreview(harness);
+    const user = userEvent.setup();
+    render(<ContextLabClient {...harness.ops} initialScreen={preview} />);
+    await user.type(screen.getByLabelText("英文答案"), "spoon");
+    await user.click(screen.getByRole("button", { name: "提交" }));
+    expect(await screen.findByText("这次练习已记录。")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "重新体验" }));
+    expect(await screen.findByText("1 / 4")).toBeTruthy();
   });
 
   it("step 2 highlights only grounded entities", async () => {
@@ -263,6 +343,9 @@ describe("Context Lab client presentation", () => {
           throw new Error("unused");
         }}
         restart={async () => {
+          throw new Error("unused");
+        }}
+        submitFrozenTask={async () => {
           throw new Error("unused");
         }}
         initialScreen={{

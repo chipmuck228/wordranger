@@ -29,12 +29,14 @@ describe("Meal Context Lab current-step presentation", () => {
   });
 
   it("renders a controlled error when the typing capability is missing", async () => {
-    const { repository } = createMealLabHarness();
+    const { repository, learningTasks, learning } = createMealLabHarness();
     const { MealContextLabController } = await import(
       "@/server/context-lab/meal-context-lab-controller"
     );
     const controller = new MealContextLabController({
       repository,
+      learningTasks,
+      learning,
       planningInput: mealBuildPlanningInput([]),
     });
     const screen = await controller.start();

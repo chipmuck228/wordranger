@@ -26,6 +26,21 @@ const SERVER_ROOTS = [
   join(process.cwd(), "src/app/play/context-lab/actions.ts"),
 ];
 
+const SUBMIT_ADAPTER = join(
+  process.cwd(),
+  "src/server/context-lab/meal-context-lab-controller.ts",
+);
+const RUNTIME_ADAPTER = join(
+  process.cwd(),
+  "src/server/context-lab/create-context-lab-runtime.ts",
+);
+const TASK_ASSIGN_ADAPTERS = [
+  join(process.cwd(), "src/server/context-lab/ensure-assigned-generated-task.ts"),
+  join(process.cwd(), "src/server/context-lab/to-generated-learning-task.ts"),
+  SUBMIT_ADAPTER,
+  RUNTIME_ADAPTER,
+];
+
 const FORBIDDEN_IMPORTS = [
   "default-task-evaluator",
   "TaskEvaluator",
@@ -85,9 +100,6 @@ describe("Context Lab import boundary", () => {
           "EvidenceFactory",
           "process-evidence",
           "processEvidence",
-          "submit-task-action",
-          "task-answer-key",
-          "LearningRepository",
           "create-daily-training",
           "@/domain/scheduler",
           "@/server/scheduler",
@@ -95,6 +107,31 @@ describe("Context Lab import boundary", () => {
         ]) {
           expect(line, file).not.toContain(moduleName);
         }
+        if (file !== SUBMIT_ADAPTER) {
+          expect(line, file).not.toContain("submit-task-action");
+        }
+        if (!TASK_ASSIGN_ADAPTERS.includes(file)) {
+          expect(line, file).not.toContain("task-answer-key");
+          expect(line, file).not.toContain("LearningRepository");
+          expect(line, file).not.toContain("learning-repository");
+        }
+      }
+    }
+  });
+
+  it("Candidate execution still does not import the frozen submission pipeline", () => {
+    const executionRoot = join(
+      process.cwd(),
+      "src/contextual-learning/candidate-v0",
+    );
+    for (const file of filesFrom([executionRoot])) {
+      const lines = importLines(file);
+      for (const line of lines) {
+        expect(line, file).not.toContain("submit-task-action");
+        expect(line, file).not.toContain("default-task-evaluator");
+        expect(line, file).not.toContain("evidence-factory");
+        expect(line, file).not.toContain("process-evidence");
+        expect(line, file).not.toContain("processEvidence");
       }
     }
   });

@@ -227,12 +227,14 @@ describe("Meal Context Lab controller", () => {
   });
 
   it("planner failure returns a controlled error without a run", async () => {
-    const { repository } = createMealLabHarness();
+    const { repository, learningTasks, learning } = createMealLabHarness();
     const { MealContextLabController } = await import(
       "@/server/context-lab/meal-context-lab-controller"
     );
     const screen = await new MealContextLabController({
       repository,
+      learningTasks,
+      learning,
       planningInput: mealBuildPlanningInput([]),
     }).start();
     expect(screen.kind).toBe("ERROR");
@@ -246,6 +248,7 @@ describe("Meal Context Lab controller", () => {
     expect(ACTIONS_SOURCE).toContain("startMealContextLab");
     expect(ACTIONS_SOURCE).toContain("acknowledgeContextLabGuidedActivity");
     expect(ACTIONS_SOURCE).toContain("restartMealContextLab");
+    expect(ACTIONS_SOURCE).toContain("submitContextLabFrozenTask");
     expect(ACTIONS_SOURCE).not.toMatch(/userId\s*:/);
     expect(ACTIONS_SOURCE).toContain("createContextLabRuntime");
   });

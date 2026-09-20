@@ -48,6 +48,31 @@ function collectContextLabMutations(page: Page): string[] {
   return urls;
 }
 
+async function resetMemoryProbe(page: Page): Promise<void> {
+  await page.request.post("/play/context-lab/memory-probe");
+}
+
+async function memoryEvidence(page: Page): Promise<{
+  evidenceCount: number;
+  items: Array<{ taskId: string | null; sessionId: string; gameId: string; outcome: string }>;
+}> {
+  const response = await page.request.get("/play/context-lab/memory-probe");
+  expect(response.ok()).toBeTruthy();
+  return response.json();
+}
+
+async function walkGuidedToPreview(page: Page): Promise<void> {
+  await expect(page.getByRole("heading", { name: "早餐时间" })).toBeVisible();
+  await expect(page.getByText("1 / 4")).toBeVisible();
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page.getByText("勺子 → 适合舀汤")).toBeVisible();
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page.getByText("勺子：舀取汤或柔软食物")).toBeVisible();
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page.getByLabel("英文答案")).toBeVisible();
+  await expect(page.getByText("4 / 4")).toBeVisible();
+}
+
 async function assertNoOverflow(page: Page): Promise<void> {
   const overflow = await page.evaluate(() => {
     const root = document.documentElement;
@@ -69,7 +94,7 @@ async function assertNoForbiddenPayload(page: Page): Promise<void> {
   for (const field of FORBIDDEN_PAYLOAD) {
     expect(payload, field).not.toContain(field);
   }
-  expect(payload).not.toMatch(/答对了|掌握了|完成学习/);
+  expect(payload).not.toMatch(/已经掌握|永远记住了|学习完成|能力提升/);
 
   const storage = await page.evaluate(() => ({
     search: window.location.search,
@@ -92,7 +117,7 @@ async function assertNoForbiddenPayload(page: Page): Promise<void> {
     /answerKey|exactAcceptedTexts|semanticAcceptedTexts/,
   );
   expect(storage.hidden.join("")).not.toMatch(
-    /answerKey|exactAcceptedTexts|spoon/,
+    /answerKey|exactAcceptedTexts/,
   );
   expect(storage.dataAttrs.join("\n")).not.toMatch(
     /answerKey|exactAcceptedTexts|semanticAcceptedTexts/,
@@ -127,22 +152,24 @@ async function walkMealFlow(page: Page, prefix: string): Promise<void> {
   await capture(page, `${prefix}-03-contrast`);
 
   await page.getByRole("button", { name: "继续" }).click();
-  await expect(page.getByLabel("英文答案预览")).toBeVisible();
+  await expect(page.getByLabel("英文答案")).toBeVisible();
   await expect(page.getByText("4 / 4")).toBeVisible();
   await assertNoOverflow(page);
   await capture(page, `${prefix}-04-preview`);
 
-  await page.getByRole("button", { name: "提交功能将在下一阶段接入" }).click();
-  await expect(page.locator('[data-pilot-state="FROZEN_TASK_HANDOFF_READY"]')).toBeVisible();
+  await page.getByLabel("英文答案").fill("spoon");
+  await page.getByRole("button", { name: "提交" }).click();
+  await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
   await assertNoOverflow(page);
-  await capture(page, `${prefix}-05-handoff`);
+  await capture(page, `${prefix}-05-recorded`);
 }
 
-test("Context Lab Meal BUILD presentation reaches the frozen-task boundary", async ({
+test("Context Lab Meal BUILD presentation reaches the assigned frozen task", async ({
   page,
 }) => {
   const prohibited = collectProhibited(page);
   const mutations = collectContextLabMutations(page);
+  await resetMemoryProbe(page);
 
   await page.goto("/play/context-lab");
   await expect(page.getByText("早餐时间")).toBeVisible();
@@ -154,27 +181,25 @@ test("Context Lab Meal BUILD presentation reaches the frozen-task boundary", asy
 
   await page.getByRole("button", { name: "继续" }).click();
   await expect(page.getByText("勺子 → 适合舀汤")).toBeVisible();
-  await expect(page.getByText(/答对了|掌握了|完成学习|挑战成功/)).toHaveCount(0);
+  await expect(page.getByText(/掌握了|完成学习|挑战成功/)).toHaveCount(0);
   await page.getByRole("button", { name: "继续" }).click();
   await expect(page.getByText("勺子：舀取汤或柔软食物")).toBeVisible();
   await page.getByRole("button", { name: "继续" }).click();
 
-  const input = page.getByLabel("英文答案预览");
+  const input = page.getByLabel("英文答案");
   await expect(input).toBeVisible();
   await input.fill("spoon");
-  await input.press("Enter");
-  await expect(page.locator('[data-pilot-state="FROZEN_TASK_HANDOFF_READY"]')).toHaveCount(0);
-  await expect(page.getByText(/答对了|掌握了|完成学习|挑战成功/)).toHaveCount(0);
-
-  await page.getByRole("button", { name: "提交功能将在下一阶段接入" }).click();
-  const boundary = page.locator('[data-pilot-state="FROZEN_TASK_HANDOFF_READY"]');
-  await expect(boundary).toBeVisible();
-  await expect(boundary.getByText(/交接点/)).toBeVisible();
-  await expect(
-    boundary.getByText(/下一阶段会通过 WordRanger 原有提交与证据流程完成这道题/),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "提交" }).click();
+  const recorded = page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]');
+  await expect(recorded).toBeVisible();
+  await expect(recorded.getByText("答对了！", { exact: true })).toBeVisible();
+  await expect(recorded.getByText("这次练习已记录。", { exact: true })).toBeVisible();
+  await expect(page.getByText(/已经掌握|永远记住了|学习完成|能力提升/)).toHaveCount(0);
 
   await assertNoForbiddenPayload(page);
+  const evidence = await memoryEvidence(page);
+  expect(evidence.evidenceCount).toBe(1);
+  expect(evidence.items[0]?.gameId).toBe("RANGER_TRIAL");
 
   const firstRunProgress = page.getByText("1 / 4");
   await page.getByRole("button", { name: "重新体验" }).click();
@@ -186,7 +211,7 @@ test("Context Lab Meal BUILD presentation reaches the frozen-task boundary", asy
   ).toBeVisible();
 
   expect(prohibited).toEqual([]);
-  expect(mutations.length).toBeGreaterThanOrEqual(4);
+  expect(mutations.length).toBeGreaterThanOrEqual(5);
 });
 
 test("Context Lab uses one start and one acknowledgement per Guided step", async ({
@@ -202,8 +227,55 @@ test("Context Lab uses one start and one acknowledgement per Guided step", async
   await page.getByRole("button", { name: "继续" }).click();
   await expect(page.getByText("3 / 4")).toBeVisible();
   await page.getByRole("button", { name: "继续" }).click();
-  await expect(page.getByLabel("英文答案预览")).toBeVisible();
+  await expect(page.getByLabel("英文答案")).toBeVisible();
   expect(mutations.length - afterStart).toBe(3);
+});
+
+test("correct and incorrect submissions each write one Evidence in memory", async ({
+  page,
+}) => {
+  await resetMemoryProbe(page);
+  await page.goto("/play/context-lab");
+  await walkGuidedToPreview(page);
+  await page.getByLabel("英文答案").fill("spoon");
+  await page.getByRole("button", { name: "提交" }).click();
+  await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
+  expect((await memoryEvidence(page)).evidenceCount).toBe(1);
+
+  await page.getByRole("button", { name: "重新体验" }).click();
+  await walkGuidedToPreview(page);
+  await page.getByLabel("英文答案").fill("fork");
+  await page.getByRole("button", { name: "提交" }).click();
+  await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
+  const afterIncorrect = await memoryEvidence(page);
+  expect(afterIncorrect.evidenceCount).toBe(2);
+  expect(afterIncorrect.items.some((item) => item.outcome === "INCORRECT")).toBe(true);
+});
+
+test("duplicate click writes one Evidence", async ({ page }) => {
+  await resetMemoryProbe(page);
+  await page.goto("/play/context-lab");
+  await walkGuidedToPreview(page);
+  await page.getByLabel("英文答案").fill("spoon");
+  await page.getByRole("button", { name: "提交" }).dblclick();
+  await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
+  expect((await memoryEvidence(page)).evidenceCount).toBe(1);
+});
+
+test("refresh after submit does not duplicate Evidence for the same task", async ({
+  page,
+}) => {
+  await resetMemoryProbe(page);
+  await page.goto("/play/context-lab");
+  await walkGuidedToPreview(page);
+  await page.getByLabel("英文答案").fill("spoon");
+  await page.getByRole("button", { name: "提交" }).click();
+  await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
+  const before = await memoryEvidence(page);
+  expect(before.evidenceCount).toBe(1);
+  await page.reload();
+  await expect(page.getByText("1 / 4")).toBeVisible();
+  expect((await memoryEvidence(page)).evidenceCount).toBe(1);
 });
 
 test("refresh starts a new experimental run", async ({ page }) => {
@@ -244,6 +316,7 @@ for (const viewport of VIEWPORTS) {
 test("keyboard-only navigation can complete the presentation", async ({
   page,
 }) => {
+  await resetMemoryProbe(page);
   await page.goto("/play/context-lab");
   await expect(page.getByRole("heading", { name: "早餐时间" })).toBeFocused();
   await page.keyboard.press("Tab");
@@ -253,9 +326,10 @@ test("keyboard-only navigation can complete the presentation", async ({
   await page.getByRole("button", { name: "继续" }).press("Space");
   await expect(page.getByText("勺子：舀取汤或柔软食物")).toBeVisible();
   await page.getByRole("button", { name: "继续" }).press("Enter");
-  await expect(page.getByLabel("英文答案预览")).toBeVisible();
-  await page.getByRole("button", { name: "提交功能将在下一阶段接入" }).press("Enter");
-  await expect(page.locator('[data-pilot-state="FROZEN_TASK_HANDOFF_READY"]')).toBeVisible();
+  await expect(page.getByLabel("英文答案")).toBeVisible();
+  await page.getByLabel("英文答案").fill("spoon");
+  await page.getByLabel("英文答案").press("Enter");
+  await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
 });
 
 test("reduced-motion browser context can complete the flow", async ({
@@ -268,9 +342,10 @@ test("reduced-motion browser context can complete the flow", async ({
   await page.getByRole("button", { name: "继续" }).click();
   await expect(page.getByText("3 / 4")).toBeVisible();
   await page.getByRole("button", { name: "继续" }).click();
-  await expect(page.getByLabel("英文答案预览")).toBeVisible();
-  await page.getByRole("button", { name: "提交功能将在下一阶段接入" }).click();
-  await expect(page.locator('[data-pilot-state="FROZEN_TASK_HANDOFF_READY"]')).toBeVisible();
+  await expect(page.getByLabel("英文答案")).toBeVisible();
+  await page.getByLabel("英文答案").fill("spoon");
+  await page.getByRole("button", { name: "提交" }).click();
+  await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
 });
 
 test("disabled feature gate returns 404", async ({ request }) => {

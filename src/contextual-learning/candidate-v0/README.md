@@ -151,7 +151,7 @@ It does **not**:
 
 If an assessable step has no semantic projection (Meal STRENGTHEN IDENTIFY, School `CLAIM_CHOICE`, Borrow `RELATION_CHOICE`), the run becomes `BLOCKED` and does not emit a guided activity. The next step is never compiled or skipped.
 
-Context Lab persistence is experimental orchestration only. It does not grade, call `submitTaskAction`, or update `StudentLexemeModel`.
+Context Lab persistence is experimental orchestration only. The Meal BUILD pilot may assign a frozen task and call `submitTaskAction`. Candidate execution still does not grade, construct Evidence, or update `StudentLexemeModel`.
 
 ## Context Lab UI pilot
 
@@ -201,13 +201,39 @@ CAS: new runs persist at revision `0`. Each successful acknowledgement updates `
 
 ### Refresh and restart
 
-The server page creates and persists the first run before render. Refresh is a new request and therefore a new experimental run. This phase does not implement resume.
+The server page creates and persists the first run before render. Refresh before submission is a new request and therefore a new experimental run. This phase does not implement resume of an in-progress Guided or issued task.
+
+After a frozen task has been submitted, retrying the same `taskId` reconciles to the existing `LearningEvidence`. Refresh still starts a new experimental run and will assign a new deterministic task if the learner walks the flow again.
 
 `重新体验` calls the server restart/start operation, receives a new run ID, and begins at progress `1 / 4`. The previous run is abandoned and is not learning truth. Expiry/cleanup of abandoned experimental runs is a later gap.
 
-### Frozen task stopping point
+### Frozen task Evidence loop
 
-After three legal Guided acknowledgements the server issues the real `PublicLearningTask` and stays at `FROZEN_TASK_ISSUED`. The UI preview does not grade, call `submitTaskAction`, create Evidence, or update learner state. Clicking `提交功能将在下一阶段接入` only opens the local `FROZEN_TASK_HANDOFF_READY` notice.
+After three legal Guided acknowledgements the server:
+
+1. compiles the Meal recall step;
+2. persists the complete generated task through `LearningTaskRepository.saveGeneratedTask` with a deterministic UUID (`runId + stepId`);
+3. CAS-saves the Candidate run as `FROZEN_TASK_ISSUED`;
+4. returns only `PublicLearningTask`.
+
+The typing UI reuses Ranger Trial `TextInputTaskRenderer`. `Evidence.gameId` is therefore `RANGER_TRIAL`. Context Lab is orchestration identity, not a new frozen game ID.
+
+The browser sends only `{ runId, revision, taskId, action: { kind: "TEXT_INPUT", value }, responseTimeMs }`. The server attaches user/session/game/evidence identity and calls existing `submitTaskAction`. Context Lab does not inspect AnswerKey, grade, construct Evidence, or call `processEvidence`.
+
+Required order:
+
+```text
+validate issued run/task
+→ submitTaskAction
+→ Evidence committed
+→ recordFrozenTaskCompletion
+→ CAS-save COMPLETED Candidate run
+→ public frozen feedback + “这次练习已记录。”
+```
+
+Incorrect Evidence still completes orchestration. Completion means the assessable task was terminally processed, not that the word is mastered.
+
+If Evidence exists and Candidate CAS fails, retry loads the existing Evidence by `taskId + userId + sessionId` and completes the run without a second Evidence.
 
 There is no `/train` integration.
 

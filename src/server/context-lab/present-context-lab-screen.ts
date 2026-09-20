@@ -10,12 +10,13 @@ import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
 import type { ResolvedContextSnapshot } from "@/contextual-learning/candidate-v0/domain/types";
 import type { ExperienceRun } from "@/contextual-learning/candidate-v0/execution/types";
 import {
-  CONTEXT_LAB_BOUNDARY_MESSAGE,
   CONTEXT_LAB_ERROR_CODES,
+  CONTEXT_LAB_RECORDED_MESSAGE,
   type ContextLabCurrentScreen,
   type ContextLabErrorCode,
   type ContextLabProgress,
   type ContextLabRunHandle,
+  type ContextLabTaskFeedback,
   type PublicContextPresentation,
 } from "@/components/context-lab/types";
 import { errorScreen } from "./context-lab-errors";
@@ -67,14 +68,16 @@ export function presentFrozenTaskScreen(input: {
   };
 }
 
-export function presentHandoffScreen(input: {
+export function presentRecordedScreen(input: {
   handle: ContextLabRunHandle;
+  feedback: ContextLabTaskFeedback;
   progress: ContextLabProgress;
 }): ContextLabCurrentScreen {
   return {
-    kind: "FROZEN_TASK_HANDOFF_READY",
+    kind: "FROZEN_TASK_RECORDED",
     handle: input.handle,
-    message: CONTEXT_LAB_BOUNDARY_MESSAGE,
+    feedback: input.feedback,
+    recordedMessage: CONTEXT_LAB_RECORDED_MESSAGE,
     progress: input.progress,
   };
 }

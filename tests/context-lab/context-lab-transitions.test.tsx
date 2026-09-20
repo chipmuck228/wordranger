@@ -126,13 +126,11 @@ describe("Context Lab reduced-motion and restart", () => {
     render(
       <ContextLabClient {...harness.ops} initialScreen={current} />,
     );
-    const input = screen.getByLabelText("英文答案预览") as HTMLInputElement;
+    const input = screen.getByLabelText("英文答案") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "spoon" } });
     expect(input.value).toBe("spoon");
-    fireEvent.click(screen.getByRole("button", { name: "提交功能将在下一阶段接入" }));
-    expect(
-      document.querySelector('[data-pilot-state="FROZEN_TASK_HANDOFF_READY"]'),
-    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "提交" }));
+    expect(await screen.findByText("这次练习已记录。")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "重新体验" }));
     expect(await screen.findByText("1 / 4")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
@@ -141,7 +139,7 @@ describe("Context Lab reduced-motion and restart", () => {
     expect(await screen.findByText("3 / 4")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
     expect(
-      (await screen.findByLabelText("英文答案预览") as HTMLInputElement).value,
+      (await screen.findByLabelText("英文答案") as HTMLInputElement).value,
     ).toBe("");
   });
 
@@ -154,7 +152,7 @@ describe("Context Lab reduced-motion and restart", () => {
     expect(await screen.findByLabelText("进度 3 / 4")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
     expect(await screen.findByLabelText("进度 4 / 4")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "提交功能将在下一阶段接入" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交" }));
     expect(screen.getByLabelText("进度 4 / 4")).toBeTruthy();
     expect(screen.queryByText("5 / 4")).toBeNull();
   });

@@ -1,5 +1,7 @@
 import { MealContextLabController } from "@/server/context-lab/meal-context-lab-controller";
 import { InMemoryContextLabRunRepository } from "@/server/context-lab/in-memory-context-lab-run-repository";
+import { InMemoryLearningTaskRepository } from "@/server/tasks/in-memory-learning-task-repository";
+import { InMemoryLearningRepository } from "@/server/learning/in-memory-learning-repository";
 import { V1_PLACEHOLDER_USER_ID } from "@/server/auth/v1-user";
 import type { ContextLabCurrentScreen } from "@/components/context-lab/types";
 import type { ContextLabClientOps } from "@/app/play/context-lab/context-lab-client";
@@ -40,11 +42,18 @@ export function createMealLabHarness(options: {
   userId?: string;
   enabled?: boolean;
   createId?: () => string;
+  repository?: InMemoryContextLabRunRepository;
+  learningTasks?: InMemoryLearningTaskRepository;
+  learning?: InMemoryLearningRepository;
 } = {}) {
-  const repository = new InMemoryContextLabRunRepository();
+  const repository = options.repository ?? new InMemoryContextLabRunRepository();
+  const learningTasks = options.learningTasks ?? new InMemoryLearningTaskRepository();
+  const learning = options.learning ?? new InMemoryLearningRepository();
   let seq = 0;
   const controller = new MealContextLabController({
     repository,
+    learningTasks,
+    learning,
     userId: options.userId ?? V1_PLACEHOLDER_USER_ID,
     enabled: options.enabled ?? true,
     now: () => "2026-09-20T00:00:00.000Z",
@@ -55,14 +64,32 @@ export function createMealLabHarness(options: {
     acknowledge: (input) => controller.acknowledge(input),
     restart: () => controller.restart(),
     loadCurrent: (input) => controller.loadCurrent(input),
+    submitFrozenTask: (input) => controller.submitFrozenTask(input),
   };
-  return { repository, controller, ops };
+  return { repository, learningTasks, learning, controller, ops };
 }
 
 export async function startFirstGuided() {
   const harness = createMealLabHarness();
   const screen = await harness.controller.start();
   return { ...harness, screen };
+}
+
+export async function acknowledgeUntilFrozen(
+  controller: MealContextLabController,
+  startScreen?: ContextLabCurrentScreen,
+) {
+  let screen = startScreen ?? (await controller.start());
+  for (let index = 0; index < 3; index += 1) {
+    assertGuided(screen);
+    screen = await controller.acknowledge({
+      runId: screen.handle.runId,
+      revision: screen.handle.revision,
+      activityId: screen.activity.id,
+    });
+  }
+  assertFrozen(screen);
+  return screen;
 }
 
 export function assertGuided(
@@ -81,5 +108,16 @@ export function assertFrozen(
 > {
   if (screen.kind !== "FROZEN_TASK_PREVIEW") {
     throw new Error(`expected FROZEN_TASK_PREVIEW, got ${screen.kind}`);
+  }
+}
+
+export function assertRecorded(
+  screen: ContextLabCurrentScreen,
+): asserts screen is Extract<
+  ContextLabCurrentScreen,
+  { kind: "FROZEN_TASK_RECORDED" }
+> {
+  if (screen.kind !== "FROZEN_TASK_RECORDED") {
+    throw new Error(`expected FROZEN_TASK_RECORDED, got ${screen.kind}`);
   }
 }

@@ -55,9 +55,10 @@ export type ContextLabCurrentScreen =
       progress: ContextLabProgress;
     }
   | {
-      kind: "FROZEN_TASK_HANDOFF_READY";
+      kind: "FROZEN_TASK_RECORDED";
       handle: ContextLabRunHandle;
-      message: string;
+      feedback: ContextLabTaskFeedback;
+      recordedMessage: string;
       progress: ContextLabProgress;
     }
   | {
@@ -67,6 +68,12 @@ export type ContextLabCurrentScreen =
       message: string;
       recoverable: boolean;
     };
+
+export interface ContextLabTaskFeedback {
+  status: "CORRECT" | "ASSISTED" | "INCORRECT" | "SKIPPED" | "TIMEOUT";
+  message: string;
+  correction?: { text: string };
+}
 
 /** @deprecated Use ContextLabCurrentScreen. Kept as an alias during the controller cutover. */
 export type ContextLabScreen = ContextLabCurrentScreen;
@@ -82,6 +89,8 @@ export const CONTEXT_LAB_ERROR_CODES = {
   CONTEXT_LAB_NOT_FOUND: "CONTEXT_LAB_NOT_FOUND",
   CONTEXT_LAB_RUNTIME_INVALID: "CONTEXT_LAB_RUNTIME_INVALID",
   CONTEXT_LAB_ACK_REJECTED: "CONTEXT_LAB_ACK_REJECTED",
+  CONTEXT_LAB_SUBMIT_REJECTED: "CONTEXT_LAB_SUBMIT_REJECTED",
+  CONTEXT_LAB_TASK_CONFLICT: "CONTEXT_LAB_TASK_CONFLICT",
   NETWORK_ERROR: "NETWORK_ERROR",
 } as const;
 
@@ -90,6 +99,7 @@ export type ContextLabErrorCode =
 
 export const CONTEXT_LAB_HEADING_ID = "context-lab-heading";
 
+export const CONTEXT_LAB_RECORDED_MESSAGE = "这次练习已记录。";
 export const CONTEXT_LAB_BOUNDARY_MESSAGE =
   "语境体验已到达现有学习任务的交接点。\n下一阶段会通过 WordRanger 原有提交与证据流程完成这道题。";
 
@@ -99,3 +109,4 @@ export const CONTEXT_LAB_LEARNER_ERROR_MESSAGE =
 export const CONTEXT_LAB_STALE_MESSAGE =
   "这一步已经更新，请重新同步当前进度。";
 export const CONTEXT_LAB_NETWORK_MESSAGE = "暂时没能继续这一步，请再试一次。";
+export const CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE = "这次提交无法完成，请再试一次。";

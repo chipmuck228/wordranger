@@ -3,13 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { ContextLabErrorState } from "@/components/context-lab/ContextLabErrorState";
 import { ContextLabHeader } from "@/components/context-lab/ContextLabHeader";
+import { ContextLabRecordedNotice } from "@/components/context-lab/ContextLabRecordedNotice";
 import { ContextLabShell } from "@/components/context-lab/ContextLabShell";
 import { FrozenTaskPreview } from "@/components/context-lab/FrozenTaskPreview";
 import { GuidedActivityPanel } from "@/components/context-lab/GuidedActivityPanel";
-import { PilotBoundaryNotice } from "@/components/context-lab/PilotBoundaryNotice";
 import { withClientGameTimeout } from "@/components/game/shared/bounded-game-operation";
 import {
-  CONTEXT_LAB_BOUNDARY_MESSAGE,
   CONTEXT_LAB_ERROR_CODES,
   CONTEXT_LAB_HEADING_ID,
   CONTEXT_LAB_NETWORK_MESSAGE,
@@ -23,7 +22,7 @@ type PresentationState =
   | "GUIDED_STEP"
   | "TRANSITIONING"
   | "FROZEN_TASK_PREVIEW"
-  | "FROZEN_TASK_HANDOFF_READY"
+  | "FROZEN_TASK_RECORDED"
   | "ERROR";
 
 export interface ContextLabClientOps {
@@ -35,6 +34,13 @@ export interface ContextLabClientOps {
   }) => Promise<ContextLabCurrentScreen>;
   restart: () => Promise<ContextLabCurrentScreen>;
   loadCurrent?: (input: { runId: string }) => Promise<ContextLabCurrentScreen>;
+  submitFrozenTask: (input: {
+    runId: string;
+    revision: number;
+    taskId: string;
+    action: { kind: "TEXT_INPUT"; value: string };
+    responseTimeMs?: number | null;
+  }) => Promise<ContextLabCurrentScreen>;
 }
 
 export function ContextLabClient({
@@ -42,6 +48,7 @@ export function ContextLabClient({
   acknowledge,
   restart,
   loadCurrent,
+  submitFrozenTask,
   initialScreen,
 }: ContextLabClientOps & {
   initialScreen?: ContextLabCurrentScreen;
@@ -49,8 +56,6 @@ export function ContextLabClient({
   const [screen, setScreen] = useState<ContextLabCurrentScreen | null>(
     initialScreen ?? null,
   );
-  const [previewText, setPreviewText] = useState("");
-  const [handoffOpen, setHandoffOpen] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,6 +64,7 @@ export function ContextLabClient({
   const timerRef = useRef<number | null>(null);
   const transitioningRef = useRef(false);
   const mutationRef = useRef(false);
+  const previewStartedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -77,11 +83,17 @@ export function ContextLabClient({
   }, []);
 
   useEffect(() => {
+    if (screen?.kind === "FROZEN_TASK_PREVIEW") {
+      previewStartedAtRef.current = Date.now();
+    }
+  }, [screen]);
+
+  useEffect(() => {
     if (transitioning || !screen || screen.kind === "ERROR") {
       return;
     }
     document.getElementById(CONTEXT_LAB_HEADING_ID)?.focus();
-  }, [screen, transitioning, handoffOpen]);
+  }, [screen, transitioning]);
 
   function clearPendingTransition(): void {
     if (timerRef.current !== null) {
@@ -125,11 +137,11 @@ export function ContextLabClient({
   }
 
   function applyScreen(next: ContextLabCurrentScreen): void {
-    setHandoffOpen(false);
     if (next.kind === "ERROR") {
       if (next.recoverable && screen && screen.kind !== "ERROR") {
         setActionError(next.message);
         setBusy(false);
+        mutationRef.current = false;
         return;
       }
       setScreen(next);
@@ -221,39 +233,78 @@ export function ContextLabClient({
     }
   }
 
-  function openBoundary(): void {
-    if (busy || transitioningRef.current || screen?.kind !== "FROZEN_TASK_PREVIEW") {
+  async function submitFrozenIntent(intent: {
+    kind: "TEXT_INPUT";
+    value: string;
+  }): Promise<void> {
+    if (
+      busy ||
+      mutationRef.current ||
+      transitioningRef.current ||
+      screen?.kind !== "FROZEN_TASK_PREVIEW"
+    ) {
       return;
     }
-    setHandoffOpen(true);
+    mutationRef.current = true;
+    setBusy(true);
+    setActionError(null);
+    const requestId = ++requestIdRef.current;
+    const responseTimeMs =
+      previewStartedAtRef.current == null
+        ? null
+        : Date.now() - previewStartedAtRef.current;
+    try {
+      const outcome = await withClientGameTimeout(
+        submitFrozenTask({
+          runId: screen.handle.runId,
+          revision: screen.handle.revision,
+          taskId: screen.task.id,
+          action: intent,
+          responseTimeMs,
+        }),
+      );
+      if (requestId !== requestIdRef.current) {
+        mutationRef.current = false;
+        return;
+      }
+      setBusy(false);
+      mutationRef.current = false;
+      if (outcome.timedOut) {
+        setActionError(CONTEXT_LAB_NETWORK_MESSAGE);
+        return;
+      }
+      if (outcome.value.kind === "ERROR") {
+        applyScreen(outcome.value);
+        return;
+      }
+      revealScreen(outcome.value);
+    } catch {
+      if (requestId !== requestIdRef.current) {
+        mutationRef.current = false;
+        return;
+      }
+      setBusy(false);
+      mutationRef.current = false;
+      setActionError(CONTEXT_LAB_NETWORK_MESSAGE);
+    }
   }
 
   function onRestart(): void {
     clearPendingTransition();
     setTransitioning(false);
-    setPreviewText("");
-    setHandoffOpen(false);
     setScreen(null);
     startedRef.current = true;
     mutationRef.current = false;
+    previewStartedAtRef.current = null;
     void begin(restart);
   }
-
-  const visibleScreen = handoffOpen && screen?.kind === "FROZEN_TASK_PREVIEW"
-    ? {
-        kind: "FROZEN_TASK_HANDOFF_READY" as const,
-        handle: screen.handle,
-        message: CONTEXT_LAB_BOUNDARY_MESSAGE,
-        progress: screen.progress,
-      }
-    : screen;
 
   const headerContext =
     screen?.kind === "GUIDED" || screen?.kind === "FROZEN_TASK_PREVIEW"
       ? screen.context
       : undefined;
 
-  const presentationState = stateFor(visibleScreen, transitioning, busy);
+  const presentationState = stateFor(screen, transitioning, busy);
 
   return (
     <ContextLabShell
@@ -266,28 +317,28 @@ export function ContextLabClient({
         className="flex min-w-0 flex-1 flex-col gap-6"
       >
         <p className="sr-only" aria-live="polite" aria-atomic="true">
-          {transitioning || busy ? "" : liveAnnouncement(visibleScreen)}
+          {transitioning || busy ? "" : liveAnnouncement(screen)}
         </p>
         {actionError ? (
           <p role="alert" className="text-destructive text-sm leading-relaxed">
             {actionError}
           </p>
         ) : null}
-        {!visibleScreen ? (
+        {!screen ? (
           <p className="text-muted-foreground text-sm">正在准备体验…</p>
         ) : null}
-        {visibleScreen?.kind === "ERROR" ? (
-          <ContextLabErrorState screen={visibleScreen} />
+        {screen?.kind === "ERROR" ? (
+          <ContextLabErrorState screen={screen} />
         ) : null}
-        {visibleScreen?.kind === "GUIDED" ? (
+        {screen?.kind === "GUIDED" ? (
           <>
             <ContextLabHeader
-              title={visibleScreen.context.title}
-              settingLabel={visibleScreen.context.settingLabel}
-              progress={visibleScreen.progress}
+              title={screen.context.title}
+              settingLabel={screen.context.settingLabel}
+              progress={screen.progress}
             />
             <GuidedActivityPanel
-              screen={visibleScreen}
+              screen={screen}
               disabled={busy || transitioning}
               onAcknowledge={() => {
                 void acknowledgeGuided();
@@ -295,32 +346,32 @@ export function ContextLabClient({
             />
           </>
         ) : null}
-        {visibleScreen?.kind === "FROZEN_TASK_PREVIEW" ? (
+        {screen?.kind === "FROZEN_TASK_PREVIEW" ? (
           <>
             <ContextLabHeader
-              title={visibleScreen.context.title}
-              settingLabel={visibleScreen.context.settingLabel}
-              progress={visibleScreen.progress}
+              title={screen.context.title}
+              settingLabel={screen.context.settingLabel}
+              progress={screen.progress}
             />
             <FrozenTaskPreview
-              screen={visibleScreen}
-              value={previewText}
+              screen={screen}
               disabled={busy || transitioning}
-              onValueChange={setPreviewText}
-              onOpenBoundary={openBoundary}
+              onAction={(intent) => {
+                void submitFrozenIntent(intent);
+              }}
             />
           </>
         ) : null}
-        {visibleScreen?.kind === "FROZEN_TASK_HANDOFF_READY" ? (
+        {screen?.kind === "FROZEN_TASK_RECORDED" ? (
           <>
             <ContextLabHeader
               title={headerContext?.title ?? "早餐时间"}
               settingLabel={
                 headerContext?.settingLabel ?? "看看桌上的食物和餐具。"
               }
-              progress={visibleScreen.progress}
+              progress={screen.progress}
             />
-            <PilotBoundaryNotice screen={visibleScreen} />
+            <ContextLabRecordedNotice screen={screen} />
           </>
         ) : null}
       </div>
@@ -336,10 +387,10 @@ function liveAnnouncement(screen: ContextLabCurrentScreen | null): string {
     return screen.title;
   }
   if (screen.kind === "FROZEN_TASK_PREVIEW") {
-    return `第 ${screen.progress.current} 步，共 ${screen.progress.total} 步。这是输入预览，提交功能尚未接入。`;
+    return `第 ${screen.progress.current} 步，共 ${screen.progress.total} 步。请输入英文单词。`;
   }
-  if (screen.kind === "FROZEN_TASK_HANDOFF_READY") {
-    return `第 ${screen.progress.current} 步，共 ${screen.progress.total} 步。体验已到达学习任务交接点。`;
+  if (screen.kind === "FROZEN_TASK_RECORDED") {
+    return `${screen.feedback.message} ${screen.recordedMessage}`;
   }
   return `第 ${screen.progress.current} 步，共 ${screen.progress.total} 步。`;
 }
@@ -361,8 +412,8 @@ function stateFor(
   if (screen.kind === "FROZEN_TASK_PREVIEW") {
     return "FROZEN_TASK_PREVIEW";
   }
-  if (screen.kind === "FROZEN_TASK_HANDOFF_READY") {
-    return "FROZEN_TASK_HANDOFF_READY";
+  if (screen.kind === "FROZEN_TASK_RECORDED") {
+    return "FROZEN_TASK_RECORDED";
   }
   return "GUIDED_STEP";
 }

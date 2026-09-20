@@ -40,6 +40,27 @@ export async function loadCurrentMealContextLab(input: {
   return runController((controller) => controller.loadCurrent(input));
 }
 
+export async function submitContextLabFrozenTask(input: {
+  runId: string;
+  revision: number;
+  taskId: string;
+  action: {
+    kind: "TEXT_INPUT";
+    value: string;
+  };
+  responseTimeMs?: number | null;
+}): Promise<ContextLabCurrentScreen> {
+  return runController((controller) =>
+    controller.submitFrozenTask({
+      runId: input.runId,
+      revision: input.revision,
+      taskId: input.taskId,
+      action: input.action,
+      responseTimeMs: input.responseTimeMs,
+    }),
+  );
+}
+
 async function runController(
   operation: (
     controller: ReturnType<
