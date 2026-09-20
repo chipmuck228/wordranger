@@ -153,7 +153,60 @@ If an assessable step has no semantic projection (Meal STRENGTHEN IDENTIFY, Scho
 
 There is no persistence, UI, scheduler hook, or `submitTaskAction` integration.
 
-Validators live next to the types. Fixtures are deterministic data, not a planner.
+Validators live next to the types.
+
+## Experience Planner Candidate V0
+
+`planning/` is a pure, deterministic selector over reviewed plan variants. It is not the Scheduler and not the Task Generator.
+
+```text
+opaque LearningNeed reference
+  + externally supplied CognitiveMode
+  + explicit target senses
+  + allowed contexts
+  + runtime capabilities
+        ↓
+planExperience
+        ↓
+LearningExperiencePlan + planning trace
+        ↓
+existing validation / execution / compiler
+```
+
+It does **not**:
+
+- generate a `LearningNeed`
+- inspect or update `StudentLexemeModel`
+- infer `CognitiveMode` (no `UNSEEN → BUILD`)
+- grade, create Evidence, or call `processEvidence`
+- select a renderer
+- use randomness, current time, or ID-string inference
+
+Mode selection from learner state is out of scope.
+
+### Deterministic selection policy
+
+Among variants that pass admission:
+
+1. authored `priority` (lower wins)
+2. `allowedContextIds` order when that allow-list is present; otherwise stable `contextFrameId`
+3. stable `variant.id`
+
+Registry insertion order is not a selection rule.
+
+### Supported three-case variants
+
+| Case | Modes that can succeed today | Honest gap |
+| --- | --- | --- |
+| Meal | `BUILD` (guided then frozen recall) and `RETRIEVE` (safe lexical typing) when `frozen-text-input:TYPE` is present | `STRENGTHEN` IDENTIFY/DISTINGUISH and `PROBE` have no frozen projection |
+| School Challenge | none as verified learning | `CLAIM_CHOICE` stays unsupported; Guided presentation is `GUIDED_ONLY` and cannot verify BUILD/STRENGTHEN/PROBE/RETRIEVE |
+| Borrowing-Sharing | none as verified learning | contextual `RELATION_CHOICE` stays unsupported; Guided observation is not relational assessment |
+
+`SUITABLE_FOR` remains a frame fact, not a universal lexical truth. Requester/owner perspectives must both be requested for borrow/lend variants.
+
+A Guided-only plan may be structurally executable but produces no frozen Evidence. The planner returns `PLAN_GUIDED_ONLY_CANNOT_VERIFY_MODE` instead of treating acknowledgement as learning.
+
+Candidate V0 remains Experimental / Not a Standard.
 
 ## When Candidate V1 may be discussed
 
