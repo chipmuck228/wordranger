@@ -151,47 +151,73 @@ It does **not**:
 
 If an assessable step has no semantic projection (Meal STRENGTHEN IDENTIFY, School `CLAIM_CHOICE`, Borrow `RELATION_CHOICE`), the run becomes `BLOCKED` and does not emit a guided activity. The next step is never compiled or skipped.
 
-There is no persistence, production UI, scheduler hook, or `submitTaskAction` integration.
+Context Lab persistence is experimental orchestration only. It does not grade, call `submitTaskAction`, or update `StudentLexemeModel`.
 
 ## Context Lab UI pilot
 
-Internal presentation-only route:
+Internal experimental route:
 
 ```text
 /play/context-lab
 ```
 
-Gate:
+Gates:
 
 ```text
 CONTEXT_LAB_ENABLED=1
+CONTEXT_LAB_RUNTIME=memory
+CONTEXT_LAB_RUNTIME=supabase
 ```
 
-Default is closed. When the flag is absent, the route returns `notFound()` and is not an operational pilot. Do not set a `NEXT_PUBLIC_` copy of this flag. Do not reuse Ranger Trial or other game runtime flags.
+Default is closed. When the feature flag is absent, the route returns `notFound()` and server operations fail closed. Runtime selection does not bypass the gate. Do not set a `NEXT_PUBLIC_` copy of either flag. Do not reuse `GAME_RUNTIME` or `RANGER_TRIAL_RUNTIME`.
 
 Current coverage is Meal BUILD on `home-breakfast-v0` only. School Challenge and Borrowing-Sharing are not wired.
 
-Preparation stays server-side:
+The server is authoritative for the current step:
 
 ```text
-explicit Meal ExperiencePlanningInput
-  → planExperience
-  → validateExperiencePlan
-  → createExperienceRun
-  → issue / acknowledge Guided steps
-  → issue frozen ACTIVE_RECALL_TYPING
-  → public screens only
+server creates ExperienceRun
+  → issues only the current step
+  → client receives one public screen + opaque run handle
+  → client acknowledges the current Guided Activity
+  → server verifies ownership + revision + activityId
+  → server records Guided completion
+  → server issues the next current step
+  → repository CAS-saves the updated run
+  → client receives only the next public screen
 ```
+
+The browser never receives the complete `ExperienceRun`, future steps, the plan snapshot, resolved targets, AnswerKey, Evidence, or learner state.
+
+### Repository boundary
+
+`ContextLabRunRepository` stores Candidate orchestration JSON only. It does not store Evidence, mastery, AnswerKey, or submitted preview text.
+
+- `CONTEXT_LAB_RUNTIME=memory` is allowed for local development, unit/component tests, and Playwright. It must be selected explicitly.
+- `CONTEXT_LAB_RUNTIME=supabase` is required when the experimental route is enabled on a deployed Vercel production/preview host. Missing Supabase service-role configuration fails closed. There is no silent memory fallback.
+- Invalid or missing `CONTEXT_LAB_RUNTIME` is a controlled configuration error.
+
+CAS: new runs persist at revision `0`. Each successful acknowledgement updates `WHERE revision = N` to `N+1`. Concurrent acknowledgements of the same `runId + revision + activityId` produce one advancement and one `CONTEXT_LAB_STALE_RUN`.
+
+### Refresh and restart
+
+The server page creates and persists the first run before render. Refresh is a new request and therefore a new experimental run. This phase does not implement resume.
+
+`重新体验` calls the server restart/start operation, receives a new run ID, and begins at progress `1 / 4`. The previous run is abandoned and is not learning truth. Expiry/cleanup of abandoned experimental runs is a later gap.
+
+### Frozen task stopping point
+
+After three legal Guided acknowledgements the server issues the real `PublicLearningTask` and stays at `FROZEN_TASK_ISSUED`. The UI preview does not grade, call `submitTaskAction`, create Evidence, or update learner state. Clicking `提交功能将在下一阶段接入` only opens the local `FROZEN_TASK_HANDOFF_READY` notice.
+
+There is no `/train` integration.
+
+Candidate V0 remains Experimental / Not a Standard.
 
 Learner-facing rules:
 
 - Guided `继续` means “I have viewed this presentation.” It is not correctness.
-- The compiled `PublicLearningTask` is shown as a typing preview.
-- The preview does not grade, receive `TaskAnswerKey`, call `DefaultTaskEvaluator`, create `LearningEvidence`, or call `processEvidence`.
-- The pilot ends at `FROZEN_TASK_HANDOFF_READY`, not `LEARNING_COMPLETED`.
-- `重新体验` and a page refresh both restart the local presentation. Nothing is persisted.
-- Rapid `继续` clicks cannot skip a screen. Restart cancels a pending transition timer.
-- Reduced motion (`prefers-reduced-motion: reduce`) advances immediately.
+- Rapid `继续` clicks cannot skip a screen. The client waits for the server screen.
+- Reduced motion (`prefers-reduced-motion: reduce`) replaces the screen immediately after the server responds.
 
 Tested presentation viewports:
 
@@ -201,9 +227,7 @@ Tested presentation viewports:
 1440 × 900
 ```
 
-Playwright binds the preview server to `127.0.0.1` so Next does not enumerate public interfaces.
-
-This is not production Daily Training integration and does not promote Candidate V0 to a Standard.
+Playwright binds the preview server to `127.0.0.1` and sets `CONTEXT_LAB_ENABLED=1` plus `CONTEXT_LAB_RUNTIME=memory`.
 
 Validators live next to the types.
 

@@ -1,7 +1,8 @@
 /**
  * Presentation-only Context Lab UI contract.
  * Candidate V0 / Experimental / Not a Standard.
- * No answer keys, Evidence, or learner-state fields.
+ * The client receives exactly one current screen plus an opaque run handle.
+ * No answer keys, Evidence, learner-state, future steps, or full ExperienceRun.
  */
 
 import type { PublicGuidedActivity } from "@/contextual-learning/candidate-v0/execution/guided-activity";
@@ -33,34 +34,42 @@ export interface ContextLabProgress {
   total: number;
 }
 
-export type ContextLabScreen =
+export interface ContextLabRunHandle {
+  runId: string;
+  revision: number;
+}
+
+export type ContextLabCurrentScreen =
   | {
       kind: "GUIDED";
+      handle: ContextLabRunHandle;
       activity: PublicGuidedActivity;
       context: PublicContextPresentation;
       progress: ContextLabProgress;
     }
   | {
       kind: "FROZEN_TASK_PREVIEW";
+      handle: ContextLabRunHandle;
       task: PublicLearningTask;
       context: PublicContextPresentation;
       progress: ContextLabProgress;
     }
   | {
-      kind: "PILOT_BOUNDARY";
+      kind: "FROZEN_TASK_HANDOFF_READY";
+      handle: ContextLabRunHandle;
       message: string;
       progress: ContextLabProgress;
     }
   | {
       kind: "ERROR";
+      code: string;
       title: string;
       message: string;
-      code: string;
+      recoverable: boolean;
     };
 
-export interface ContextLabPilotPayload {
-  screens: ContextLabScreen[];
-}
+/** @deprecated Use ContextLabCurrentScreen. Kept as an alias during the controller cutover. */
+export type ContextLabScreen = ContextLabCurrentScreen;
 
 export const CONTEXT_LAB_ERROR_CODES = {
   FEATURE_DISABLED: "FEATURE_DISABLED",
@@ -69,9 +78,24 @@ export const CONTEXT_LAB_ERROR_CODES = {
   GUIDED_GROUNDING_FAILURE: "GUIDED_GROUNDING_FAILURE",
   FROZEN_COMPILATION_FAILURE: "FROZEN_COMPILATION_FAILURE",
   MISSING_PUBLIC_PRESENTATION: "MISSING_PUBLIC_PRESENTATION",
+  CONTEXT_LAB_STALE_RUN: "CONTEXT_LAB_STALE_RUN",
+  CONTEXT_LAB_NOT_FOUND: "CONTEXT_LAB_NOT_FOUND",
+  CONTEXT_LAB_RUNTIME_INVALID: "CONTEXT_LAB_RUNTIME_INVALID",
+  CONTEXT_LAB_ACK_REJECTED: "CONTEXT_LAB_ACK_REJECTED",
+  NETWORK_ERROR: "NETWORK_ERROR",
 } as const;
 
 export type ContextLabErrorCode =
   (typeof CONTEXT_LAB_ERROR_CODES)[keyof typeof CONTEXT_LAB_ERROR_CODES];
 
 export const CONTEXT_LAB_HEADING_ID = "context-lab-heading";
+
+export const CONTEXT_LAB_BOUNDARY_MESSAGE =
+  "语境体验已到达现有学习任务的交接点。\n下一阶段会通过 WordRanger 原有提交与证据流程完成这道题。";
+
+export const CONTEXT_LAB_LEARNER_ERROR_TITLE = "这个体验暂时无法加载。";
+export const CONTEXT_LAB_LEARNER_ERROR_MESSAGE =
+  "请稍后再试，或检查本地实验开关。";
+export const CONTEXT_LAB_STALE_MESSAGE =
+  "这一步已经更新，请重新同步当前进度。";
+export const CONTEXT_LAB_NETWORK_MESSAGE = "暂时没能继续这一步，请再试一次。";

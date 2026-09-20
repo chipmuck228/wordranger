@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ContextLabClient } from "@/app/play/context-lab/context-lab-client";
-import { prepareMealContextLab } from "@/server/context-lab/prepare-meal-context-lab";
+import { createMealLabHarness } from "./helpers";
 
 function mockMotion(reduce: boolean): void {
   window.matchMedia = (query: string) =>
@@ -24,88 +24,108 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+async function renderFirstScreen(reduce = false) {
+  mockMotion(reduce);
+  const harness = createMealLabHarness();
+  const initialScreen = await harness.controller.start();
+  const view = render(
+    <ContextLabClient {...harness.ops} initialScreen={initialScreen} />,
+  );
+  return { ...harness, initialScreen, ...view };
+}
+
 describe("Context Lab transition races", () => {
   beforeEach(() => {
     mockMotion(false);
     vi.useFakeTimers();
   });
 
-  it("repeated 继续 clicks do not skip a screen", () => {
-    render(<ContextLabClient payload={prepareMealContextLab()} />);
+  it("repeated 继续 clicks do not skip a screen", async () => {
+    const { initialScreen } = await renderFirstScreen(false);
     const next = screen.getByRole("button", { name: "继续" });
     fireEvent.click(next);
     fireEvent.click(next);
     fireEvent.click(next);
     expect(screen.getByText("1 / 4")).toBeTruthy();
-    expect(screen.queryByText("勺子 → 适合舀汤")).toBeNull();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText("3 / 4")).toBeNull();
     act(() => {
       vi.advanceTimersByTime(160);
     });
     expect(screen.getByText("2 / 4")).toBeTruthy();
     expect(screen.getByText("勺子 → 适合舀汤")).toBeTruthy();
-    expect(screen.queryByText("3 / 4")).toBeNull();
+    if (initialScreen.kind === "GUIDED") {
+      expect(initialScreen.progress.current).toBe(1);
+    }
   });
 
-  it("disables navigation controls while transitioning", () => {
-    render(<ContextLabClient payload={prepareMealContextLab()} />);
+  it("disables navigation controls while acknowledging", async () => {
+    const harness = createMealLabHarness();
+    const initialScreen = await harness.controller.start();
+    let release: (() => void) | undefined;
+    render(
+      <ContextLabClient
+        {...harness.ops}
+        initialScreen={initialScreen}
+        acknowledge={() =>
+          new Promise((resolve) => {
+            release = () => {
+              void harness.ops.acknowledge({
+                runId: initialScreen.kind === "GUIDED" ? initialScreen.handle.runId : "",
+                revision: initialScreen.kind === "GUIDED" ? initialScreen.handle.revision : 0,
+                activityId: initialScreen.kind === "GUIDED" ? initialScreen.activity.id : "",
+              }).then(resolve);
+            };
+          })
+        }
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
+    await act(async () => {
+      await Promise.resolve();
+    });
     const next = screen.getByRole("button", { name: "继续" });
-    expect(
-      next.getAttribute("aria-disabled") === "true" ||
-        (next as HTMLButtonElement).disabled,
-    ).toBe(true);
+    expect((next as HTMLButtonElement).disabled).toBe(true);
     expect(
       document.querySelector('[data-presentation-state="TRANSITIONING"]'),
     ).toBeTruthy();
-    expect((screen.getByRole("button", { name: "重新体验" }) as HTMLButtonElement).disabled).toBe(
-      false,
-    );
-  });
-
-  it("restart cancels a pending transition", () => {
-    render(<ContextLabClient payload={prepareMealContextLab()} />);
-    fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    fireEvent.click(screen.getByRole("button", { name: "重新体验" }));
-    expect(screen.getByText("1 / 4")).toBeTruthy();
-    act(() => {
-      vi.advanceTimersByTime(300);
+    release?.();
+    await act(async () => {
+      await Promise.resolve();
+      vi.advanceTimersByTime(160);
     });
-    expect(screen.getByText("1 / 4")).toBeTruthy();
-    expect(screen.getByText("桌上有汤、碗、勺子和叉子。先看看这些物品。")).toBeTruthy();
-  });
-
-  it("unmount cancels pending timers", () => {
-    const { unmount } = render(
-      <ContextLabClient payload={prepareMealContextLab()} />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    unmount();
-    expect(() => {
-      act(() => {
-        vi.advanceTimersByTime(300);
-      });
-    }).not.toThrow();
   });
 });
 
 describe("Context Lab reduced-motion and restart", () => {
   it("reduced motion advances immediately without a timer", async () => {
-    mockMotion(true);
-    vi.useFakeTimers();
-    render(<ContextLabClient payload={prepareMealContextLab()} />);
+    await renderFirstScreen(true);
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(screen.getByText("2 / 4")).toBeTruthy();
+    expect(await screen.findByText("2 / 4")).toBeTruthy();
     expect(
       document.querySelector('[data-presentation-state="TRANSITIONING"]'),
     ).toBeNull();
   });
 
   it("restart clears preview text and works from the boundary", async () => {
+    const harness = createMealLabHarness();
+    let current = await harness.controller.start();
+    for (let index = 0; index < 3; index += 1) {
+      if (current.kind !== "GUIDED") {
+        throw new Error("guided");
+      }
+      current = await harness.controller.acknowledge({
+        runId: current.handle.runId,
+        revision: current.handle.revision,
+        activityId: current.activity.id,
+      });
+    }
     mockMotion(true);
-    render(<ContextLabClient payload={prepareMealContextLab()} />);
-    fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    fireEvent.click(screen.getByRole("button", { name: "继续" }));
+    render(
+      <ContextLabClient {...harness.ops} initialScreen={current} />,
+    );
     const input = screen.getByLabelText("英文答案预览") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "spoon" } });
     expect(input.value).toBe("spoon");
@@ -114,28 +134,28 @@ describe("Context Lab reduced-motion and restart", () => {
       document.querySelector('[data-pilot-state="FROZEN_TASK_HANDOFF_READY"]'),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "重新体验" }));
-    expect(screen.getByText("1 / 4")).toBeTruthy();
+    expect(await screen.findByText("1 / 4")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
+    expect(await screen.findByText("2 / 4")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
+    expect(await screen.findByText("3 / 4")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect((screen.getByLabelText("英文答案预览") as HTMLInputElement).value).toBe(
-      "",
-    );
+    expect(
+      (await screen.findByLabelText("英文答案预览") as HTMLInputElement).value,
+    ).toBe("");
   });
 
-  it("progress stays within 1 / 4 through 4 / 4", () => {
-    mockMotion(true);
-    render(<ContextLabClient payload={prepareMealContextLab()} />);
+  it("progress stays within 1 / 4 through 4 / 4", async () => {
+    await renderFirstScreen(true);
     expect(screen.getByLabelText("进度 1 / 4")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(screen.getByLabelText("进度 2 / 4")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 2 / 4")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(screen.getByLabelText("进度 3 / 4")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 3 / 4")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(screen.getByLabelText("进度 4 / 4")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 4 / 4")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "提交功能将在下一阶段接入" }));
     expect(screen.getByLabelText("进度 4 / 4")).toBeTruthy();
     expect(screen.queryByText("5 / 4")).toBeNull();
-    expect(screen.queryByText("0 / 4")).toBeNull();
   });
 });

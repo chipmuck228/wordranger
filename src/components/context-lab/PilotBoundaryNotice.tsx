@@ -3,7 +3,7 @@ import type { ContextLabScreen } from "./types";
 export function PilotBoundaryNotice({
   screen,
 }: {
-  screen: Extract<ContextLabScreen, { kind: "PILOT_BOUNDARY" }>;
+  screen: Extract<ContextLabScreen, { kind: "FROZEN_TASK_HANDOFF_READY" }>;
 }) {
   return (
     <section

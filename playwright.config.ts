@@ -27,6 +27,7 @@ export default defineConfig({
       PLACEMENT_REVIEW_STORE: "file",
       PLACEMENT_REVIEW_WRITE_ENABLED: "1",
       CONTEXT_LAB_ENABLED: "1",
+      CONTEXT_LAB_RUNTIME: "memory",
     },
   },
 });

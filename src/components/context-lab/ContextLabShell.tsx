@@ -6,10 +6,12 @@ export function ContextLabShell({
   children,
   transitioning,
   onRestart,
+  restartDisabled = false,
 }: {
   children: ReactNode;
   transitioning?: boolean;
   onRestart?: () => void;
+  restartDisabled?: boolean;
 }) {
   return (
     <main
@@ -28,6 +30,7 @@ export function ContextLabShell({
         <Button
           type="button"
           variant="ghost"
+          disabled={restartDisabled}
           className="h-11 min-h-11 self-center px-4 text-sm"
           onClick={onRestart}
         >

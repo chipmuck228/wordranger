@@ -34,6 +34,20 @@ function collectProhibited(page: Page): string[] {
   return urls;
 }
 
+function collectContextLabMutations(page: Page): string[] {
+  const urls: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() !== "POST") {
+      return;
+    }
+    if (!/\/play\/context-lab(?:\/|$|\?)/.test(request.url())) {
+      return;
+    }
+    urls.push(request.url());
+  });
+  return urls;
+}
+
 async function assertNoOverflow(page: Page): Promise<void> {
   const overflow = await page.evaluate(() => {
     const root = document.documentElement;
@@ -128,6 +142,7 @@ test("Context Lab Meal BUILD presentation reaches the frozen-task boundary", asy
   page,
 }) => {
   const prohibited = collectProhibited(page);
+  const mutations = collectContextLabMutations(page);
 
   await page.goto("/play/context-lab");
   await expect(page.getByText("早餐时间")).toBeVisible();
@@ -161,8 +176,9 @@ test("Context Lab Meal BUILD presentation reaches the frozen-task boundary", asy
 
   await assertNoForbiddenPayload(page);
 
+  const firstRunProgress = page.getByText("1 / 4");
   await page.getByRole("button", { name: "重新体验" }).click();
-  await expect(page.getByText("1 / 4")).toBeVisible();
+  await expect(firstRunProgress).toBeVisible();
   await expect(
     page.getByText("桌上有汤、碗、勺子和叉子。先看看这些物品。", {
       exact: true,
@@ -170,6 +186,47 @@ test("Context Lab Meal BUILD presentation reaches the frozen-task boundary", asy
   ).toBeVisible();
 
   expect(prohibited).toEqual([]);
+  expect(mutations.length).toBeGreaterThanOrEqual(4);
+});
+
+test("Context Lab uses one start and one acknowledgement per Guided step", async ({
+  page,
+}) => {
+  const mutations = collectContextLabMutations(page);
+  await page.goto("/play/context-lab");
+  await expect(page.getByText("1 / 4")).toBeVisible();
+  const afterStart = mutations.length;
+  expect(afterStart).toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page.getByText("2 / 4")).toBeVisible();
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page.getByText("3 / 4")).toBeVisible();
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page.getByLabel("英文答案预览")).toBeVisible();
+  expect(mutations.length - afterStart).toBe(3);
+});
+
+test("refresh starts a new experimental run", async ({ page }) => {
+  await page.goto("/play/context-lab");
+  await expect(page.getByText("1 / 4")).toBeVisible();
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page.getByText("2 / 4")).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("1 / 4")).toBeVisible();
+  await expect(
+    page.getByText("桌上有汤、碗、勺子和叉子。先看看这些物品。", {
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+
+test("rapid double-click does not skip a Guided step", async ({ page }) => {
+  await page.goto("/play/context-lab");
+  await expect(page.getByText("1 / 4")).toBeVisible();
+  const next = page.getByRole("button", { name: "继续" });
+  await next.dblclick();
+  await expect(page.getByText("2 / 4")).toBeVisible();
+  await expect(page.getByText("3 / 4")).toHaveCount(0);
 });
 
 for (const viewport of VIEWPORTS) {
@@ -235,6 +292,7 @@ async function startDisabledContextLab(): Promise<string> {
   const env = {
     ...process.env,
     CONTEXT_LAB_ENABLED: "0",
+    CONTEXT_LAB_RUNTIME: "memory",
   };
   const child = spawn(
     "npx",

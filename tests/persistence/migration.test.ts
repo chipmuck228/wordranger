@@ -10,6 +10,7 @@ const sql = [
   "supabase/migrations/202609170003_learning_evidence_session_correlation.sql",
   "supabase/migrations/202609170004_cleanup_progress_test_user.sql",
   "supabase/migrations/202609170005_vocabulary_placement_reviews.sql",
+  "supabase/migrations/202609200001_context_lab_runs.sql",
 ]
   .map((file) => readFileSync(path.join(process.cwd(), file), "utf8"))
   .join("\n");
@@ -106,5 +107,18 @@ describe("Schema", () => {
     expect(sql).not.toMatch(
       /create policy[\s\S]*vocabulary_placement_reviews/,
     );
+  });
+
+  it("adds experimental context_lab_runs orchestration without learning-truth columns", () => {
+    expect(sql).toContain("create table if not exists context_lab_runs");
+    expect(sql).toContain("run_state jsonb not null");
+    expect(sql).toContain("context_lab_runs_revision_nonnegative");
+    expect(sql).toContain("context_lab_runs_id_user_id_idx");
+    expect(sql).toContain("grant select, insert, update on table context_lab_runs to service_role");
+    expect(sql).toContain("revoke all on table context_lab_runs from anon");
+    expect(sql).not.toMatch(/context_lab_runs[\s\S]*answer_key/);
+    expect(sql).not.toMatch(/context_lab_runs[\s\S]*mastery/);
+    expect(sql).not.toMatch(/context_lab_runs[\s\S]*learning_evidence/);
+    expect(sql).not.toMatch(/create policy[\s\S]*context_lab_runs/);
   });
 });

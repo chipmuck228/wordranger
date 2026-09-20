@@ -23,6 +23,7 @@ const CLIENT_ROOTS = [
 const SERVER_ROOTS = [
   join(process.cwd(), "src/server/context-lab"),
   join(process.cwd(), "src/app/play/context-lab/page.tsx"),
+  join(process.cwd(), "src/app/play/context-lab/actions.ts"),
 ];
 
 const FORBIDDEN_IMPORTS = [
@@ -63,9 +64,12 @@ describe("Context Lab import boundary", () => {
           expect(line, file).not.toContain(moduleName);
         }
         expect(line, file).not.toContain("prepare-meal-context-lab");
+        expect(line, file).not.toContain("meal-context-lab-controller");
         expect(line, file).not.toContain("compile-experience-step");
         expect(line, file).not.toContain("plan-experience");
         expect(line, file).not.toContain("issue-current-step");
+        expect(line, file).not.toContain("LearningRepository");
+        expect(line, file).not.toContain("create-daily-training");
       }
     }
   });
@@ -76,12 +80,18 @@ describe("Context Lab import boundary", () => {
       for (const line of lines) {
         for (const moduleName of [
           "default-task-evaluator",
+          "TaskEvaluator",
           "evidence-factory",
+          "EvidenceFactory",
           "process-evidence",
+          "processEvidence",
           "submit-task-action",
           "task-answer-key",
+          "LearningRepository",
+          "create-daily-training",
           "@/domain/scheduler",
           "@/server/scheduler",
+          "@/app/train",
         ]) {
           expect(line, file).not.toContain(moduleName);
         }

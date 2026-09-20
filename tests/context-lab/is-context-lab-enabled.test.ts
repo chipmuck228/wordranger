@@ -17,12 +17,8 @@ describe("Context Lab feature gate", () => {
     );
   });
 
-  it("loads the Meal pilot when the gate is enabled", () => {
+  it("exposes the route shell when the gate is enabled without creating a run", () => {
     const loaded = loadContextLabPage({ CONTEXT_LAB_ENABLED: "1" });
     expect(loaded.kind).toBe("READY");
-    if (loaded.kind !== "READY") {
-      throw new Error("enabled gate must load the pilot");
-    }
-    expect(loaded.payload.screens[0]?.kind).not.toBe("ERROR");
   });
 });
