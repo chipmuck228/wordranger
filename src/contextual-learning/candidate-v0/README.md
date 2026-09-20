@@ -190,6 +190,18 @@ Learner-facing rules:
 - The preview does not grade, receive `TaskAnswerKey`, call `DefaultTaskEvaluator`, create `LearningEvidence`, or call `processEvidence`.
 - The pilot ends at `FROZEN_TASK_HANDOFF_READY`, not `LEARNING_COMPLETED`.
 - `重新体验` and a page refresh both restart the local presentation. Nothing is persisted.
+- Rapid `继续` clicks cannot skip a screen. Restart cancels a pending transition timer.
+- Reduced motion (`prefers-reduced-motion: reduce`) advances immediately.
+
+Tested presentation viewports:
+
+```text
+375 × 812
+768 × 1024
+1440 × 900
+```
+
+Playwright binds the preview server to `127.0.0.1` so Next does not enumerate public interfaces.
 
 This is not production Daily Training integration and does not promote Candidate V0 to a Standard.
 

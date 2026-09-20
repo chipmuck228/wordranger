@@ -14,7 +14,7 @@ export function ContextLabShell({
   return (
     <main
       lang="zh-CN"
-      className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-6 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+      className="mx-auto flex min-h-dvh w-full min-w-0 max-w-md flex-col gap-6 overflow-x-hidden px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
     >
       <div
         className={cn(

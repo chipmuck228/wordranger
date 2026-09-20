@@ -1,6 +1,7 @@
 export const FORBIDDEN_CLIENT_FIELDS = [
   "answerKey",
   "correctOptionIds",
+  "optionLexemeIds",
   "expectedAnswer",
   "exactAcceptedTexts",
   "semanticAcceptedTexts",

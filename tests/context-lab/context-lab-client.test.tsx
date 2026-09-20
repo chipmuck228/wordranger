@@ -62,6 +62,7 @@ describe("Context Lab client presentation", () => {
       "home-soup",
       "home-spoon",
     ]);
+    expect(screen.getAllByText(/当前关注/)).toHaveLength(2);
   });
 
   it("step 3 presents contrast without a scored response", async () => {
@@ -85,6 +86,20 @@ describe("Context Lab client presentation", () => {
     await user.type(input, "spoon");
     expect(screen.queryByText(/答对|正确|掌握|完成学习/)).toBeNull();
     expect((input as HTMLInputElement).value).toBe("spoon");
+    expect(screen.getByText("试着输入英文单词。这只是预览，不会判分。")).toBeTruthy();
+  });
+
+  it("Enter in the preview input does not navigate or grade", async () => {
+    const user = userEvent.setup();
+    renderPilot();
+    await user.click(screen.getByRole("button", { name: "继续" }));
+    await user.click(screen.getByRole("button", { name: "继续" }));
+    await user.click(screen.getByRole("button", { name: "继续" }));
+    const input = screen.getByLabelText("英文答案预览");
+    await user.type(input, "spoon{Enter}");
+    expect(screen.getByLabelText("英文答案预览")).toBeTruthy();
+    expect(screen.queryByText(/交接点/)).toBeNull();
+    expect(screen.queryByText(/答对了|掌握了|完成学习/)).toBeNull();
   });
 
   it("opens the frozen-runtime boundary without completing learning", async () => {
@@ -94,11 +109,11 @@ describe("Context Lab client presentation", () => {
     await user.click(screen.getByRole("button", { name: "继续" }));
     await user.click(screen.getByRole("button", { name: "继续" }));
     await user.click(screen.getByRole("button", { name: "提交功能将在下一阶段接入" }));
-    const notice = screen.getByText(/交接点/);
-    expect(notice).toBeTruthy();
+    expect(screen.getAllByText(/交接点/).length).toBeGreaterThan(0);
     expect(
-      screen.getByText(/下一阶段会通过 WordRanger 原有提交与证据流程完成这道题/),
-    ).toBeTruthy();
+      screen.getAllByText(/下一阶段会通过 WordRanger 原有提交与证据流程完成这道题/)
+        .length,
+    ).toBeGreaterThan(0);
     expect(
       document.querySelector('[data-pilot-state="FROZEN_TASK_HANDOFF_READY"]'),
     ).toBeTruthy();
@@ -140,7 +155,9 @@ describe("Context Lab client presentation", () => {
         }}
       />,
     );
-    expect(screen.getByText("这个体验暂时无法加载。")).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "这个体验暂时无法加载。" }),
+    ).toBeTruthy();
     expect(within(document.body).queryByText("汤")).toBeNull();
   });
 });

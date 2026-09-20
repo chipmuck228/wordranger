@@ -11,7 +11,7 @@ export function ContextLabErrorState({
       <p className="text-muted-foreground text-sm leading-relaxed">
         {screen.message}
       </p>
-      <p className="text-muted-foreground font-mono text-xs">{screen.code}</p>
+      <p className="text-muted-foreground text-xs">{screen.code}</p>
     </section>
   );
 }

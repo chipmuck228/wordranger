@@ -73,3 +73,5 @@ export const CONTEXT_LAB_ERROR_CODES = {
 
 export type ContextLabErrorCode =
   (typeof CONTEXT_LAB_ERROR_CODES)[keyof typeof CONTEXT_LAB_ERROR_CODES];
+
+export const CONTEXT_LAB_HEADING_ID = "context-lab-heading";

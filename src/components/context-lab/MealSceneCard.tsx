@@ -11,7 +11,7 @@ export function MealSceneCard({
   return (
     <section
       aria-label="早餐桌上的物品"
-      className="bg-card flex flex-col gap-4 rounded-3xl p-4 shadow-sm ring-1 ring-black/5"
+      className="bg-card flex min-w-0 flex-col gap-4 rounded-3xl p-4 shadow-sm ring-1 ring-black/5"
     >
       <p className="text-sm leading-relaxed">{context.instruction}</p>
       <div className="grid grid-cols-2 gap-3">

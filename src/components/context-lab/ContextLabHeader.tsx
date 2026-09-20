@@ -1,4 +1,4 @@
-import type { ContextLabProgress } from "./types";
+import { CONTEXT_LAB_HEADING_ID, type ContextLabProgress } from "./types";
 
 export function ContextLabHeader({
   title,
@@ -14,7 +14,13 @@ export function ContextLabHeader({
       <p className="text-muted-foreground text-xs">Context Lab · Experimental</p>
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1
+            id={CONTEXT_LAB_HEADING_ID}
+            tabIndex={-1}
+            className="text-2xl font-semibold tracking-tight outline-none"
+          >
+            {title}
+          </h1>
           <p className="text-muted-foreground text-sm leading-relaxed">
             {settingLabel}
           </p>

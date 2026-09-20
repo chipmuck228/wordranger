@@ -18,15 +18,19 @@ export function ContextEntityTile({
     <article
       data-entity-id={entity.id}
       data-highlighted={highlighted ? "true" : "false"}
+      aria-current={highlighted ? "true" : undefined}
       className={cn(
-        "flex min-h-20 flex-col justify-center rounded-2xl px-3 py-3 ring-1",
+        "flex min-h-20 min-w-0 flex-col justify-center rounded-2xl px-3 py-3 ring-1",
         highlighted
-          ? "bg-card text-foreground ring-foreground/25 shadow-sm"
+          ? "bg-card text-foreground ring-2 ring-foreground/40 shadow-sm"
           : "bg-muted/40 text-foreground ring-black/5",
       )}
     >
-      <p className="text-base font-medium">{entity.label}</p>
-      <p className="text-muted-foreground text-xs">{ROLE_LABEL[entity.role]}</p>
+      <p className="text-base font-medium break-words">{entity.label}</p>
+      <p className="text-muted-foreground text-xs">
+        {ROLE_LABEL[entity.role]}
+        {highlighted ? " · 当前关注" : ""}
+      </p>
     </article>
   );
 }
