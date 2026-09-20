@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EvidenceOutcome } from "@/domain/learning/evidence.types";
 import { RANGER_TRIAL_GAME_ID, V1_PLACEHOLDER_USER_ID } from "@/server/auth/v1-user";
+import { contextLabBoundLexemeId } from "@/server/context-lab/bind-generated-task-to-vocabulary";
 import type { ContextLabRunRepository } from "@/server/context-lab/context-lab-run.types";
 import {
   acknowledgeUntilFrozen,
@@ -51,6 +52,7 @@ describe("Context Lab frozen task submission", () => {
     expect(evidence[0]?.gameId).toBe(RANGER_TRIAL_GAME_ID);
     expect(evidence[0]?.userId).toBe(V1_PLACEHOLDER_USER_ID);
     expect(evidence[0]?.outcome).toBe(EvidenceOutcome.INDEPENDENT_CORRECT);
+    expect(evidence[0]?.lexemeId).toBe(contextLabBoundLexemeId("lex-spoon"));
     const model = await correctHarness.learning.getStudentLexemeModel(
       V1_PLACEHOLDER_USER_ID,
       evidence[0]!.lexemeId,
@@ -243,7 +245,7 @@ describe("Context Lab frozen task submission", () => {
     expect(isolated.learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID)).toHaveLength(1);
     const model = await isolated.learning.getStudentLexemeModel(
       V1_PLACEHOLDER_USER_ID,
-      "lex-spoon",
+      contextLabBoundLexemeId("lex-spoon") ?? "lex-spoon",
     );
     expect(model?.evidenceCount).toBe(1);
     const completed = await isolated.repository.get({

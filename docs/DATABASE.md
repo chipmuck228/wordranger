@@ -150,7 +150,7 @@ Why a separate table: `game_sessions` is the product orchestration store for Lea
 
 Context Lab frozen-task assignment writes the existing `learning_tasks` row (`user_id` = server `V1_PLACEHOLDER_USER_ID`, `session_id` = Context Lab run id). Submission goes through `submitTaskAction` into existing `learning_evidence` / learner snapshots. Do not add a Context Lab Evidence table.
 
-Live Supabase writes also require the existing `learning_tasks` / `learning_evidence` migrations. Meal fixture lexeme IDs such as `lex-spoon` are not `lexemes.id` UUIDs, so a live FK to `lexemes(id)` remains a documented gap. Memory runtime does not enforce that FK.
+Live Supabase writes also require the existing `learning_tasks` / `learning_evidence` migrations. Context Lab binds the Meal BUILD typing fixture `lex-spoon` onto bundled canonical `lex-1311-1` before `saveGeneratedTask`. Candidate plan JSON may still contain fixture IDs; Evidence uses the vocabulary UUID.
 
 Rollback implication: dropping `context_lab_runs` discards experimental Context Lab orchestration only. It does not affect `learning_tasks`, `learning_evidence`, `student_lexeme_models`, or `game_sessions`.
 

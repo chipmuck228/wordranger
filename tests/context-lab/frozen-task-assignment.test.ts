@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { V1_PLACEHOLDER_USER_ID } from "@/server/auth/v1-user";
+import { contextLabBoundLexemeId } from "@/server/context-lab/bind-generated-task-to-vocabulary";
 import { contextLabFrozenTaskId } from "@/server/context-lab/context-lab-frozen-task-id";
 import { toGeneratedLearningTask } from "@/server/context-lab/to-generated-learning-task";
 import { LearningTaskType } from "@/domain/tasks/task-type";
@@ -23,6 +24,8 @@ describe("Context Lab frozen task assignment", () => {
     );
     expect(assigned?.assignment.userId).toBe(V1_PLACEHOLDER_USER_ID);
     expect(assigned?.assignment.sessionId).toBe(screen.handle.runId);
+    expect(screen.task.lexemeId).toBe(contextLabBoundLexemeId("lex-spoon"));
+    expect(assigned?.task.publicTask.lexemeId).toBe(screen.task.lexemeId);
   });
 
   it("uses a deterministic UUID from run ID + step ID", async () => {

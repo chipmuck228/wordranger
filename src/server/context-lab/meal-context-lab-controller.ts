@@ -68,6 +68,7 @@ import {
   type ContextLabRunRecord,
   type ContextLabRunRepository,
 } from "./context-lab-run.types";
+import { bindGeneratedTaskToVocabulary } from "./bind-generated-task-to-vocabulary";
 import { ensureAssignedGeneratedTask } from "./ensure-assigned-generated-task";
 import { HOME_BREAKFAST_FRAME_ID } from "./meal-presentation-map";
 import {
@@ -206,15 +207,25 @@ export class MealContextLabController {
       });
     }
 
+    let issuedTask = issued.issuedTask;
     if (issued.issuedTask) {
       if (!issued.answerKey) {
         return errorScreen(CONTEXT_LAB_ERROR_CODES.FROZEN_COMPILATION_FAILURE);
       }
-      const assigned = await withPersistenceTimeout(
-        this.assignIssuedTask(issued.run, issued.issuedTask, issued.answerKey),
-      );
-      if (!assigned.ok) {
-        return assigned.screen;
+      try {
+        const assigned = await withPersistenceTimeout(
+          this.assignIssuedTask(issued.run, issued.issuedTask, issued.answerKey),
+        );
+        if (!assigned.ok) {
+          return assigned.screen;
+        }
+        issuedTask = assigned.publicTask;
+      } catch (error) {
+        console.error("[context-lab] assign frozen task failed", persistErrorMessage(error));
+        return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
+          message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+          recoverable: true,
+        });
       }
     }
 
@@ -234,7 +245,7 @@ export class MealContextLabController {
     }
     return this.toPublicScreen(issued.run, saved.revision, {
       issuedActivity: issued.issuedActivity,
-      issuedTask: issued.issuedTask,
+      issuedTask,
     });
   }
 
@@ -375,10 +386,25 @@ export class MealContextLabController {
     run: ExperienceRun,
     publicTask: PublicLearningTask,
     answerKey: TaskAnswerKey,
-  ): Promise<{ ok: true } | { ok: false; screen: ContextLabCurrentScreen }> {
+  ): Promise<
+    | { ok: true; publicTask: PublicLearningTask }
+    | { ok: false; screen: ContextLabCurrentScreen }
+  > {
+    const bound = bindGeneratedTaskToVocabulary(
+      toGeneratedLearningTask({ publicTask, answerKey }),
+    );
+    if (!bound.ok) {
+      return {
+        ok: false,
+        screen: errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
+          message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+          recoverable: false,
+        }),
+      };
+    }
     const ensured = await ensureAssignedGeneratedTask({
       tasks: this.learningTasks,
-      task: toGeneratedLearningTask({ publicTask, answerKey }),
+      task: bound.task,
       assignment: {
         userId: this.userId,
         sessionId: run.id,
@@ -393,7 +419,7 @@ export class MealContextLabController {
         }),
       };
     }
-    return { ok: true };
+    return { ok: true, publicTask: bound.task.publicTask };
   }
 
   private async completeAfterEvidence(input: {
@@ -781,6 +807,15 @@ function rejectMalformedSubmit(
     });
   }
   return null;
+}
+
+function persistErrorMessage(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return "unknown persistence error";
+  }
+  const code = "code" in error ? String(error.code) : "";
+  const message = "message" in error ? String(error.message) : "";
+  return [code, message].filter(Boolean).join(" ");
 }
 
 function mapIssueError(code: string): (typeof CONTEXT_LAB_ERROR_CODES)[keyof typeof CONTEXT_LAB_ERROR_CODES] {
