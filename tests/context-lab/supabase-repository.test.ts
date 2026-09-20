@@ -139,4 +139,111 @@ describe("Context Lab Supabase repository", () => {
     ).rejects.toThrow(/schema version/);
     expect(CONTEXT_LAB_RUN_SCHEMA_VERSION).toBe("candidate-v0");
   });
+
+  it("round-trips a STRENGTHEN experienceId change and support exposures", async () => {
+    const { controller, learningTasks, repository } = createMealLabHarness({
+      beginAt: "PROBE",
+    });
+    let screen = await controller.start();
+    const recognitionCorrect = [false, false, true, false];
+    for (let index = 0; index < 4; index += 1) {
+      if (screen.kind !== "PROBE_INTRO" && screen.kind !== "PROBE_TASK_RECORDED") {
+        throw new Error(screen.kind);
+      }
+      screen = await controller.continueProbe({
+        runId: screen.handle.runId,
+        revision: screen.handle.revision,
+      });
+      if (screen.kind !== "FROZEN_TASK_PREVIEW") {
+        throw new Error(screen.kind);
+      }
+      screen = await controller.submitFrozenTask({
+        runId: screen.handle.runId,
+        revision: screen.handle.revision,
+        taskId: screen.task.id,
+        action: { kind: "TEXT_INPUT", value: "nope" },
+      });
+      if (screen.kind !== "PROBE_TASK_RECORDED") {
+        throw new Error(screen.kind);
+      }
+      screen = await controller.continueProbe({
+        runId: screen.handle.runId,
+        revision: screen.handle.revision,
+      });
+      if (screen.kind !== "FROZEN_TASK_PREVIEW") {
+        throw new Error(screen.kind);
+      }
+      const assigned = await learningTasks.getTaskForEvaluation(screen.task.id);
+      const optionId = recognitionCorrect[index]
+        ? assigned?.task.answerKey.correctOptionIds[0]
+        : assigned?.task.publicTask.responseContract.kind === "CHOICE"
+          ? assigned.task.publicTask.responseContract.options.find(
+              (option) =>
+                !assigned.task.answerKey.correctOptionIds.includes(option.id),
+            )?.id
+          : "";
+      screen = await controller.submitFrozenTask({
+        runId: screen.handle.runId,
+        revision: screen.handle.revision,
+        taskId: screen.task.id,
+        action: { kind: "CHOICE", optionId: optionId ?? "" },
+      });
+    }
+    if (screen.kind !== "PROBE_TASK_RECORDED") {
+      throw new Error(screen.kind);
+    }
+    const summary = await controller.continueProbe({
+      runId: screen.handle.runId,
+      revision: screen.handle.revision,
+    });
+    if (summary.kind !== "PROBE_SUMMARY") {
+      throw new Error(summary.kind);
+    }
+    const reconnect = await controller.continueProbe({
+      runId: summary.handle.runId,
+      revision: summary.handle.revision,
+      handoff: true,
+    });
+    if (reconnect.kind !== "GUIDED") {
+      throw new Error(reconnect.kind);
+    }
+    await controller.acknowledge({
+      runId: reconnect.handle.runId,
+      revision: reconnect.handle.revision,
+      activityId: reconnect.activity.id,
+    });
+    const memory = await repository.get({
+      runId: reconnect.handle.runId,
+      userId: V1_PLACEHOLDER_USER_ID,
+    });
+    if (!memory) {
+      throw new Error("missing strengthen run");
+    }
+    const client = createFakeClient();
+    const store = new SupabaseContextLabRunRepository(
+      client as never,
+      V1_PLACEHOLDER_USER_ID,
+    );
+    await store.create({
+      ...memory,
+      revision: 0,
+    });
+    const saved = await store.saveIfRevision({
+      runId: memory.id,
+      userId: V1_PLACEHOLDER_USER_ID,
+      expectedRevision: 0,
+      nextRun: memory.experienceRun,
+      nextProbe: memory.probe,
+      updatedAt: "2026-09-20T00:00:02.000Z",
+    });
+    expect(saved).toEqual({ ok: true, revision: 1 });
+    const loaded = await store.get({
+      runId: memory.id,
+      userId: V1_PLACEHOLDER_USER_ID,
+    });
+    expect(loaded?.experienceId).toBe(memory.experienceRun.experienceId);
+    expect(loaded?.probe?.experienceMode).toBe("STRENGTHEN");
+    expect(loaded?.probe?.supportExposures?.length).toBeGreaterThan(0);
+    expect(JSON.stringify(loaded?.probe)).not.toContain("answerKey");
+  });
 });

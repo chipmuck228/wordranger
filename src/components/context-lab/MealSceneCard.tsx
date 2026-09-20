@@ -38,6 +38,28 @@ export function MealSceneCard({
           ))}
         </ul>
       ) : null}
+      {context.supportReveal ? (
+        <div
+          data-support-kind={context.supportReveal.kind}
+          className="bg-muted/50 rounded-2xl px-3 py-3 text-sm leading-relaxed"
+        >
+          <p className="text-muted-foreground">{context.supportReveal.note}</p>
+          {context.supportReveal.lexicalForm ? (
+            <p className="mt-2 text-lg font-semibold">{context.supportReveal.lexicalForm}</p>
+          ) : null}
+          {context.supportReveal.meaningGloss ? (
+            <p className="mt-1">{context.supportReveal.meaningGloss}</p>
+          ) : null}
+          {context.supportReveal.phonetic ? (
+            <p className="text-muted-foreground mt-1">{context.supportReveal.phonetic}</p>
+          ) : null}
+          {context.supportReveal.spellingCue ? (
+            <p aria-label="拼写提示" className="mt-2 font-mono text-lg tracking-widest">
+              {context.supportReveal.spellingCue}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

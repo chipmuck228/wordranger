@@ -233,6 +233,63 @@ export function createMealBuildPlan(frame: ContextFrame): LearningExperiencePlan
   };
 }
 
+export function createMealRecallStrengthenPlan(
+  frame: ContextFrame,
+): LearningExperiencePlan {
+  const prefix = mealPrefixForFrame(frame.id);
+  const spoon = `${prefix}-spoon`;
+  const reconnect: GuidedExperienceStepSpec = {
+    id: `${prefix}-strengthen-reconnect`,
+    purpose: "CONNECT",
+    targetIds: ["target-spoon-form"],
+    semanticAction: "OBSERVE",
+    executionIntent: {
+      kind: "GUIDED",
+      guidedActivityKind: "RECONNECT_FORM",
+      completionMode: "ACKNOWLEDGE_ONLY",
+      rationale:
+        "Re-show the scene object with the English form. Acknowledgement is support exposure, not Evidence.",
+    },
+    presentation: {
+      instruction: "这是强化，不是测试。重新看一看勺子和它的英文词形。",
+      presentedEntityIds: [spoon],
+    },
+    transition: nextOrEnd(false),
+  };
+  const fade: GuidedExperienceStepSpec = {
+    id: `${prefix}-strengthen-fade`,
+    purpose: "CONNECT",
+    targetIds: ["target-spoon-form"],
+    semanticAction: "OBSERVE",
+    executionIntent: {
+      kind: "GUIDED",
+      guidedActivityKind: "FADE_FORM",
+      completionMode: "ACKNOWLEDGE_ONLY",
+      rationale:
+        "Withdraw the full form and leave a spelling cue. Acknowledgement is support exposure, not Evidence.",
+    },
+    presentation: {
+      instruction: "完整英文已经收起。下面是提示，不是答案。",
+      presentedEntityIds: [spoon],
+    },
+    transition: nextOrEnd(false),
+  };
+  const steps = [reconnect, fade, mealRecallStep(prefix, "STRENGTHEN")];
+  return {
+    id: `meal-strengthen-recall-${frame.id}`,
+    schemaVersion: "candidate-v0",
+    mode: "STRENGTHEN",
+    sourceLearningNeedRef: "need-meal-spoon",
+    targets: [spoonFormTarget()],
+    skeletonId: MEAL_SKELETON_ID,
+    contextFrameId: frame.id,
+    activeGoalId: "EATER_CAN_EAT_FOOD",
+    steps,
+    completionPolicy: completeAll(steps),
+    provenance: FIXTURE_PROVENANCE,
+  };
+}
+
 export function createMealStrengthenPlan(
   frame: ContextFrame,
 ): LearningExperiencePlan {

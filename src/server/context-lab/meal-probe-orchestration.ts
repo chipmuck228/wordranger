@@ -7,6 +7,8 @@ import type {
   ProbeObservationRef,
 } from "@/contextual-learning/candidate-v0/probe/types";
 import { resolveProbeDisposition } from "@/contextual-learning/candidate-v0/probe/resolve-probe-disposition";
+import { isSpoonActiveRecallStrengthenEligible } from "@/contextual-learning/candidate-v0/strengthen/eligibility";
+import type { ContextualSupportExposure } from "@/contextual-learning/candidate-v0/strengthen/types";
 import { BUNDLED_SPOON_LEXEME_ID } from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
 
 export type MealProbePhase =
@@ -16,7 +18,8 @@ export type MealProbePhase =
   | "PROBE_FEEDBACK_RECORDED"
   | "PROBE_COMPLETED"
   | "ROUTING_SUMMARY"
-  | "BUILD_HANDOFF";
+  | "BUILD_HANDOFF"
+  | "STRENGTHEN_HANDOFF";
 
 export interface MealProbeIssuedTask {
   taskId: string;
@@ -34,6 +37,8 @@ export interface MealProbeOrchestration {
   issued: MealProbeIssuedTask | null;
   observations: ProbeObservationRef[];
   lastOutcome?: EvidenceOutcome;
+  experienceMode?: "BUILD" | "STRENGTHEN" | null;
+  supportExposures?: ContextualSupportExposure[];
 }
 
 export function createMealProbeOrchestration(
@@ -46,6 +51,8 @@ export function createMealProbeOrchestration(
     currentSkill: null,
     issued: null,
     observations: [],
+    experienceMode: null,
+    supportExposures: [],
   };
 }
 
@@ -98,6 +105,24 @@ export function canHandoffSpoonBuild(
   );
 }
 
+export function canHandoffSpoonRecallStrengthen(
+  probe: MealProbeOrchestration,
+): boolean {
+  const results = routingResultsForProbe(probe);
+  const spoon = results.find(
+    (result) => result.target.lexemeId === BUNDLED_SPOON_LEXEME_ID,
+  );
+  if (!spoon) {
+    return false;
+  }
+  return isSpoonActiveRecallStrengthenEligible({
+    targetLexemeId: spoon.target.lexemeId,
+    spoonLexemeId: BUNDLED_SPOON_LEXEME_ID,
+    disposition: spoon.disposition,
+    observations: spoon.observations,
+  });
+}
+
 export function publicDispositionLabel(
   disposition: ContextualProbeDisposition,
 ): string {
@@ -124,7 +149,7 @@ export function spoonPendingMessage(
     return null;
   }
   if (spoon.disposition === "STRENGTHEN") {
-    return "勺子的强化体验将在下一步实现。";
+    return null;
   }
   if (spoon.disposition === "READY") {
     return "这次勺子已经能独立回答，不进入教学阶段。";

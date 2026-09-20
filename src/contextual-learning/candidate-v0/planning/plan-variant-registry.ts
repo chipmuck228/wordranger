@@ -20,7 +20,11 @@ import {
   restaurantMealFrame,
 } from "../fixtures/meal/contexts";
 import { MEAL_PROFILES, MEAL_SENSE } from "../fixtures/meal/knowledge";
-import { createMealBuildPlan, createMealStrengthenPlan } from "../fixtures/meal/plans";
+import {
+  createMealBuildPlan,
+  createMealRecallStrengthenPlan,
+  createMealStrengthenPlan,
+} from "../fixtures/meal/plans";
 import { mealSkeleton } from "../fixtures/meal/skeleton";
 import { MEAL_SUPPORTS } from "../fixtures/meal/supports";
 import { SCHOOL_FRAMES } from "../fixtures/school-challenge/contexts";
@@ -61,7 +65,7 @@ const MEAL_FRAMES = [picnicLunchFrame, restaurantMealFrame, homeBreakfastFrame];
 const BORROW_TRANSFER_FRAMES = [libraryBookFrame, classroomRulerFrame];
 
 function mealVariant(
-  kind: "build" | "strengthen" | "retrieve",
+  kind: "build" | "strengthen" | "strengthen-recall" | "retrieve",
   frame: ContextFrame,
 ): ExperiencePlanVariant {
   if (kind === "build") {
@@ -78,6 +82,22 @@ function mealVariant(
       containsAssessableSteps: true,
       reviewStatus: "REVIEWED",
       createPlan: () => createMealBuildPlan(frame),
+    };
+  }
+  if (kind === "strengthen-recall") {
+    return {
+      id: `meal-strengthen-recall:${frame.id}`,
+      priority: 30,
+      mode: "STRENGTHEN",
+      supportedSenses: MEAL_SPOON,
+      requiredSenses: MEAL_SPOON,
+      contextFrameId: frame.id,
+      skeletonId: mealSkeleton.id,
+      requiredCapabilityIds: TYPING,
+      containsGuidedSteps: true,
+      containsAssessableSteps: true,
+      reviewStatus: "REVIEWED",
+      createPlan: () => createMealRecallStrengthenPlan(frame),
     };
   }
   if (kind === "strengthen") {
@@ -224,6 +244,7 @@ const PLAN_VARIANTS: readonly ExperiencePlanVariant[] = [
   ...MEAL_FRAMES.flatMap((frame) => [
     mealVariant("retrieve", frame),
     mealVariant("build", frame),
+    mealVariant("strengthen-recall", frame),
     mealVariant("strengthen", frame),
   ]),
   ...SCHOOL_FRAMES.flatMap((frame) => [

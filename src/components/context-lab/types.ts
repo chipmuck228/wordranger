@@ -27,6 +27,14 @@ export interface PublicContextPresentation {
     entityId: string;
     caption: string;
   }>;
+  supportReveal?: {
+    kind: "LEXICAL_FORM" | "SPELLING_CUE";
+    lexicalForm?: string;
+    meaningGloss?: string;
+    phonetic?: string;
+    spellingCue?: string;
+    note: string;
+  };
 }
 
 export interface ContextLabProgress {
@@ -62,6 +70,7 @@ export type ContextLabCurrentScreen =
       progress: ContextLabProgress;
       items: PublicProbeRoutingItem[];
       canHandoffToBuild: boolean;
+      canHandoffToStrengthen: boolean;
       pendingMessage: string | null;
     }
   | {
@@ -71,6 +80,8 @@ export type ContextLabCurrentScreen =
       context: PublicContextPresentation;
       progress: ContextLabProgress;
       teachingPhase?: boolean;
+      strengthenPhase?: "RECONNECT" | "FADE";
+      acknowledgeLabel?: string;
     }
   | {
       kind: "FROZEN_TASK_PREVIEW";
@@ -79,6 +90,7 @@ export type ContextLabCurrentScreen =
       context: PublicContextPresentation;
       progress: ContextLabProgress;
       presentationMode?: ContextLabTaskPresentationMode;
+      strengthenPhase?: "VERIFY";
     }
   | {
       kind: "PROBE_TASK_RECORDED";
@@ -133,6 +145,8 @@ export type ContextLabErrorCode =
 export const CONTEXT_LAB_HEADING_ID = "context-lab-heading";
 
 export const CONTEXT_LAB_RECORDED_MESSAGE = "这次练习已记录。";
+export const CONTEXT_LAB_STRENGTHEN_RECORDED_MESSAGE = "这次强化已经记录。";
+export const CONTEXT_LAB_STRENGTHEN_ASSISTED_MESSAGE = "这次是在提示后答对的。";
 export const CONTEXT_LAB_PROBE_RECORDED_MESSAGE = "这次回答已记录，请继续。";
 export const CONTEXT_LAB_BOUNDARY_MESSAGE =
   "语境体验已到达现有学习任务的交接点。\n下一阶段会通过 WordRanger 原有提交与证据流程完成这道题。";

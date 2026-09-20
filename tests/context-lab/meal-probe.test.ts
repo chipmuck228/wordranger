@@ -295,6 +295,7 @@ describe("Meal cold Probe orchestration", () => {
     expect(screen.items).toHaveLength(4);
     expect(screen.items.every((item) => item.summary === "建立情境记忆")).toBe(true);
     expect(screen.canHandoffToBuild).toBe(true);
+    expect(screen.canHandoffToStrengthen).toBe(false);
     expect(JSON.stringify(screen)).not.toContain("answerKey");
     expect(JSON.stringify(screen)).not.toContain(EvidenceOutcome.INCORRECT);
 
@@ -332,6 +333,7 @@ describe("Meal cold Probe orchestration", () => {
     assertKind(screen, "PROBE_SUMMARY");
     expect(screen.items.every((item) => item.summary === "本次已能独立回答")).toBe(true);
     expect(screen.canHandoffToBuild).toBe(false);
+    expect(screen.canHandoffToStrengthen).toBe(false);
     const refused = await controller.continueProbe({
       runId: screen.handle.runId,
       revision: screen.handle.revision,
@@ -340,7 +342,7 @@ describe("Meal cold Probe orchestration", () => {
     expect(refused.kind).toBe("ERROR");
   });
 
-  it("routes failed recall + correct recognition to STRENGTHEN and refuses spoon STRENGTHEN handoff", async () => {
+  it("routes failed recall + correct recognition to STRENGTHEN and offers spoon strengthen handoff", async () => {
     const { controller, learningTasks } = probeHarness();
     let screen: ContextLabCurrentScreen = await controller.start();
     for (let index = 0; index < 2; index += 1) {
@@ -361,7 +363,17 @@ describe("Meal cold Probe orchestration", () => {
     assertKind(screen, "PROBE_SUMMARY");
     expect(screen.items[2]?.summary).toBe("加强记忆连接");
     expect(screen.canHandoffToBuild).toBe(false);
-    expect(screen.pendingMessage).toContain("强化体验将在下一步实现");
+    expect(screen.canHandoffToStrengthen).toBe(true);
+    expect(screen.pendingMessage).toBeNull();
+    const strengthen = await controller.continueProbe({
+      runId: screen.handle.runId,
+      revision: screen.handle.revision,
+      handoff: true,
+    });
+    assertKind(strengthen, "GUIDED");
+    expect(strengthen.strengthenPhase).toBe("RECONNECT");
+    expect(strengthen.context.settingLabel).toContain("强化阶段");
+    expect(strengthen.context.settingLabel).not.toContain("教学阶段");
   });
 
   it("does not accept a client-supplied next skill or disposition", async () => {

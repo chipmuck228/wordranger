@@ -411,7 +411,9 @@ export interface StepTransitionPolicy {
 export type GuidedActivityKind =
   | "PRESENT_CONTEXT"
   | "OBSERVE_RELATION"
-  | "SHOW_CONTRAST";
+  | "SHOW_CONTRAST"
+  | "RECONNECT_FORM"
+  | "FADE_FORM";
 
 export type AssessableExecutionIntent = {
   kind: "ASSESSABLE";

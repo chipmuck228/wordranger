@@ -343,6 +343,96 @@ test("recall wrong plus recognition correct routes STRENGTHEN", async ({
   await expect(page.getByText("建立情境记忆")).toHaveCount(3);
 });
 
+async function completeProbeSpoonStrengthen(page: Page): Promise<void> {
+  await expect(page.getByText("先看看你已经会了哪些词", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "开始检查" }).click();
+  await completeOneTargetWrong(page, 0);
+  await completeOneTargetWrong(page, 1);
+  await expect(page.getByText("3 / 4 个物品")).toBeVisible();
+  await page.getByLabel("英文答案").fill("nope");
+  await page.getByRole("button", { name: "提交" }).click();
+  await expectNeutralProbeRecorded(page);
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page.getByText("spoon", { exact: true })).toBeVisible();
+  await clickCorrectChoice(page, "匙");
+  await expectNeutralProbeRecorded(page);
+  await page.getByRole("button", { name: "继续" }).click();
+  await completeOneTargetWrong(page, 3);
+  await expect(page.getByText("加强记忆连接")).toBeVisible();
+  await expect(page.getByText("建立情境记忆")).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "开始勺子强化" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "开始勺子教学" })).toHaveCount(0);
+}
+
+test("spoon STRENGTHEN reconnects the form, fades it, then records assisted verification", async ({
+  page,
+}) => {
+  await resetMemoryProbe(page);
+  await page.goto("/play/context-lab");
+  await completeProbeSpoonStrengthen(page);
+  await expect(page.getByRole("button", { name: "开始勺子强化" })).toBeVisible();
+  await page.getByRole("button", { name: "开始勺子强化" }).click();
+  await expect(page.getByText("强化阶段：加强勺子的记忆连接")).toBeVisible();
+  await expect(page.getByText("教学阶段：建立勺子的情境记忆")).toHaveCount(0);
+  await expect(page.getByText("勺子 → 适合舀汤")).toHaveCount(0);
+  await expect(page.getByText("spoon", { exact: true })).toBeVisible();
+  await expect(page.getByText("匙，调羹")).toBeVisible();
+  await assertNoOverflow(page);
+
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page.locator('[data-strengthen-phase="FADE"]')).toBeVisible();
+  await expect(page.getByLabel("拼写提示")).toHaveText("s _ _ _ _");
+  await expect(page.getByText("spoon", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "试着自己写" }).click();
+  await expect(page.locator('[data-strengthen-phase="VERIFY"]')).toBeVisible();
+  await expect(page.getByText("spoon", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("拼写提示")).toHaveCount(0);
+  const before = await memoryEvidence(page);
+  await page.getByLabel("英文答案").fill("spoon");
+  await page.getByRole("button", { name: "提交" }).dblclick();
+  await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
+  await expect(page.getByText("这次是在提示后答对的。", { exact: true })).toBeVisible();
+  await expect(page.getByText("这次强化已经记录。", { exact: true })).toBeVisible();
+  await expect(page.getByText("完全独立")).toHaveCount(0);
+  await expect(page.getByText("永久掌握")).toHaveCount(0);
+  const after = await memoryEvidence(page);
+  expect(after.evidenceCount).toBe(before.evidenceCount + 1);
+  expect(after.items.some((item) => item.outcome === "ASSISTED_CORRECT")).toBe(true);
+  await assertNoForbiddenPayload(page);
+  const html = await page.content();
+  expect(html).not.toContain('"hintCount"');
+});
+
+test("strengthen incorrect verification writes INCORRECT and READY has no plan button", async ({
+  page,
+}) => {
+  await resetMemoryProbe(page);
+  await page.goto("/play/context-lab");
+  await completeProbeSpoonStrengthen(page);
+  await page.getByRole("button", { name: "开始勺子强化" }).click();
+  await page.getByRole("button", { name: "继续" }).click();
+  await page.getByRole("button", { name: "试着自己写" }).click();
+  const before = await memoryEvidence(page);
+  await page.getByLabel("英文答案").fill("fork");
+  await page.getByRole("button", { name: "提交" }).click();
+  await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
+  await expect(page.getByText("这次强化已经记录。", { exact: true })).toBeVisible();
+  expect((await memoryEvidence(page)).evidenceCount).toBe(before.evidenceCount + 1);
+  expect((await memoryEvidence(page)).items.some((item) => item.outcome === "INCORRECT")).toBe(true);
+
+  await page.getByRole("button", { name: "重新体验" }).click();
+  await page.getByRole("button", { name: "开始检查" }).click();
+  for (const lemma of PROBE_LEMMAS) {
+    await page.getByLabel("英文答案").fill(lemma);
+    await page.getByRole("button", { name: "提交" }).click();
+    await expectNeutralProbeRecorded(page);
+    await page.getByRole("button", { name: "继续" }).click();
+  }
+  await expect(page.getByText("本次已能独立回答")).toHaveCount(4);
+  await expect(page.getByRole("button", { name: "开始勺子教学" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "开始勺子强化" })).toHaveCount(0);
+});
+
 test("independent recall routes READY and skips recognition", async ({
   page,
 }) => {
@@ -358,6 +448,7 @@ test("independent recall routes READY and skips recognition", async ({
   }
   await expect(page.getByText("本次已能独立回答")).toHaveCount(4);
   await expect(page.getByRole("button", { name: "开始勺子教学" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "开始勺子强化" })).toHaveCount(0);
 });
 
 test("Context Lab uses one start and one acknowledgement per Guided step", async ({
@@ -447,6 +538,29 @@ test("rapid double-click does not skip a Guided step", async ({ page }) => {
   await expect(page.getByText("2 / 4")).toBeVisible();
   await expect(page.getByText("3 / 4")).toHaveCount(0);
 });
+
+for (const viewport of VIEWPORTS) {
+  test(`Context Lab strengthen layout has no overflow at ${viewport.name}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({
+      width: viewport.width,
+      height: viewport.height,
+    });
+    await resetMemoryProbe(page);
+    await page.goto("/play/context-lab");
+    await completeProbeSpoonStrengthen(page);
+    await page.getByRole("button", { name: "开始勺子强化" }).click();
+    await expect(page.getByText("强化阶段：加强勺子的记忆连接")).toBeVisible();
+    await assertNoOverflow(page);
+    await page.getByRole("button", { name: "继续" }).click();
+    await expect(page.locator('[data-strengthen-phase="FADE"]')).toBeVisible();
+    await assertNoOverflow(page);
+    await page.getByRole("button", { name: "试着自己写" }).click();
+    await expect(page.locator('[data-strengthen-phase="VERIFY"]')).toBeVisible();
+    await assertNoOverflow(page);
+  });
+}
 
 for (const viewport of VIEWPORTS) {
   test(`Context Lab layout and screenshots at ${viewport.name}`, async ({

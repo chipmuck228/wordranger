@@ -12,7 +12,10 @@ export function GuidedActivityPanel({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-6">
+    <div
+      data-strengthen-phase={screen.strengthenPhase}
+      className="flex min-w-0 flex-1 flex-col gap-6"
+    >
       <MealSceneCard context={screen.context} />
       <Button
         type="button"
@@ -20,7 +23,7 @@ export function GuidedActivityPanel({
         className="h-12 w-full min-h-12 rounded-2xl text-base"
         onClick={onAcknowledge}
       >
-        继续
+        {screen.acknowledgeLabel ?? "继续"}
       </Button>
     </div>
   );

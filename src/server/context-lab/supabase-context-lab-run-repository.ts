@@ -141,6 +141,7 @@ export class SupabaseContextLabRunRepository implements ContextLabRunRepository 
       .from("context_lab_runs")
       .update({
         run_state: runState,
+        experience_id: input.nextRun.experienceId,
         updated_at: input.updatedAt,
         revision: input.expectedRevision + 1,
       })

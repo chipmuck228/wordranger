@@ -81,6 +81,7 @@ export { mealSkeleton } from "./fixtures/meal/skeleton";
 export { MEAL_FRAMES } from "./fixtures/meal/contexts";
 export {
   createMealBuildPlan,
+  createMealRecallStrengthenPlan,
   createMealStrengthenPlan,
 } from "./fixtures/meal/plans";
 export { createSafeLexicalRecallPlan } from "./fixtures/execution/safe-lexical-recall";

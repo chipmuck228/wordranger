@@ -39,7 +39,7 @@ describe("Candidate V0 experience planner — Meal", () => {
     );
   });
 
-  it("reports Meal BUILD as fully executable and STRENGTHEN/PROBE as explicit gaps", () => {
+  it("reports Meal BUILD as fully executable and PROBE as an explicit gap", () => {
     const build = planExperience(mealInput("BUILD", [TYPING_CAPABILITY]));
     expect(build.ok).toBe(true);
     if (!build.ok) {
@@ -52,23 +52,40 @@ describe("Candidate V0 experience planner — Meal", () => {
     );
     expect(build.plan.steps.some((step) => step.purpose === "RECALL")).toBe(true);
 
-    const strengthen = planExperience(mealInput("STRENGTHEN", [
-      TYPING_CAPABILITY,
-      CHOICE_IDENTIFY,
-    ]));
-    expect(strengthen.ok).toBe(false);
-    if (strengthen.ok) {
-      throw new Error("STRENGTHEN must remain an honest gap");
-    }
-    expect(strengthen.error.code).toBe(PlanningErrorCode.PLAN_NO_COMPATIBLE_VARIANT);
-    expect(strengthen.trace.rejectedVariantReasons.length).toBeGreaterThan(0);
-
     const probe = planExperience(mealInput("PROBE"));
     expect(probe.ok).toBe(false);
     if (probe.ok) {
       throw new Error("PROBE must not be invented");
     }
     expect(probe.error.code).toBe(PlanningErrorCode.PLAN_MODE_NOT_AVAILABLE);
+  });
+
+  it("selects the Meal recall STRENGTHEN variant and keeps IDENTIFY STRENGTHEN as a gap", () => {
+    const strengthen = planExperience(mealInput("STRENGTHEN", [TYPING_CAPABILITY]));
+    expect(strengthen.ok).toBe(true);
+    if (!strengthen.ok) {
+      throw new Error(strengthen.error.message);
+    }
+    expect(strengthen.trace.selectedVariantId).toBe(
+      "meal-strengthen-recall:home-breakfast-v0",
+    );
+    expect(strengthen.plan.mode).toBe("STRENGTHEN");
+    expect(strengthen.plan.id).toContain("strengthen-recall");
+    expect(strengthen.plan.steps.map((step) => step.executionIntent.kind)).toEqual([
+      "GUIDED",
+      "GUIDED",
+      "ASSESSABLE",
+    ]);
+    expect(strengthen.trace.rejectedVariantReasons.some((item) =>
+      item.variantId.startsWith("meal-strengthen:"),
+    )).toBe(true);
+
+    const identifyOnly = planExperience(mealInput("STRENGTHEN", [CHOICE_IDENTIFY]));
+    expect(identifyOnly.ok).toBe(false);
+    if (identifyOnly.ok) {
+      throw new Error("IDENTIFY-only STRENGTHEN must remain an honest gap");
+    }
+    expect(identifyOnly.error.code).toBe(PlanningErrorCode.PLAN_NO_COMPATIBLE_VARIANT);
   });
 
   it("selects Home / Restaurant / Picnic from the same Meal skeleton by allow-list order", () => {

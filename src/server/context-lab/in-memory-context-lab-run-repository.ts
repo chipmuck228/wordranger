@@ -88,7 +88,7 @@ export class InMemoryContextLabRunRepository implements ContextLabRunRepository 
     if (stored.revision !== input.expectedRevision) {
       return { ok: false, reason: "REVISION_CONFLICT" };
     }
-    if (input.nextRun.id !== stored.id || input.nextRun.experienceId !== stored.experienceId) {
+    if (input.nextRun.id !== stored.id) {
       throw new ContextLabError(
         CONTEXT_LAB_ERROR_CODES.PLAN_VALIDATION_FAILURE,
         "Updated Context Lab run identity does not match the stored row",
@@ -97,6 +97,7 @@ export class InMemoryContextLabRunRepository implements ContextLabRunRepository 
     }
     const next: ContextLabRunRecord = {
       ...stored,
+      experienceId: input.nextRun.experienceId,
       experienceRun: input.nextRun,
       probe: input.nextProbe !== undefined ? input.nextProbe : stored.probe ?? null,
       revision: input.expectedRevision + 1,

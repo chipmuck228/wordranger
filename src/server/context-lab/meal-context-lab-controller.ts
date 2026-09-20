@@ -85,6 +85,7 @@ import { generateMealProbeTask } from "./generate-meal-probe-task";
 import { mealColdProbeTargets } from "./meal-probe-targets";
 import {
   canHandoffSpoonBuild,
+  canHandoffSpoonRecallStrengthen,
   createMealProbeOrchestration,
   nextProbeSkill,
   publicDispositionLabel,
@@ -95,8 +96,14 @@ import {
 import type { StudentAction } from "@/domain/tasks/student-action";
 import {
   BUNDLED_LEXEME_BINDINGS,
+  BUNDLED_SPOON_LEXEME_ID,
   bundledBindingLexemeId,
 } from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
+import { deriveFrozenHintCountFromSupportExposure } from "@/contextual-learning/candidate-v0/strengthen/derive-frozen-hint-count";
+import {
+  mergeSupportExposures,
+  supportExposuresForStrengthenStep,
+} from "@/contextual-learning/candidate-v0/strengthen/record-support-exposure";
 import { toGeneratedLearningTask } from "./to-generated-learning-task";
 
 const TYPING_CAPABILITY = FROZEN_RUNTIME_CAPABILITIES.find(
@@ -207,6 +214,8 @@ export class MealContextLabController {
     }
 
     const completedAt = this.now();
+    const acknowledgedStep =
+      record.experienceRun.planSnapshot.plan.steps[record.experienceRun.currentStepIndex];
     const recorded = recordGuidedActivityCompletion({
       run: record.experienceRun,
       receipt: {
@@ -255,13 +264,18 @@ export class MealContextLabController {
       }
     }
 
+    const nextProbe = recordSupportExposureOnProbe({
+      probe: record.probe,
+      stepId: acknowledgedStep?.id ?? "",
+      shownAt: completedAt,
+    });
     const saved = await withPersistenceTimeout(
       this.repository.saveIfRevision({
         runId: input.runId,
         userId: this.userId,
         expectedRevision: input.revision,
         nextRun: issued.run,
-        nextProbe: record.probe,
+        nextProbe,
         updatedAt: completedAt,
       }),
     );
@@ -348,6 +362,16 @@ export class MealContextLabController {
     }
 
     const occurredAt = this.now();
+    const hintCount = frozenHintCountForRecord(record);
+    if (
+      record.experienceRun.planSnapshot.plan.mode === "STRENGTHEN" &&
+      hintCount === 0
+    ) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+        recoverable: false,
+      });
+    }
     try {
       const submitted = await withPersistenceTimeout(
         submitTaskAction({
@@ -358,7 +382,7 @@ export class MealContextLabController {
             taskId: input.taskId,
             occurredAt,
             responseTimeMs: boundResponseTimeMs(input.responseTimeMs),
-            hintCount: 0,
+            hintCount,
           },
           userId: this.userId,
           sessionId: record.id,
@@ -436,7 +460,7 @@ export class MealContextLabController {
       });
     }
     if (input.handoff) {
-      return this.handoffToBuild(record);
+      return this.handoffFromProbe(record);
     }
     if (
       record.probe.phase !== "PROBE_INTRO" &&
@@ -546,6 +570,7 @@ export class MealContextLabController {
       handle: { runId: input.record.id, revision: saved.revision },
       feedback: input.feedback,
       progress: progressForIssuedRun(recorded.run),
+      planMode: planModeOf(recorded.run),
     });
   }
 
@@ -565,6 +590,7 @@ export class MealContextLabController {
         handle: { runId: record.id, revision: record.revision },
         feedback: contextLabFeedbackFromEvidence(evidence),
         progress: progressForIssuedRun(record.experienceRun),
+        planMode: planModeOf(record.experienceRun),
       });
     }
     return this.completeAfterEvidence({
@@ -598,6 +624,7 @@ export class MealContextLabController {
       handle: { runId: record.id, revision: record.revision },
       feedback: contextLabFeedbackFromEvidence(evidence),
       progress: progressForIssuedRun(record.experienceRun),
+      planMode: planModeOf(record.experienceRun),
     });
   }
 
@@ -623,11 +650,14 @@ export class MealContextLabController {
     );
   }
 
-  private createIssuedRun():
+  private createIssuedRun(options?: {
+    planningInput?: ExperiencePlanningInput;
+    runId?: string;
+  }):
     | { run: ExperienceRun; issued: IssuedPayload }
     | { screen: ContextLabCurrentScreen } {
     const planned = planExperience(
-      this.planningInput ?? mealBuildPlanningInput(),
+      options?.planningInput ?? this.planningInput ?? mealBuildPlanningInput(),
     );
     if (!planned.ok) {
       return {
@@ -676,7 +706,7 @@ export class MealContextLabController {
       ),
       resolvedTargets: resolvePlanTargets(planned.plan),
       now: createdAt,
-      createId: this.createId,
+      createId: options?.runId ? () => options.runId! : this.createId,
     });
     if (!created.ok) {
       return {
@@ -710,7 +740,11 @@ export class MealContextLabController {
   private async presentStoredRun(
     record: ContextLabRunRecord,
   ): Promise<ContextLabCurrentScreen> {
-    if (record.probe && record.probe.phase !== "BUILD_HANDOFF") {
+    if (
+      record.probe &&
+      record.probe.phase !== "BUILD_HANDOFF" &&
+      record.probe.phase !== "STRENGTHEN_HANDOFF"
+    ) {
       if (record.probe.phase === "PROBE_TASK_ISSUED") {
         return this.presentIssuedProbeTask(record);
       }
@@ -735,6 +769,7 @@ export class MealContextLabController {
         }),
         resolvedContext: run.planSnapshot.resolvedContext,
         progress,
+        planMode: planModeOf(run),
       });
     }
     if (run.status === "FROZEN_TASK_ISSUED" && current?.taskId) {
@@ -749,6 +784,7 @@ export class MealContextLabController {
         task: assigned.task.publicTask,
         resolvedContext: run.planSnapshot.resolvedContext,
         progress,
+        planMode: planModeOf(run),
       });
     }
     if (run.status === "COMPLETED" && current?.taskId) {
@@ -770,6 +806,7 @@ export class MealContextLabController {
         activity: issued.issuedActivity,
         resolvedContext: run.planSnapshot.resolvedContext,
         progress,
+        planMode: planModeOf(run),
       });
     }
     if (issued.issuedTask) {
@@ -778,6 +815,7 @@ export class MealContextLabController {
         task: issued.issuedTask,
         resolvedContext: run.planSnapshot.resolvedContext,
         progress,
+        planMode: planModeOf(run),
       });
     }
     return errorScreen(CONTEXT_LAB_ERROR_CODES.FROZEN_COMPILATION_FAILURE);
@@ -842,6 +880,7 @@ export class MealContextLabController {
           summary: publicDispositionLabel(result.disposition),
         })),
         canHandoffToBuild: canHandoffSpoonBuild(results),
+        canHandoffToStrengthen: canHandoffSpoonRecallStrengthen(probe),
         pendingMessage: spoonPendingMessage(results),
       });
     }
@@ -1166,6 +1205,58 @@ export class MealContextLabController {
     });
   }
 
+  private async handoffFromProbe(
+    record: ContextLabRunRecord,
+  ): Promise<ContextLabCurrentScreen> {
+    const results = record.probe ? routingResultsForProbe(record.probe) : [];
+    if (canHandoffSpoonBuild(results)) {
+      return this.handoffToBuild(record);
+    }
+    if (record.probe && canHandoffSpoonRecallStrengthen(record.probe)) {
+      return this.handoffToStrengthen(record);
+    }
+    return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+      recoverable: true,
+    });
+  }
+
+  private async handoffToStrengthen(
+    record: ContextLabRunRecord,
+  ): Promise<ContextLabCurrentScreen> {
+    if (!record.probe || !canHandoffSpoonRecallStrengthen(record.probe)) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: true,
+      });
+    }
+    const prepared = this.createIssuedRun({
+      planningInput: mealStrengthenPlanningInput(),
+      runId: record.id,
+    });
+    if ("screen" in prepared) {
+      return prepared.screen;
+    }
+    const nextProbe: MealProbeOrchestration = {
+      ...record.probe,
+      phase: "STRENGTHEN_HANDOFF",
+      experienceMode: "STRENGTHEN",
+      supportExposures: record.probe.supportExposures ?? [],
+    };
+    const saved = await this.repository.saveIfRevision({
+      runId: record.id,
+      userId: this.userId,
+      expectedRevision: record.revision,
+      nextRun: prepared.run,
+      nextProbe,
+      updatedAt: this.now(),
+    });
+    if (!saved.ok) {
+      return saved.reason === "REVISION_CONFLICT"
+        ? staleRunScreen()
+        : notFoundRunScreen();
+    }
+    return this.toPublicScreen(prepared.run, saved.revision, prepared.issued);
+  }
+
   private async handoffToBuild(
     record: ContextLabRunRecord,
   ): Promise<ContextLabCurrentScreen> {
@@ -1188,6 +1279,8 @@ export class MealContextLabController {
     const nextProbe: MealProbeOrchestration = {
       ...record.probe!,
       phase: "BUILD_HANDOFF",
+      experienceMode: "BUILD",
+      supportExposures: [],
     };
     const saved = await this.repository.saveIfRevision({
       runId: record.id,
@@ -1220,6 +1313,18 @@ export function mealBuildPlanningInput(
   return {
     learningNeedRef: "need-opaque-ref",
     mode: "BUILD",
+    targets: [spoonFormTarget()],
+    allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
+    runtimeCapabilities: capabilities,
+  };
+}
+
+export function mealStrengthenPlanningInput(
+  capabilities: RuntimeCapability[] = typingCapabilities(),
+): ExperiencePlanningInput {
+  return {
+    learningNeedRef: "need-opaque-ref",
+    mode: "STRENGTHEN",
     targets: [spoonFormTarget()],
     allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
     runtimeCapabilities: capabilities,
@@ -1276,7 +1381,7 @@ function rejectMalformedSubmit(
       key !== "action" &&
       key !== "responseTimeMs",
   );
-  if (extra.length > 0) {
+  if (extra.length > 0 || "hintCount" in input) {
     return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
       message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
       recoverable: true,
@@ -1298,11 +1403,13 @@ function rejectMalformedSubmit(
   const textOk =
     input.action.kind === "TEXT_INPUT" &&
     actionKeys.every((key) => key === "kind" || key === "value") &&
+    !("hintCount" in input.action) &&
     typeof input.action.value === "string" &&
     input.action.value.trim().length > 0;
   const choiceOk =
     input.action.kind === "CHOICE" &&
     actionKeys.every((key) => key === "kind" || key === "optionId") &&
+    !("hintCount" in input.action) &&
     typeof input.action.optionId === "string" &&
     input.action.optionId.trim().length > 0;
   if (!textOk && !choiceOk) {
@@ -1356,6 +1463,52 @@ function toStudentAction(
     };
   }
   return null;
+}
+
+function planModeOf(run: ExperienceRun): "BUILD" | "STRENGTHEN" | undefined {
+  return run.planSnapshot.plan.mode === "STRENGTHEN" ||
+    run.planSnapshot.plan.mode === "BUILD"
+    ? run.planSnapshot.plan.mode
+    : undefined;
+}
+
+function spoonStrengthenTarget() {
+  return {
+    lexemeId: BUNDLED_SPOON_LEXEME_ID,
+    senseId: MEAL_SENSE.spoon.senseId,
+  };
+}
+
+function frozenHintCountForRecord(record: ContextLabRunRecord): number {
+  if (record.experienceRun.planSnapshot.plan.mode !== "STRENGTHEN") {
+    return 0;
+  }
+  return deriveFrozenHintCountFromSupportExposure({
+    target: spoonStrengthenTarget(),
+    exposures: record.probe?.supportExposures ?? [],
+  });
+}
+
+function recordSupportExposureOnProbe(input: {
+  probe: MealProbeOrchestration | null;
+  stepId: string;
+  shownAt: string;
+}): MealProbeOrchestration | null {
+  if (!input.probe || input.probe.experienceMode !== "STRENGTHEN") {
+    return input.probe;
+  }
+  const next = supportExposuresForStrengthenStep({
+    stepId: input.stepId,
+    target: spoonStrengthenTarget(),
+    shownAt: input.shownAt,
+  });
+  return {
+    ...input.probe,
+    supportExposures: mergeSupportExposures(
+      input.probe.supportExposures ?? [],
+      next,
+    ),
+  };
 }
 
 function lemmaForTarget(lexemeId: string): string {

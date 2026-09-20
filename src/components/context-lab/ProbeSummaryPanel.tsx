@@ -40,6 +40,16 @@ export function ProbeSummaryPanel({
           开始勺子教学
         </Button>
       ) : null}
+      {screen.canHandoffToStrengthen ? (
+        <Button
+          type="button"
+          disabled={disabled}
+          className="h-12 w-full min-h-12 rounded-2xl text-base"
+          onClick={onHandoff}
+        >
+          开始勺子强化
+        </Button>
+      ) : null}
     </div>
   );
 }

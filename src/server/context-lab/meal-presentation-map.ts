@@ -37,7 +37,11 @@ const GUIDED_INSTRUCTIONS: Record<GuidedActivityKind, string> = {
   PRESENT_CONTEXT: "桌上有汤、碗、勺子和叉子。先看看这些物品。",
   OBSERVE_RELATION: "勺子适合用来喝汤或舀取流质食物。",
   SHOW_CONTRAST: "比较一下勺子和叉子：它们的用途有什么不同？",
+  RECONNECT_FORM: "这是强化，不是测试。重新看一看勺子和它的英文词形。",
+  FADE_FORM: "完整英文已经收起。下面是提示，不是答案。",
 };
+
+const STRENGTHEN_VERIFY_INSTRUCTION = "根据勺子的意思，写出英文单词。当前页面没有完整答案或拼写提示。";
 
 const FROZEN_PREVIEW_INSTRUCTION = "根据刚才看到的早餐情景，试着写出对应的英文单词。";
 
@@ -63,6 +67,10 @@ export function guidedInstructionFor(kind: GuidedActivityKind): string {
 
 export function frozenPreviewInstruction(): string {
   return FROZEN_PREVIEW_INSTRUCTION;
+}
+
+export function strengthenVerifyInstruction(): string {
+  return STRENGTHEN_VERIFY_INSTRUCTION;
 }
 
 export function mappedMealEntity(

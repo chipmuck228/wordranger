@@ -78,7 +78,7 @@ Choice responses declare `candidates` and `correctCandidateIds`. The compiler co
 
 | Case | Skeleton | What it proves |
 | --- | --- | --- |
-| Meal | `meal-setting-v0` | One skeleton, three frames. BUILD is guided present / observe / contrast then assessable RECALL. STRENGTHEN IDENTIFY remains assessable and unsupported. |
+| Meal | `meal-setting-v0` | One skeleton, three frames. BUILD is guided present / observe / contrast then assessable RECALL. STRENGTHEN recall-weakness is guided reconnect / fade then frozen recall. STRENGTHEN IDENTIFY remains assessable and unsupported. |
 | School Challenge | `goal-directed-challenge-v0` | Abstract words bind as property / action / state / outcome / grounded claim. Local success is not general ability. CLAIM_CHOICE does not compile. |
 | Borrowing-Sharing | `temporary-resource-access-v0` | Same transfer event; requester perspective is `borrow`, owner perspective is `lend`. Contextual RELATION_CHOICE does not compile. |
 
@@ -320,7 +320,7 @@ Registry insertion order is not a selection rule.
 
 | Case | Modes that can succeed today | Honest gap |
 | --- | --- | --- |
-| Meal | `BUILD` (guided then frozen recall) and `RETRIEVE` (safe lexical typing) when `frozen-text-input:TYPE` is present | `STRENGTHEN` IDENTIFY/DISTINGUISH and `PROBE` have no frozen projection |
+| Meal | `BUILD` (guided then frozen recall), `STRENGTHEN` recall-weakness (guided reconnect/fade then frozen recall), and `RETRIEVE` (safe lexical typing) when `frozen-text-input:TYPE` is present | `STRENGTHEN` IDENTIFY/DISTINGUISH and `PROBE` have no frozen projection |
 | School Challenge | none as verified learning | `CLAIM_CHOICE` stays unsupported; Guided presentation is `GUIDED_ONLY` and cannot verify BUILD/STRENGTHEN/PROBE/RETRIEVE |
 | Borrowing-Sharing | none as verified learning | contextual `RELATION_CHOICE` stays unsupported; Guided observation is not relational assessment |
 

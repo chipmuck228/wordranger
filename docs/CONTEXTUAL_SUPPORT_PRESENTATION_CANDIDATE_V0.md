@@ -26,9 +26,11 @@
 | --- | --- |
 | **Probe** | Hidden by default. The Meal scene may show unlabeled objects. No phonetic, audio, gloss-as-answer, synonym/antonym, spelling split, full use explanation, or spoon/fork teaching contrast. |
 | **BUILD** | Revealed in authored order after Probe, as the existing guided Meal sequence does: scene → relation → contrast → recall. |
-| **STRENGTHEN** | Only the support that matches the frozen weakness under repair (when that mapping exists). V0 does not implement STRENGTHEN support. |
+| **STRENGTHEN** | Only the support that matches the Probe weakness under repair. Meal V0 implements spoon **active-recall weakness** only: lexical form reveal, then a spelling cue, then a frozen typing check. |
 
 `FULL_ANSWER_REVEAL` after a correct response must not be treated as independent retrieval. Frozen Evidence still uses `hintCount` / evaluator outcome. A revealed answer plus a later correct type-in is not `INDEPENDENT_CORRECT` if hints were used.
+
+Frozen `ASSISTED_CORRECT` after this STRENGTHEN verification means the check happened after support exposure. It is not a new Candidate Evidence outcome. It is not cold independent retrieval and does not prove long-term independent recall. A later delayed task/session is still required to test that.
 
 ---
 
@@ -42,6 +44,9 @@ Frozen `hintCount` still collapses every assist into `ASSISTED_CORRECT`. The inf
 
 ## Meal V0 application
 
-- Cold Probe screens use the breakfast objects without BUILD support blocks.
-- Existing Meal BUILD guided steps remain the teaching phase and must be labeled as such.
-- STRENGTHEN support for spoon (and other words) is pending.
+- Cold Probe screens hide support by default. The Meal scene may show unlabeled objects. No phonetic, audio, gloss-as-answer, synonym/antonym, spelling split, full use explanation, or spoon/fork teaching contrast before the learner answers.
+- Existing Meal BUILD guided steps remain the teaching phase and must be labeled as such. BUILD still uses scene → relation → contrast → recall. It does not reuse the STRENGTHEN support sequence.
+- Meal STRENGTHEN for spoon active-recall weakness uses a different sequence: reconnect the scene object to `spoon` and the real bundled gloss → fade the full form and show a generated spelling cue → frozen `ACTIVE_RECALL_TYPING` verification.
+- Lexical form reveal and spelling cue are Candidate support exposures. They are recorded only after the server issues and the learner acknowledges that step. The client cannot claim exposure.
+- Because those supports were shown in the same experience, the verification `StudentAction.hintCount` is server-authored as `> 0`. Correct typing therefore becomes frozen `ASSISTED_CORRECT`. Candidate does not add an Evidence outcome.
+- STRENGTHEN for other Meal words, other weaknesses, and delayed independent retrieval remains pending.

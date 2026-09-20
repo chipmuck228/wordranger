@@ -20,6 +20,7 @@ export function FrozenTaskPreview({
   return (
     <div
       data-presentation-mode={screen.presentationMode ?? "SCENE_TARGET"}
+      data-strengthen-phase={screen.strengthenPhase}
       className="flex min-w-0 flex-1 flex-col gap-6"
     >
       {showScene ? (
