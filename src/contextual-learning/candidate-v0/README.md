@@ -151,7 +151,47 @@ It does **not**:
 
 If an assessable step has no semantic projection (Meal STRENGTHEN IDENTIFY, School `CLAIM_CHOICE`, Borrow `RELATION_CHOICE`), the run becomes `BLOCKED` and does not emit a guided activity. The next step is never compiled or skipped.
 
-There is no persistence, UI, scheduler hook, or `submitTaskAction` integration.
+There is no persistence, production UI, scheduler hook, or `submitTaskAction` integration.
+
+## Context Lab UI pilot
+
+Internal presentation-only route:
+
+```text
+/play/context-lab
+```
+
+Gate:
+
+```text
+CONTEXT_LAB_ENABLED=1
+```
+
+Default is closed. When the flag is absent, the route returns `notFound()` and is not an operational pilot. Do not set a `NEXT_PUBLIC_` copy of this flag. Do not reuse Ranger Trial or other game runtime flags.
+
+Current coverage is Meal BUILD on `home-breakfast-v0` only. School Challenge and Borrowing-Sharing are not wired.
+
+Preparation stays server-side:
+
+```text
+explicit Meal ExperiencePlanningInput
+  → planExperience
+  → validateExperiencePlan
+  → createExperienceRun
+  → issue / acknowledge Guided steps
+  → issue frozen ACTIVE_RECALL_TYPING
+  → public screens only
+```
+
+Learner-facing rules:
+
+- Guided `继续` means “I have viewed this presentation.” It is not correctness.
+- The compiled `PublicLearningTask` is shown as a typing preview.
+- The preview does not grade, receive `TaskAnswerKey`, call `DefaultTaskEvaluator`, create `LearningEvidence`, or call `processEvidence`.
+- The pilot ends at `FROZEN_TASK_HANDOFF_READY`, not `LEARNING_COMPLETED`.
+- `重新体验` and a page refresh both restart the local presentation. Nothing is persisted.
+
+This is not production Daily Training integration and does not promote Candidate V0 to a Standard.
 
 Validators live next to the types.
 

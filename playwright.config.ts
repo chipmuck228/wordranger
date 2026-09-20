@@ -26,6 +26,7 @@ export default defineConfig({
       GAME_RUNTIME: "memory",
       PLACEMENT_REVIEW_STORE: "file",
       PLACEMENT_REVIEW_WRITE_ENABLED: "1",
+      CONTEXT_LAB_ENABLED: "1",
     },
   },
 });
