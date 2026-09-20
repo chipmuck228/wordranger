@@ -316,7 +316,7 @@ describe("Meal cold Probe orchestration", () => {
     const teaching = await controller.continueProbe({
       runId: screen.handle.runId,
       revision: screen.handle.revision,
-      handoff: true,
+      intent: "START_BUILD",
     });
     assertKind(teaching, "GUIDED");
     expect(teaching.context.settingLabel).toContain("教学阶段");
@@ -337,7 +337,7 @@ describe("Meal cold Probe orchestration", () => {
     const refused = await controller.continueProbe({
       runId: screen.handle.runId,
       revision: screen.handle.revision,
-      handoff: true,
+      intent: "START_BUILD",
     });
     expect(refused.kind).toBe("ERROR");
   });
@@ -368,7 +368,7 @@ describe("Meal cold Probe orchestration", () => {
     const strengthen = await controller.continueProbe({
       runId: screen.handle.runId,
       revision: screen.handle.revision,
-      handoff: true,
+      intent: "START_STRENGTHEN",
     });
     assertKind(strengthen, "GUIDED");
     expect(strengthen.strengthenPhase).toBe("RECONNECT");

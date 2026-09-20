@@ -1,9 +1,12 @@
 import type {
   ContextFrame,
   ExperienceStepSpec,
+  ExperienceTarget,
   GuidedExperienceStepSpec,
   LearningExperiencePlan,
 } from "../../domain/types";
+import { identityForFixtureSense } from "../../strengthen/meal-lexical-profiles";
+import type { MealLexicalStrengthenIdentity } from "../../strengthen/meal-lexical-profiles";
 import {
   FIXTURE_PROVENANCE,
   MINIMAL_SUPPORT,
@@ -233,15 +236,26 @@ export function createMealBuildPlan(frame: ContextFrame): LearningExperiencePlan
   };
 }
 
-export function createMealRecallStrengthenPlan(
-  frame: ContextFrame,
-): LearningExperiencePlan {
-  const prefix = mealPrefixForFrame(frame.id);
-  const spoon = `${prefix}-spoon`;
+export function createMealActiveRecallStrengthenPlan(input: {
+  frame: ContextFrame;
+  profile: MealLexicalStrengthenIdentity;
+}): LearningExperiencePlan {
+  const prefix = mealPrefixForFrame(input.frame.id);
+  const entityId = `${prefix}-${input.profile.stepToken}`;
+  const targetId = `target-${input.profile.stepToken}-form`;
+  const formTarget = {
+    id: targetId,
+    sense: input.profile.fixtureSense,
+    focus: "MEANING_TO_FORM" as const,
+  };
+  const bundledTarget = {
+    lexemeId: input.profile.target.lexemeId,
+    senseId: input.profile.target.senseId,
+  };
   const reconnect: GuidedExperienceStepSpec = {
-    id: `${prefix}-strengthen-reconnect`,
+    id: `${prefix}-strengthen-${input.profile.stepToken}-reconnect`,
     purpose: "CONNECT",
-    targetIds: ["target-spoon-form"],
+    targetIds: [targetId],
     semanticAction: "OBSERVE",
     executionIntent: {
       kind: "GUIDED",
@@ -251,15 +265,19 @@ export function createMealRecallStrengthenPlan(
         "Re-show the scene object with the English form. Acknowledgement is support exposure, not Evidence.",
     },
     presentation: {
-      instruction: "这是强化，不是测试。重新看一看勺子和它的英文词形。",
-      presentedEntityIds: [spoon],
+      instruction: "这是强化，不是测试。重新看一看这个词和它的英文词形。",
+      presentedEntityIds: [entityId],
+    },
+    supportExposure: {
+      kinds: ["LEXICAL_FORM", "MEANING_GLOSS"],
+      target: bundledTarget,
     },
     transition: nextOrEnd(false),
   };
   const fade: GuidedExperienceStepSpec = {
-    id: `${prefix}-strengthen-fade`,
+    id: `${prefix}-strengthen-${input.profile.stepToken}-fade`,
     purpose: "CONNECT",
-    targetIds: ["target-spoon-form"],
+    targetIds: [targetId],
     semanticAction: "OBSERVE",
     executionIntent: {
       kind: "GUIDED",
@@ -270,24 +288,67 @@ export function createMealRecallStrengthenPlan(
     },
     presentation: {
       instruction: "完整英文已经收起。下面是提示，不是答案。",
-      presentedEntityIds: [spoon],
+      presentedEntityIds: [entityId],
+    },
+    supportExposure: {
+      kinds: ["SPELLING_CUE"],
+      target: bundledTarget,
     },
     transition: nextOrEnd(false),
   };
-  const steps = [reconnect, fade, mealRecallStep(prefix, "STRENGTHEN")];
+  const verify = assessable({
+    id: `${prefix}-strengthen-${input.profile.stepToken}-recall`,
+    purpose: "RECALL",
+    targetIds: [targetId],
+    semanticAction: "TYPE",
+    promptIntent: {
+      instructionKey: "Produce the English word for the highlighted object.",
+      semanticQuestion: pred("name_required_object", [entityArg(entityId)]),
+      mustNotRevealTargetForm: true,
+    },
+    expectedResponse: { kind: "LEXICAL_FORM", sense: input.profile.fixtureSense },
+    supportPolicy: MINIMAL_SUPPORT,
+    requiredCapabilities: [`frozen-text-input:TYPE`],
+    transition: nextOrEnd(true),
+  });
+  const steps = [reconnect, fade, verify];
   return {
-    id: `meal-strengthen-recall-${frame.id}`,
+    id: `meal-strengthen-recall-${input.frame.id}-${input.profile.stepToken}`,
     schemaVersion: "candidate-v0",
     mode: "STRENGTHEN",
-    sourceLearningNeedRef: "need-meal-spoon",
-    targets: [spoonFormTarget()],
+    sourceLearningNeedRef: "need-opaque-ref",
+    targets: [formTarget],
     skeletonId: MEAL_SKELETON_ID,
-    contextFrameId: frame.id,
+    contextFrameId: input.frame.id,
     activeGoalId: "EATER_CAN_EAT_FOOD",
     steps,
     completionPolicy: completeAll(steps),
     provenance: FIXTURE_PROVENANCE,
   };
+}
+
+export function createMealRecallStrengthenPlan(
+  frame: ContextFrame,
+  request?: { targets?: readonly ExperienceTarget[] },
+): LearningExperiencePlan {
+  const requested = request?.targets?.[0]?.sense;
+  const identity = requested ? identityForFixtureSense(requested) : null;
+  if (!identity || (request?.targets?.length ?? 0) !== 1) {
+    return {
+      id: `meal-strengthen-recall-${frame.id}-unresolved`,
+      schemaVersion: "candidate-v0",
+      mode: "STRENGTHEN",
+      sourceLearningNeedRef: "need-opaque-ref",
+      targets: [],
+      skeletonId: MEAL_SKELETON_ID,
+      contextFrameId: frame.id,
+      activeGoalId: "EATER_CAN_EAT_FOOD",
+      steps: [],
+      completionPolicy: completeAll([]),
+      provenance: FIXTURE_PROVENANCE,
+    };
+  }
+  return createMealActiveRecallStrengthenPlan({ frame, profile: identity });
 }
 
 export function createMealStrengthenPlan(

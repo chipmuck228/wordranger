@@ -7,7 +7,13 @@ import type {
   ProbeObservationRef,
 } from "@/contextual-learning/candidate-v0/probe/types";
 import { resolveProbeDisposition } from "@/contextual-learning/candidate-v0/probe/resolve-probe-disposition";
-import { isSpoonActiveRecallStrengthenEligible } from "@/contextual-learning/candidate-v0/strengthen/eligibility";
+import { isActiveRecallStrengthenEligible } from "@/contextual-learning/candidate-v0/strengthen/eligibility";
+import {
+  buildMealStrengthenQueue,
+  createMealStrengthenQueueState,
+  readMealStrengthenQueue,
+  type MealStrengthenQueueState,
+} from "@/contextual-learning/candidate-v0/strengthen/queue";
 import type { ContextualSupportExposure } from "@/contextual-learning/candidate-v0/strengthen/types";
 import { BUNDLED_SPOON_LEXEME_ID } from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
 
@@ -19,7 +25,9 @@ export type MealProbePhase =
   | "PROBE_COMPLETED"
   | "ROUTING_SUMMARY"
   | "BUILD_HANDOFF"
-  | "STRENGTHEN_HANDOFF";
+  | "STRENGTHEN_HANDOFF"
+  | "STRENGTHEN_ITEM_RECORDED"
+  | "STRENGTHEN_QUEUE_COMPLETED";
 
 export interface MealProbeIssuedTask {
   taskId: string;
@@ -39,6 +47,7 @@ export interface MealProbeOrchestration {
   lastOutcome?: EvidenceOutcome;
   experienceMode?: "BUILD" | "STRENGTHEN" | null;
   supportExposures?: ContextualSupportExposure[];
+  strengthenQueue?: MealStrengthenQueueState | null;
 }
 
 export function createMealProbeOrchestration(
@@ -53,6 +62,7 @@ export function createMealProbeOrchestration(
     observations: [],
     experienceMode: null,
     supportExposures: [],
+    strengthenQueue: null,
   };
 }
 
@@ -105,22 +115,33 @@ export function canHandoffSpoonBuild(
   );
 }
 
-export function canHandoffSpoonRecallStrengthen(
+export function strengthenQueueFromProbe(
   probe: MealProbeOrchestration,
-): boolean {
-  const results = routingResultsForProbe(probe);
-  const spoon = results.find(
-    (result) => result.target.lexemeId === BUNDLED_SPOON_LEXEME_ID,
-  );
-  if (!spoon) {
-    return false;
-  }
-  return isSpoonActiveRecallStrengthenEligible({
-    targetLexemeId: spoon.target.lexemeId,
-    spoonLexemeId: BUNDLED_SPOON_LEXEME_ID,
-    disposition: spoon.disposition,
-    observations: spoon.observations,
+): ContextualStrengthenQueueItems {
+  return buildMealStrengthenQueue({
+    targets: probe.targets,
+    results: routingResultsForProbe(probe),
   });
+}
+
+type ContextualStrengthenQueueItems = ReturnType<typeof buildMealStrengthenQueue>;
+
+export function canHandoffRecallStrengthen(probe: MealProbeOrchestration): boolean {
+  return strengthenQueueFromProbe(probe).length > 0;
+}
+
+export function initializeStrengthenQueue(
+  probe: MealProbeOrchestration,
+): MealStrengthenQueueState | null {
+  return createMealStrengthenQueueState(strengthenQueueFromProbe(probe));
+}
+
+export function requireStrengthenQueue(
+  probe: MealProbeOrchestration,
+):
+  | { ok: true; queue: MealStrengthenQueueState }
+  | { ok: false; reason: "STRENGTHEN_QUEUE_PERSISTENCE_GAP" } {
+  return readMealStrengthenQueue(probe.strengthenQueue);
 }
 
 export function publicDispositionLabel(
@@ -138,21 +159,35 @@ export function publicDispositionLabel(
   }
 }
 
-export function spoonPendingMessage(
+export function capabilityNoteForResult(input: {
+  result: ContextualProbeRoutingResult;
+}): string | null {
+  if (
+    input.result.disposition === "BUILD" &&
+    input.result.target.lexemeId !== BUNDLED_SPOON_LEXEME_ID
+  ) {
+    return "建立记忆体验尚未实现";
+  }
+  return null;
+}
+
+export function probePendingMessage(
   results: readonly ContextualProbeRoutingResult[],
 ): string | null {
-  const spoon = results.find((result) => result.target.lexemeId === BUNDLED_SPOON_LEXEME_ID);
-  if (!spoon) {
-    return "勺子的下一步还需要更多信息。";
-  }
-  if (spoon.disposition === "BUILD") {
+  const hasStrengthen = results.some(
+    (result) =>
+      isActiveRecallStrengthenEligible({
+        target: result.target,
+        disposition: result.disposition,
+        observations: result.observations,
+      }),
+  );
+  const hasSpoonBuild = canHandoffSpoonBuild(results);
+  if (hasStrengthen || hasSpoonBuild) {
     return null;
   }
-  if (spoon.disposition === "STRENGTHEN") {
+  if (results.every((result) => result.disposition === "READY")) {
     return null;
   }
-  if (spoon.disposition === "READY") {
-    return "这次勺子已经能独立回答，不进入教学阶段。";
-  }
-  return "还不能确定勺子的下一步，不会默认进入教学。";
+  return "还不能确定下一步，不会默认进入教学。";
 }

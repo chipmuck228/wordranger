@@ -16,9 +16,11 @@ import {
   CONTEXT_LAB_HEADING_ID,
   CONTEXT_LAB_NETWORK_MESSAGE,
   type ContextLabCurrentScreen,
+  type ContextLabHandoffIntent,
 } from "@/components/context-lab/types";
 
 const TRANSITION_MS = 160;
+const STRENGTHEN_RUN_STORAGE_KEY = "context-lab-strengthen-run";
 
 type PresentationState =
   | "LOADING"
@@ -52,7 +54,7 @@ export interface ContextLabClientOps {
   continueProbe?: (input: {
     runId: string;
     revision: number;
-    handoff?: boolean;
+    intent?: ContextLabHandoffIntent;
   }) => Promise<ContextLabCurrentScreen>;
 }
 
@@ -87,6 +89,15 @@ export function ContextLabClient({
   }, []);
 
   useEffect(() => {
+    const stored =
+      typeof window === "undefined"
+        ? null
+        : window.sessionStorage.getItem(STRENGTHEN_RUN_STORAGE_KEY);
+    if (stored && loadCurrent) {
+      startedRef.current = true;
+      void begin(() => loadCurrent({ runId: stored }));
+      return;
+    }
     if (startedRef.current) {
       return;
     }
@@ -162,6 +173,7 @@ export function ContextLabClient({
       setActionError(null);
       return;
     }
+    persistStrengthenRun(next);
     setActionError(null);
     setScreen(next);
   }
@@ -247,7 +259,7 @@ export function ContextLabClient({
     }
   }
 
-  async function continueProbeIntent(handoff = false): Promise<void> {
+  async function continueProbeIntent(intent?: ContextLabHandoffIntent): Promise<void> {
     if (
       busy ||
       mutationRef.current ||
@@ -270,7 +282,7 @@ export function ContextLabClient({
         continueProbe({
           runId: screen.handle.runId,
           revision: screen.handle.revision,
-          handoff,
+          intent,
         }),
       );
       if (requestId !== requestIdRef.current) {
@@ -363,6 +375,9 @@ export function ContextLabClient({
     startedRef.current = true;
     mutationRef.current = false;
     previewStartedAtRef.current = null;
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(STRENGTHEN_RUN_STORAGE_KEY);
+    }
     void begin(restart);
   }
 
@@ -411,7 +426,7 @@ export function ContextLabClient({
               screen={screen}
               disabled={busy || transitioning}
               onContinue={() => {
-                void continueProbeIntent(false);
+                void continueProbeIntent();
               }}
             />
           </>
@@ -426,8 +441,8 @@ export function ContextLabClient({
             <ProbeSummaryPanel
               screen={screen}
               disabled={busy || transitioning}
-              onHandoff={() => {
-                void continueProbeIntent(true);
+              onHandoff={(intent) => {
+                void continueProbeIntent(intent);
               }}
             />
           </>
@@ -475,7 +490,7 @@ export function ContextLabClient({
               screen={screen}
               disabled={busy || transitioning}
               onContinue={() => {
-                void continueProbeIntent(false);
+                void continueProbeIntent();
               }}
             />
           </>
@@ -495,7 +510,7 @@ export function ContextLabClient({
               onContinue={
                 screen.continueAvailable
                   ? () => {
-                      void continueProbeIntent(false);
+                      void continueProbeIntent();
                     }
                   : undefined
               }
@@ -530,6 +545,28 @@ function liveAnnouncement(screen: ContextLabCurrentScreen | null): string {
     return `${screen.feedback.message} ${screen.recordedMessage}`;
   }
   return `第 ${screen.progress.current} 步，共 ${screen.progress.total} 步。`;
+}
+
+function persistStrengthenRun(screen: ContextLabCurrentScreen): void {
+  if (typeof window === "undefined" || !("handle" in screen)) {
+    return;
+  }
+  const persist =
+    (screen.kind === "GUIDED" && screen.strengthenPhase != null) ||
+    (screen.kind === "FROZEN_TASK_PREVIEW" && screen.strengthenPhase === "VERIFY") ||
+    (screen.kind === "FROZEN_TASK_RECORDED" &&
+      Boolean(screen.queueCompleteMessage || screen.continueLabel));
+  if (persist) {
+    window.sessionStorage.setItem(STRENGTHEN_RUN_STORAGE_KEY, screen.handle.runId);
+    return;
+  }
+  if (
+    screen.kind === "PROBE_INTRO" ||
+    screen.kind === "PROBE_SUMMARY" ||
+    screen.kind === "PROBE_TASK_RECORDED"
+  ) {
+    window.sessionStorage.removeItem(STRENGTHEN_RUN_STORAGE_KEY);
+  }
 }
 
 function stateFor(

@@ -80,6 +80,7 @@ export type {
 export { mealSkeleton } from "./fixtures/meal/skeleton";
 export { MEAL_FRAMES } from "./fixtures/meal/contexts";
 export {
+  createMealActiveRecallStrengthenPlan,
   createMealBuildPlan,
   createMealRecallStrengthenPlan,
   createMealStrengthenPlan,

@@ -3,27 +3,32 @@
  * Status: Candidate / Experimental / Not a Standard.
  */
 
-import type { LexemeSenseRef } from "../domain/types";
-import type {
-  ContextualSupportExposure,
-  ContextualSupportKind,
-} from "./types";
+import {
+  isGuidedExperienceStep,
+  type ExperienceStepSpec,
+} from "../domain/types";
+import type { ContextualSupportExposure } from "./types";
 
 export function supportExposuresForStrengthenStep(input: {
-  stepId: string;
-  target: LexemeSenseRef;
+  step: ExperienceStepSpec;
+  planId: string;
   shownAt: string;
 }): ContextualSupportExposure[] {
-  if (input.stepId.endsWith("-strengthen-reconnect")) {
-    return [
-      exposure("LEXICAL_FORM", input),
-      exposure("MEANING_GLOSS", input),
-    ];
+  if (!isGuidedExperienceStep(input.step) || !input.step.supportExposure) {
+    return [];
   }
-  if (input.stepId.endsWith("-strengthen-fade")) {
-    return [exposure("SPELLING_CUE", input)];
+  const { kinds, target } = input.step.supportExposure;
+  if (!input.planId.trim() || !target.lexemeId.trim() || !target.senseId.trim()) {
+    return [];
   }
-  return [];
+  return kinds.map((kind) => ({
+    supportId: `strengthen-support:${kind}:${input.step.id}`,
+    kind,
+    target: { lexemeId: target.lexemeId, senseId: target.senseId },
+    shownAt: input.shownAt,
+    sourceStepId: input.step.id,
+    planId: input.planId,
+  }));
 }
 
 export function mergeSupportExposures(
@@ -40,6 +45,7 @@ export function mergeSupportExposures(
         seen.supportId === item.supportId &&
         seen.sourceStepId === item.sourceStepId &&
         seen.kind === item.kind &&
+        seen.planId === item.planId &&
         seen.target.lexemeId === item.target.lexemeId &&
         seen.target.senseId === item.target.senseId,
     );
@@ -51,21 +57,4 @@ export function mergeSupportExposures(
     }
   }
   return merged;
-}
-
-function exposure(
-  kind: ContextualSupportKind,
-  input: {
-    stepId: string;
-    target: LexemeSenseRef;
-    shownAt: string;
-  },
-): ContextualSupportExposure {
-  return {
-    supportId: `strengthen-support:${kind}:${input.stepId}`,
-    kind,
-    target: { lexemeId: input.target.lexemeId, senseId: input.target.senseId },
-    shownAt: input.shownAt,
-    sourceStepId: input.stepId,
-  };
 }

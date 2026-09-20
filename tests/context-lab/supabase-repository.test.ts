@@ -202,7 +202,7 @@ describe("Context Lab Supabase repository", () => {
     const reconnect = await controller.continueProbe({
       runId: summary.handle.runId,
       revision: summary.handle.revision,
-      handoff: true,
+      intent: "START_STRENGTHEN",
     });
     if (reconnect.kind !== "GUIDED") {
       throw new Error(reconnect.kind);

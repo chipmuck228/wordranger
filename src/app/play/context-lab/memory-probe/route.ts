@@ -26,6 +26,7 @@ export async function GET(): Promise<NextResponse> {
       sessionId: item.sessionId,
       gameId: item.gameId,
       outcome: item.outcome,
+      lexemeId: item.lexemeId,
     })),
   });
 }

@@ -49,12 +49,24 @@ function collectContextLabMutations(page: Page): string[] {
 }
 
 async function resetMemoryProbe(page: Page): Promise<void> {
+  if (!page.url().startsWith("http")) {
+    await page.goto("/play/context-lab");
+  }
+  await page.evaluate(() => {
+    sessionStorage.removeItem("context-lab-strengthen-run");
+  });
   await page.request.post("/play/context-lab/memory-probe");
 }
 
 async function memoryEvidence(page: Page): Promise<{
   evidenceCount: number;
-  items: Array<{ taskId: string | null; sessionId: string; gameId: string; outcome: string }>;
+  items: Array<{
+    taskId: string | null;
+    sessionId: string;
+    gameId: string;
+    outcome: string;
+    lexemeId?: string;
+  }>;
 }> {
   const response = await page.request.get("/play/context-lab/memory-probe");
   expect(response.ok()).toBeTruthy();
@@ -187,6 +199,54 @@ async function capture(page: Page, name: string): Promise<void> {
     path: `${QA_DIR}/${name}.png`,
     fullPage: true,
   });
+}
+
+const STRENGTHEN_TARGETS = [
+  { lemma: "soup", label: "汤", meaning: "汤", cue: "s _ _ _", avoid: "汤" },
+  { lemma: "bowl", label: "碗", meaning: "碗", cue: "b _ _ _", avoid: "碗" },
+  { lemma: "spoon", label: "勺子", meaning: "匙，调羹", cue: "s _ _ _ _", avoid: "匙" },
+  { lemma: "fork", label: "叉子", meaning: "叉，餐叉", cue: "f _ _ _", avoid: "叉" },
+] as const;
+
+async function completeProbeStrengthenTargets(
+  page: Page,
+  recognitionCorrect: readonly boolean[],
+): Promise<void> {
+  await expect(page.getByText("先看看你已经会了哪些词", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "开始检查" }).click();
+  for (let index = 0; index < 4; index += 1) {
+    await expect(page.getByText(`${index + 1} / 4 个物品`)).toBeVisible();
+    await page.getByLabel("英文答案").fill("nope");
+    await page.getByRole("button", { name: "提交" }).click();
+    await expectNeutralProbeRecorded(page);
+    await page.getByRole("button", { name: "继续" }).click();
+    if (recognitionCorrect[index]) {
+      await clickCorrectChoice(page, STRENGTHEN_TARGETS[index].avoid);
+    } else {
+      await clickWrongChoice(page, STRENGTHEN_TARGETS[index].avoid);
+    }
+    await expectNeutralProbeRecorded(page);
+    await page.getByRole("button", { name: "继续" }).click();
+  }
+}
+
+async function walkStrengthenExperience(
+  page: Page,
+  target: (typeof STRENGTHEN_TARGETS)[number],
+): Promise<void> {
+  await expect(page.getByText(`强化阶段：加强${target.label}的记忆连接`)).toBeVisible();
+  const reveal = page.locator('[data-support-kind="LEXICAL_FORM"]');
+  await expect(reveal).toBeVisible();
+  await expect(reveal).toContainText(target.lemma);
+  await expect(reveal).toContainText(target.meaning);
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page.locator('[data-strengthen-phase="FADE"]')).toBeVisible();
+  await expect(page.getByLabel("拼写提示")).toHaveText(target.cue);
+  await expect(page.getByText(target.lemma, { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "试着自己写" }).click();
+  await expect(page.locator('[data-strengthen-phase="VERIFY"]')).toBeVisible();
+  await expect(page.getByText(target.lemma, { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("拼写提示")).toHaveCount(0);
 }
 
 async function clickCorrectChoice(page: Page, match: string): Promise<void> {
@@ -360,7 +420,7 @@ async function completeProbeSpoonStrengthen(page: Page): Promise<void> {
   await completeOneTargetWrong(page, 3);
   await expect(page.getByText("加强记忆连接")).toBeVisible();
   await expect(page.getByText("建立情境记忆")).toHaveCount(3);
-  await expect(page.getByRole("button", { name: "开始勺子强化" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "开始需要的强化" })).toBeVisible();
   await expect(page.getByRole("button", { name: "开始勺子教学" })).toHaveCount(0);
 }
 
@@ -370,8 +430,8 @@ test("spoon STRENGTHEN reconnects the form, fades it, then records assisted veri
   await resetMemoryProbe(page);
   await page.goto("/play/context-lab");
   await completeProbeSpoonStrengthen(page);
-  await expect(page.getByRole("button", { name: "开始勺子强化" })).toBeVisible();
-  await page.getByRole("button", { name: "开始勺子强化" }).click();
+  await expect(page.getByRole("button", { name: "开始需要的强化" })).toBeVisible();
+  await page.getByRole("button", { name: "开始需要的强化" }).click();
   await expect(page.getByText("强化阶段：加强勺子的记忆连接")).toBeVisible();
   await expect(page.getByText("教学阶段：建立勺子的情境记忆")).toHaveCount(0);
   await expect(page.getByText("勺子 → 适合舀汤")).toHaveCount(0);
@@ -392,7 +452,8 @@ test("spoon STRENGTHEN reconnects the form, fades it, then records assisted veri
   await page.getByRole("button", { name: "提交" }).dblclick();
   await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
   await expect(page.getByText("这次是在提示后答对的。", { exact: true })).toBeVisible();
-  await expect(page.getByText("这次强化已经记录。", { exact: true })).toBeVisible();
+  await expect(page.getByText("“勺子”的这次强化已记录。", { exact: true })).toBeVisible();
+  await expect(page.getByText("本次需要强化的词已经完成。", { exact: true })).toBeVisible();
   await expect(page.getByText("完全独立")).toHaveCount(0);
   await expect(page.getByText("永久掌握")).toHaveCount(0);
   const after = await memoryEvidence(page);
@@ -409,14 +470,14 @@ test("strengthen incorrect verification writes INCORRECT and READY has no plan b
   await resetMemoryProbe(page);
   await page.goto("/play/context-lab");
   await completeProbeSpoonStrengthen(page);
-  await page.getByRole("button", { name: "开始勺子强化" }).click();
+  await page.getByRole("button", { name: "开始需要的强化" }).click();
   await page.getByRole("button", { name: "继续" }).click();
   await page.getByRole("button", { name: "试着自己写" }).click();
   const before = await memoryEvidence(page);
   await page.getByLabel("英文答案").fill("fork");
   await page.getByRole("button", { name: "提交" }).click();
   await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
-  await expect(page.getByText("这次强化已经记录。", { exact: true })).toBeVisible();
+  await expect(page.getByText("“勺子”的这次强化已记录。", { exact: true })).toBeVisible();
   expect((await memoryEvidence(page)).evidenceCount).toBe(before.evidenceCount + 1);
   expect((await memoryEvidence(page)).items.some((item) => item.outcome === "INCORRECT")).toBe(true);
 
@@ -430,7 +491,7 @@ test("strengthen incorrect verification writes INCORRECT and READY has no plan b
   }
   await expect(page.getByText("本次已能独立回答")).toHaveCount(4);
   await expect(page.getByRole("button", { name: "开始勺子教学" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "开始勺子强化" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "开始需要的强化" })).toHaveCount(0);
 });
 
 test("independent recall routes READY and skips recognition", async ({
@@ -448,7 +509,7 @@ test("independent recall routes READY and skips recognition", async ({
   }
   await expect(page.getByText("本次已能独立回答")).toHaveCount(4);
   await expect(page.getByRole("button", { name: "开始勺子教学" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "开始勺子强化" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "开始需要的强化" })).toHaveCount(0);
 });
 
 test("Context Lab uses one start and one acknowledgement per Guided step", async ({
@@ -539,6 +600,76 @@ test("rapid double-click does not skip a Guided step", async ({ page }) => {
   await expect(page.getByText("3 / 4")).toHaveCount(0);
 });
 
+for (const target of STRENGTHEN_TARGETS.filter((item) => item.lemma !== "spoon")) {
+  test(`${target.lemma} STRENGTHEN reconnects, fades, and records assisted verification`, async ({
+    page,
+  }) => {
+    await resetMemoryProbe(page);
+    await page.goto("/play/context-lab");
+    await completeProbeStrengthenTargets(
+      page,
+      STRENGTHEN_TARGETS.map((item) => item.lemma === target.lemma),
+    );
+    await page.getByRole("button", { name: "开始需要的强化" }).click();
+    await walkStrengthenExperience(page, target);
+    const before = await memoryEvidence(page);
+    await page.getByLabel("英文答案").fill(target.lemma);
+    await page.getByRole("button", { name: "提交" }).dblclick();
+    await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
+    await expect(page.getByText("这次是在提示后答对的。", { exact: true })).toBeVisible();
+    await expect(page.getByText(`“${target.label}”的这次强化已记录。`, { exact: true })).toBeVisible();
+    const after = await memoryEvidence(page);
+    expect(after.evidenceCount).toBe(before.evidenceCount + 1);
+    expect(after.items.some((item) => item.outcome === "ASSISTED_CORRECT")).toBe(true);
+  });
+}
+
+test("two STRENGTHEN targets stay in scene order and cannot be skipped", async ({
+  page,
+}) => {
+  await resetMemoryProbe(page);
+  await page.goto("/play/context-lab");
+  await completeProbeStrengthenTargets(page, [true, true, false, false]);
+  await expect(page.getByRole("button", { name: "开始强化 2 个词" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "开始勺子教学" })).toBeVisible();
+  await expect(page.getByText("建立记忆体验尚未实现")).toBeVisible();
+  await page.getByRole("button", { name: "开始强化 2 个词" }).click();
+  await walkStrengthenExperience(page, STRENGTHEN_TARGETS[0]);
+  const before = await memoryEvidence(page);
+  await page.getByLabel("英文答案").fill("soup");
+  await page.getByRole("button", { name: "提交" }).click();
+  await expect(page.getByText("“汤”的这次强化已记录。", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "继续下一个" })).toBeVisible();
+  const afterSoup = await memoryEvidence(page);
+  const soupEvidence = afterSoup.items.find((item) => item.outcome === "ASSISTED_CORRECT");
+  expect(soupEvidence?.lexemeId).toBeTruthy();
+  await page.reload();
+  await expect(page.getByText("“汤”的这次强化已记录。", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "继续下一个" }).click();
+  await expect(page.getByText("强化阶段：加强碗的记忆连接")).toBeVisible();
+  await walkStrengthenExperience(page, STRENGTHEN_TARGETS[1]);
+  await page.getByLabel("英文答案").fill("bowl");
+  await page.getByRole("button", { name: "提交" }).click();
+  await expect(page.getByText("“碗”的这次强化已记录。", { exact: true })).toBeVisible();
+  await expect(page.getByText("本次需要强化的词已经完成。", { exact: true })).toBeVisible();
+  const after = await memoryEvidence(page);
+  expect(after.evidenceCount).toBe(before.evidenceCount + 2);
+  const strengthened = after.items.filter((item) => item.outcome === "ASSISTED_CORRECT");
+  expect(new Set(strengthened.map((item) => item.lexemeId)).size).toBe(2);
+});
+
+test("mixed summary keeps BUILD and STRENGTHEN as separate operations", async ({
+  page,
+}) => {
+  await resetMemoryProbe(page);
+  await page.goto("/play/context-lab");
+  await completeProbeStrengthenTargets(page, [true, false, false, false]);
+  await expect(page.getByRole("button", { name: "开始需要的强化" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "开始勺子教学" })).toBeVisible();
+  await page.getByRole("button", { name: "开始勺子教学" }).click();
+  await expect(page.getByText("教学阶段：建立勺子的情境记忆")).toBeVisible();
+});
+
 for (const viewport of VIEWPORTS) {
   test(`Context Lab strengthen layout has no overflow at ${viewport.name}`, async ({
     page,
@@ -550,7 +681,7 @@ for (const viewport of VIEWPORTS) {
     await resetMemoryProbe(page);
     await page.goto("/play/context-lab");
     await completeProbeSpoonStrengthen(page);
-    await page.getByRole("button", { name: "开始勺子强化" }).click();
+    await page.getByRole("button", { name: "开始需要的强化" }).click();
     await expect(page.getByText("强化阶段：加强勺子的记忆连接")).toBeVisible();
     await assertNoOverflow(page);
     await page.getByRole("button", { name: "继续" }).click();

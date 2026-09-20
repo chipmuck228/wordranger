@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { MealSceneCard } from "./MealSceneCard";
-import type { ContextLabScreen } from "./types";
+import type { ContextLabHandoffIntent, ContextLabScreen } from "./types";
 
 export function ProbeSummaryPanel({
   screen,
@@ -9,7 +9,7 @@ export function ProbeSummaryPanel({
 }: {
   screen: Extract<ContextLabScreen, { kind: "PROBE_SUMMARY" }>;
   disabled?: boolean;
-  onHandoff: () => void;
+  onHandoff: (intent: ContextLabHandoffIntent) => void;
 }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-6">
@@ -22,6 +22,11 @@ export function ProbeSummaryPanel({
           >
             <span className="font-medium">{item.label}</span>
             <span className="text-muted-foreground"> → {item.summary}</span>
+            {item.capabilityNote ? (
+              <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+                {item.capabilityNote}
+              </p>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -30,24 +35,24 @@ export function ProbeSummaryPanel({
           {screen.pendingMessage}
         </p>
       ) : null}
-      {screen.canHandoffToBuild ? (
-        <Button
-          type="button"
-          disabled={disabled}
-          className="h-12 w-full min-h-12 rounded-2xl text-base"
-          onClick={onHandoff}
-        >
-          开始勺子教学
-        </Button>
-      ) : null}
       {screen.canHandoffToStrengthen ? (
         <Button
           type="button"
           disabled={disabled}
           className="h-12 w-full min-h-12 rounded-2xl text-base"
-          onClick={onHandoff}
+          onClick={() => onHandoff("START_STRENGTHEN")}
         >
-          开始勺子强化
+          {screen.strengthenButtonLabel ?? "开始需要的强化"}
+        </Button>
+      ) : null}
+      {screen.canHandoffToBuild ? (
+        <Button
+          type="button"
+          disabled={disabled}
+          className="h-12 w-full min-h-12 rounded-2xl text-base"
+          onClick={() => onHandoff("START_BUILD")}
+        >
+          开始勺子教学
         </Button>
       ) : null}
     </div>

@@ -88,5 +88,5 @@ export interface ExperiencePlanVariant {
   containsGuidedSteps: boolean;
   containsAssessableSteps: boolean;
   reviewStatus: "REVIEWED";
-  createPlan: () => LearningExperiencePlan;
+  createPlan: (request?: { targets?: readonly ExperienceTarget[] }) => LearningExperiencePlan;
 }

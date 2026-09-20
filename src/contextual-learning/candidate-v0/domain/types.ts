@@ -430,6 +430,16 @@ export type StepExecutionIntent =
   | AssessableExecutionIntent
   | GuidedExecutionIntent;
 
+export type ContextualSupportExposureKind =
+  | "MEANING_GLOSS"
+  | "LEXICAL_FORM"
+  | "SPELLING_CUE";
+
+export interface ExperienceStepSupportExposure {
+  kinds: readonly ContextualSupportExposureKind[];
+  target: LexemeSenseRef;
+}
+
 export interface GuidedPresentation {
   instruction: string;
   presentedEntityIds?: ContextEntityId[];
@@ -455,6 +465,7 @@ export interface AssessableExperienceStepSpec extends ExperienceStepBase {
 export interface GuidedExperienceStepSpec extends ExperienceStepBase {
   executionIntent: GuidedExecutionIntent;
   presentation: GuidedPresentation;
+  supportExposure?: ExperienceStepSupportExposure;
 }
 
 export type ExperienceStepSpec =

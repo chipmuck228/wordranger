@@ -17,6 +17,9 @@ export function ContextLabRecordedNotice({
     >
       <p className="text-base leading-relaxed">{screen.feedback.message}</p>
       <p className="text-sm leading-relaxed">{screen.recordedMessage}</p>
+      {screen.queueCompleteMessage ? (
+        <p className="text-sm leading-relaxed">{screen.queueCompleteMessage}</p>
+      ) : null}
       {screen.continueAvailable && onContinue ? (
         <Button
           type="button"
@@ -24,7 +27,7 @@ export function ContextLabRecordedNotice({
           className="h-12 w-full min-h-12 rounded-2xl text-base"
           onClick={onContinue}
         >
-          继续
+          {screen.continueLabel ?? "继续"}
         </Button>
       ) : null}
     </section>

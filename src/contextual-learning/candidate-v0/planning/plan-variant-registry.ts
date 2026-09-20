@@ -49,6 +49,12 @@ const SCHOOL_ASSESSABLE_CAPS = ["frozen-choice:DISTINGUISH"] as const;
 const BORROW_ASSESSABLE_CAPS = ["frozen-choice:SELECT"] as const;
 
 const MEAL_SPOON: readonly LexemeSenseRef[] = [MEAL_SENSE.spoon];
+const MEAL_PROBE_LEXICAL: readonly LexemeSenseRef[] = [
+  MEAL_SENSE.soup,
+  MEAL_SENSE.bowl,
+  MEAL_SENSE.spoon,
+  MEAL_SENSE.fork,
+];
 const SCHOOL_ABSTRACT: readonly LexemeSenseRef[] = [
   SCHOOL_SENSE.ability,
   SCHOOL_SENSE.possible,
@@ -89,15 +95,15 @@ function mealVariant(
       id: `meal-strengthen-recall:${frame.id}`,
       priority: 30,
       mode: "STRENGTHEN",
-      supportedSenses: MEAL_SPOON,
-      requiredSenses: MEAL_SPOON,
+      supportedSenses: MEAL_PROBE_LEXICAL,
+      requiredSenses: [],
       contextFrameId: frame.id,
       skeletonId: mealSkeleton.id,
       requiredCapabilityIds: TYPING,
       containsGuidedSteps: true,
       containsAssessableSteps: true,
       reviewStatus: "REVIEWED",
-      createPlan: () => createMealRecallStrengthenPlan(frame),
+      createPlan: (request) => createMealRecallStrengthenPlan(frame, request),
     };
   }
   if (kind === "strengthen") {

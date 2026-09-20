@@ -1,6 +1,9 @@
 "use server";
 
-import type { ContextLabCurrentScreen } from "@/components/context-lab/types";
+import type {
+  ContextLabCurrentScreen,
+  ContextLabHandoffIntent,
+} from "@/components/context-lab/types";
 import { CONTEXT_LAB_ERROR_CODES } from "@/components/context-lab/types";
 import { isAbortLike } from "@/lib/runtime/persistence-timeout";
 import {
@@ -43,13 +46,13 @@ export async function loadCurrentMealContextLab(input: {
 export async function continueContextLabProbe(input: {
   runId: string;
   revision: number;
-  handoff?: boolean;
+  intent?: ContextLabHandoffIntent;
 }): Promise<ContextLabCurrentScreen> {
   return runController((controller) =>
     controller.continueProbe({
       runId: input.runId,
       revision: input.revision,
-      handoff: input.handoff,
+      intent: input.intent,
     }),
   );
 }

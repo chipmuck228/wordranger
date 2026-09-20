@@ -25,9 +25,8 @@ import {
   type PublicProbeRoutingItem,
 } from "@/components/context-lab/types";
 import type { ContextualProbeSkill } from "@/contextual-learning/candidate-v0/probe/types";
-import { BUNDLED_LEXEME_BINDINGS } from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
+import type { MealLexicalStrengthenProfile } from "@/contextual-learning/candidate-v0/strengthen/types";
 import { spellingCueFromDisplayForm } from "@/contextual-learning/candidate-v0/strengthen/spelling-cue";
-import { bundledVocabularyRepository } from "@/server/runtime/bundled-vocabulary";
 import { errorScreen } from "./context-lab-errors";
 import {
   contrastCaptionFor,
@@ -37,6 +36,8 @@ import {
   homeBreakfastFrameCopy,
   mappedMealEntity,
   relationCaptionFor,
+  strengthenReconnectInstruction,
+  strengthenTitleFor,
   strengthenVerifyInstruction,
 } from "./meal-presentation-map";
 
@@ -47,28 +48,42 @@ export function presentGuidedScreen(input: {
   progress: ContextLabProgress;
   planMode?: "BUILD" | "STRENGTHEN";
   supportReveal?: PublicContextPresentation["supportReveal"];
+  strengthenProfile?: MealLexicalStrengthenProfile | null;
 }): ContextLabCurrentScreen {
   const context = presentGuidedContext(input.activity, input.resolvedContext);
   if ("error" in context) {
     return errorScreen(context.error);
   }
   if (input.planMode === "STRENGTHEN") {
+    const profile = input.strengthenProfile;
+    if (!profile) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION);
+    }
     const strengthenPhase =
       input.activity.kind === "FADE_FORM" ? "FADE" : "RECONNECT";
     const supportReveal =
       input.supportReveal ??
       (input.activity.kind === "FADE_FORM" ||
       input.activity.kind === "RECONNECT_FORM"
-        ? spoonStrengthenSupportReveal(input.activity.kind)
+        ? strengthenSupportReveal(profile, input.activity.kind)
         : undefined);
+    if (!supportReveal) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION);
+    }
+    const title = strengthenTitleFor(profile.displayLabel);
     return {
       kind: "GUIDED",
       handle: input.handle,
       activity: input.activity,
       context: {
         ...context,
-        title: "加强勺子的记忆连接",
-        settingLabel: "强化阶段：加强勺子的记忆连接",
+        title,
+        settingLabel: `强化阶段：${title}`,
+        instruction:
+          strengthenPhase === "FADE"
+            ? "完整英文已经收起。下面是提示，不是答案。"
+            : strengthenReconnectInstruction(profile.displayLabel),
+        highlightedEntityIds: [profile.entityId],
         supportReveal,
       },
       progress: input.progress,
@@ -96,21 +111,28 @@ export function presentFrozenTaskScreen(input: {
   resolvedContext: ResolvedContextSnapshot;
   progress: ContextLabProgress;
   planMode?: "BUILD" | "STRENGTHEN";
+  strengthenProfile?: MealLexicalStrengthenProfile | null;
 }): ContextLabCurrentScreen {
-  const context = presentFrozenContext(input.resolvedContext);
+  const context = presentFrozenContext(input.resolvedContext, input.strengthenProfile);
   if ("error" in context) {
     return errorScreen(context.error);
   }
   if (input.planMode === "STRENGTHEN") {
+    const profile = input.strengthenProfile;
+    if (!profile) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION);
+    }
+    const title = strengthenTitleFor(profile.displayLabel);
     return {
       kind: "FROZEN_TASK_PREVIEW",
       handle: input.handle,
       task: input.task,
       context: {
         ...context,
-        title: "加强勺子的记忆连接",
-        settingLabel: "强化阶段：加强勺子的记忆连接",
-        instruction: strengthenVerifyInstruction(),
+        title,
+        settingLabel: `强化阶段：${title}`,
+        instruction: strengthenVerifyInstruction(profile.displayLabel),
+        highlightedEntityIds: [profile.entityId],
         supportReveal: undefined,
       },
       progress: input.progress,
@@ -132,7 +154,10 @@ export function presentRecordedScreen(input: {
   feedback: ContextLabTaskFeedback;
   progress: ContextLabProgress;
   continueAvailable?: boolean;
+  continueLabel?: string;
   planMode?: "BUILD" | "STRENGTHEN";
+  recordedMessage?: string;
+  queueCompleteMessage?: string;
 }): ContextLabCurrentScreen {
   const feedback =
     input.planMode === "STRENGTHEN" && input.feedback.status === "ASSISTED"
@@ -143,11 +168,14 @@ export function presentRecordedScreen(input: {
     handle: input.handle,
     feedback,
     recordedMessage:
-      input.planMode === "STRENGTHEN"
+      input.recordedMessage ??
+      (input.planMode === "STRENGTHEN"
         ? CONTEXT_LAB_STRENGTHEN_RECORDED_MESSAGE
-        : CONTEXT_LAB_RECORDED_MESSAGE,
+        : CONTEXT_LAB_RECORDED_MESSAGE),
     progress: input.progress,
     continueAvailable: input.continueAvailable,
+    continueLabel: input.continueLabel,
+    queueCompleteMessage: input.queueCompleteMessage,
   };
 }
 
@@ -241,6 +269,7 @@ export function presentProbeSummaryScreen(input: {
   items: PublicProbeRoutingItem[];
   canHandoffToBuild: boolean;
   canHandoffToStrengthen: boolean;
+  strengthenButtonLabel?: string;
   pendingMessage: string | null;
 }): ContextLabCurrentScreen {
   const frameCopy = homeBreakfastFrameCopy();
@@ -258,6 +287,7 @@ export function presentProbeSummaryScreen(input: {
     items: input.items,
     canHandoffToBuild: input.canHandoffToBuild,
     canHandoffToStrengthen: input.canHandoffToStrengthen,
+    strengthenButtonLabel: input.strengthenButtonLabel,
     pendingMessage: input.pendingMessage,
   };
 }
@@ -270,28 +300,23 @@ function withProbeUnit(progress: ContextLabProgress): ContextLabProgress {
   return { ...progress, unit: progress.unit ?? "个物品" };
 }
 
-export function spoonStrengthenSupportReveal(
+export function strengthenSupportReveal(
+  profile: MealLexicalStrengthenProfile,
   kind: "RECONNECT_FORM" | "FADE_FORM",
 ): PublicContextPresentation["supportReveal"] | undefined {
-  const lexeme = bundledVocabularyRepository().getLexemeByCanonicalKey(
-    BUNDLED_LEXEME_BINDINGS.spoon.canonicalKey,
-  );
-  const displayForm = lexeme?.display.trim() || lexeme?.lemma.trim() || "";
-  const meaningGloss = lexeme?.meaningsZh[0]?.trim() || "";
-  const phonetic = lexeme?.ipa[0]?.trim() || undefined;
-  if (!displayForm || !meaningGloss) {
+  if (!profile.displayForm || !profile.meaningGloss) {
     return undefined;
   }
   if (kind === "RECONNECT_FORM") {
     return {
       kind: "LEXICAL_FORM",
-      lexicalForm: displayForm,
-      meaningGloss,
-      phonetic,
+      lexicalForm: profile.displayForm,
+      meaningGloss: profile.meaningGloss,
+      phonetic: profile.phonetic,
       note: "这是强化提示，不是测试。",
     };
   }
-  const spellingCue = spellingCueFromDisplayForm(displayForm);
+  const spellingCue = spellingCueFromDisplayForm(profile.displayForm);
   if (!spellingCue) {
     return undefined;
   }
@@ -360,6 +385,7 @@ export function presentGuidedContext(
 
 export function presentFrozenContext(
   resolvedContext: ResolvedContextSnapshot,
+  strengthenProfile?: MealLexicalStrengthenProfile | null,
 ): PublicContextPresentation | { error: ContextLabErrorCode } {
   const scene = sceneEntities(resolvedContext);
   if ("error" in scene) {
@@ -371,7 +397,7 @@ export function presentFrozenContext(
     settingLabel: frameCopy.settingLabel,
     instruction: frozenPreviewInstruction(),
     entities: scene,
-    highlightedEntityIds: ["home-spoon"],
+    highlightedEntityIds: [strengthenProfile?.entityId ?? "home-spoon"],
   };
 }
 

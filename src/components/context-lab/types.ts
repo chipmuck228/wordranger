@@ -52,7 +52,10 @@ export interface PublicProbeRoutingItem {
   entityId: string;
   label: string;
   summary: string;
+  capabilityNote?: string;
 }
+
+export type ContextLabHandoffIntent = "START_BUILD" | "START_STRENGTHEN";
 
 export type ContextLabTaskPresentationMode = "SCENE_TARGET" | "TASK_ONLY";
 
@@ -71,6 +74,7 @@ export type ContextLabCurrentScreen =
       items: PublicProbeRoutingItem[];
       canHandoffToBuild: boolean;
       canHandoffToStrengthen: boolean;
+      strengthenButtonLabel?: string;
       pendingMessage: string | null;
     }
   | {
@@ -105,6 +109,8 @@ export type ContextLabCurrentScreen =
       recordedMessage: string;
       progress: ContextLabProgress;
       continueAvailable?: boolean;
+      continueLabel?: string;
+      queueCompleteMessage?: string;
     }
   | {
       kind: "ERROR";
@@ -147,6 +153,9 @@ export const CONTEXT_LAB_HEADING_ID = "context-lab-heading";
 export const CONTEXT_LAB_RECORDED_MESSAGE = "这次练习已记录。";
 export const CONTEXT_LAB_STRENGTHEN_RECORDED_MESSAGE = "这次强化已经记录。";
 export const CONTEXT_LAB_STRENGTHEN_ASSISTED_MESSAGE = "这次是在提示后答对的。";
+export const CONTEXT_LAB_STRENGTHEN_QUEUE_COMPLETE_MESSAGE =
+  "本次需要强化的词已经完成。";
+export const CONTEXT_LAB_STRENGTHEN_NEXT_LABEL = "继续下一个";
 export const CONTEXT_LAB_PROBE_RECORDED_MESSAGE = "这次回答已记录，请继续。";
 export const CONTEXT_LAB_BOUNDARY_MESSAGE =
   "语境体验已到达现有学习任务的交接点。\n下一阶段会通过 WordRanger 原有提交与证据流程完成这道题。";

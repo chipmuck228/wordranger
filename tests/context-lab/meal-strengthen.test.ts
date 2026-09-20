@@ -4,7 +4,11 @@ import { CONTEXT_LAB_ERROR_CODES } from "@/components/context-lab/types";
 import { V1_PLACEHOLDER_USER_ID } from "@/server/auth/v1-user";
 import { CONTEXT_LAB_FROZEN_RENDERER_GAME_ID } from "@/server/context-lab/context-lab-frozen-renderer";
 import { serializeContextLabRunState } from "@/server/context-lab/context-lab-run-state";
-import { BUNDLED_SPOON_LEXEME_ID } from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
+import {
+  BUNDLED_LEXEME_BINDINGS,
+  BUNDLED_SPOON_LEXEME_ID,
+  bundledBindingLexemeId,
+} from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
 import { LearningTaskType } from "@/domain/tasks/task-type";
 import { AnswerMode, PromptMode } from "@/domain/learning/evidence.types";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
@@ -122,7 +126,7 @@ async function enterStrengthen(
   const reconnect = await controller.continueProbe({
     runId: summary.handle.runId,
     revision: summary.handle.revision,
-    handoff: true,
+    intent: "START_STRENGTHEN",
   });
   assertKind(reconnect, "GUIDED");
   return reconnect;
@@ -139,7 +143,7 @@ describe("Meal spoon active-recall STRENGTHEN", () => {
     const reconnect = await controller.continueProbe({
       runId: summary.handle.runId,
       revision: summary.handle.revision,
-      handoff: true,
+      intent: "START_STRENGTHEN",
     });
     assertKind(reconnect, "GUIDED");
     expect(reconnect.strengthenPhase).toBe("RECONNECT");
@@ -238,7 +242,8 @@ describe("Meal spoon active-recall STRENGTHEN", () => {
     assertKind(recorded, "FROZEN_TASK_RECORDED");
     expect(recorded.feedback.status).toBe("ASSISTED");
     expect(recorded.feedback.message).toBe("这次是在提示后答对的。");
-    expect(recorded.recordedMessage).toBe("这次强化已经记录。");
+    expect(recorded.recordedMessage).toBe("“勺子”的这次强化已记录。");
+    expect(recorded.queueCompleteMessage).toBe("本次需要强化的词已经完成。");
     expect(recorded.feedback.message).not.toMatch(/完全独立|永久掌握/);
 
     const items = learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID);
@@ -278,7 +283,7 @@ describe("Meal spoon active-recall STRENGTHEN", () => {
     const recorded = await submitTyping(controller, verify, "fork");
     assertKind(recorded, "FROZEN_TASK_RECORDED");
     expect(recorded.feedback.status).toBe("INCORRECT");
-    expect(recorded.recordedMessage).toBe("这次强化已经记录。");
+    expect(recorded.recordedMessage).toBe("“勺子”的这次强化已记录。");
     const verifyEvidence = learning
       .listEvidenceForUser(V1_PLACEHOLDER_USER_ID)
       .find((item) => item.taskId === verify.task.id);
@@ -320,7 +325,7 @@ describe("Meal spoon active-recall STRENGTHEN", () => {
     const teaching = await controller.continueProbe({
       runId: screen.handle.runId,
       revision: screen.handle.revision,
-      handoff: true,
+      intent: "START_BUILD",
     });
     assertKind(teaching, "GUIDED");
     expect(teaching.context.settingLabel).toContain("教学阶段");
@@ -413,5 +418,232 @@ describe("Meal spoon active-recall STRENGTHEN", () => {
     expect(missing.kind === "ERROR" ? missing.code : "").toBe(
       CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_NOT_FOUND,
     );
+  });
+});
+
+const FOUR_TARGETS = [
+  {
+    lemma: "soup",
+    label: "汤",
+    lexemeId: bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.soup),
+    cue: "s _ _ _",
+    gloss: "汤",
+  },
+  {
+    lemma: "bowl",
+    label: "碗",
+    lexemeId: bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.bowl),
+    cue: "b _ _ _",
+    gloss: "碗",
+  },
+  {
+    lemma: "spoon",
+    label: "勺子",
+    lexemeId: bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.spoon),
+    cue: "s _ _ _ _",
+    gloss: "匙，调羹",
+  },
+  {
+    lemma: "fork",
+    label: "叉子",
+    lexemeId: bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.fork),
+    cue: "f _ _ _",
+    gloss: "叉",
+  },
+] as const;
+
+async function reachSummary(
+  controller: MealContextLabController,
+  learningTasks: InMemoryLearningTaskRepository,
+  recognitionCorrect: readonly boolean[],
+) {
+  let screen: ContextLabCurrentScreen = await controller.start();
+  for (let index = 0; index < 4; index += 1) {
+    screen = await continueFrom(controller, screen);
+    screen = await submitTyping(controller, screen, "nope");
+    screen = await continueFrom(controller, screen);
+    screen = await submitChoice(
+      controller,
+      learningTasks,
+      screen,
+      recognitionCorrect[index] ?? false,
+    );
+  }
+  screen = await continueFrom(controller, screen);
+  assertKind(screen, "PROBE_SUMMARY");
+  return screen;
+}
+
+async function walkStrengthenItem(
+  controller: MealContextLabController,
+  reconnect: ContextLabCurrentScreen,
+  lemma: string,
+) {
+  assertKind(reconnect, "GUIDED");
+  const fade = await controller.acknowledge({
+    runId: reconnect.handle.runId,
+    revision: reconnect.handle.revision,
+    activityId: reconnect.activity.id,
+  });
+  assertKind(fade, "GUIDED");
+  const verify = await controller.acknowledge({
+    runId: fade.handle.runId,
+    revision: fade.handle.revision,
+    activityId: fade.activity.id,
+  });
+  assertKind(verify, "FROZEN_TASK_PREVIEW");
+  return {
+    fade,
+    verify,
+    recorded: await submitTyping(controller, verify, lemma),
+  };
+}
+
+describe("Meal four-target active-recall STRENGTHEN", () => {
+  it.each(FOUR_TARGETS)(
+    "can strengthen $lemma from the catalog-driven plan",
+    async (target) => {
+      const { controller, learningTasks, learning } = createMealLabHarness({
+        beginAt: "PROBE",
+      });
+      const recognition = FOUR_TARGETS.map((item) => item.lemma === target.lemma);
+      const summary = await reachSummary(controller, learningTasks, recognition);
+      expect(summary.canHandoffToStrengthen).toBe(true);
+      expect(summary.strengthenButtonLabel).toBe("开始需要的强化");
+      const reconnect = await controller.continueProbe({
+        runId: summary.handle.runId,
+        revision: summary.handle.revision,
+        intent: "START_STRENGTHEN",
+      });
+      assertKind(reconnect, "GUIDED");
+      expect(reconnect.context.title).toBe(`加强${target.label}的记忆连接`);
+      expect(reconnect.context.supportReveal?.lexicalForm).toBe(target.lemma);
+      expect(reconnect.context.supportReveal?.meaningGloss).toContain(target.gloss);
+      expect(reconnect.context.highlightedEntityIds[0]).toContain(target.lemma === "spoon" ? "spoon" : target.lemma);
+      const walked = await walkStrengthenItem(controller, reconnect, target.lemma);
+      assertKind(walked.fade, "GUIDED");
+      expect(walked.fade.context.supportReveal?.spellingCue).toBe(target.cue);
+      expect(walked.verify.task.lexemeId).toBe(target.lexemeId);
+      expect(walked.verify.context.supportReveal).toBeUndefined();
+      expect(walked.verify.context.instruction).not.toMatch(new RegExp(target.lemma, "i"));
+      assertKind(walked.recorded, "FROZEN_TASK_RECORDED");
+      expect(walked.recorded.recordedMessage).toBe(`“${target.label}”的这次强化已记录。`);
+      const evidence = learning
+        .listEvidenceForUser(V1_PLACEHOLDER_USER_ID)
+        .find((item) => item.taskId === walked.verify.task.id);
+      expect(evidence?.outcome).toBe(EvidenceOutcome.ASSISTED_CORRECT);
+      expect(evidence?.lexemeId).toBe(target.lexemeId);
+      expect(evidence?.hintCount).toBeGreaterThan(0);
+    },
+  );
+
+  it("queues two STRENGTHEN targets in scene order and refuses client target selection", async () => {
+    const { controller, learningTasks, learning, repository } = createMealLabHarness({
+      beginAt: "PROBE",
+    });
+    const summary = await reachSummary(controller, learningTasks, [
+      true,
+      true,
+      false,
+      false,
+    ]);
+    expect(summary.strengthenButtonLabel).toBe("开始强化 2 个词");
+    expect(summary.canHandoffToBuild).toBe(true);
+    expect(summary.items[1]?.capabilityNote).toBeUndefined();
+    expect(summary.items[2]?.capabilityNote).toBeUndefined();
+    expect(summary.items[3]?.capabilityNote).toBe("建立记忆体验尚未实现");
+    const skipped = await controller.continueProbe({
+      runId: summary.handle.runId,
+      revision: summary.handle.revision,
+      intent: "START_STRENGTHEN",
+      targetId: summary.items[1]?.entityId,
+    } as never);
+    expect(skipped.kind).toBe("ERROR");
+
+    const soup = await controller.continueProbe({
+      runId: summary.handle.runId,
+      revision: summary.handle.revision,
+      intent: "START_STRENGTHEN",
+    });
+    assertKind(soup, "GUIDED");
+    expect(soup.context.supportReveal?.lexicalForm).toBe("soup");
+    const first = await walkStrengthenItem(controller, soup, "soup");
+    assertKind(first.recorded, "FROZEN_TASK_RECORDED");
+    expect(first.recorded.continueAvailable).toBe(true);
+    expect(first.recorded.continueLabel).toBe("继续下一个");
+    expect(first.verify.task.lexemeId).toBe(FOUR_TARGETS[0].lexemeId);
+
+    const jump = await controller.continueProbe({
+      runId: first.recorded.handle.runId,
+      revision: first.recorded.handle.revision,
+      intent: "START_STRENGTHEN",
+    });
+    expect(jump.kind).toBe("ERROR");
+
+    const restored = await controller.loadCurrent({
+      runId: first.recorded.handle.runId,
+    });
+    assertKind(restored, "FROZEN_TASK_RECORDED");
+    expect(restored.recordedMessage).toContain("汤");
+
+    const bowl = await controller.continueProbe({
+      runId: first.recorded.handle.runId,
+      revision: first.recorded.handle.revision,
+    });
+    assertKind(bowl, "GUIDED");
+    expect(bowl.context.supportReveal?.lexicalForm).toBe("bowl");
+    const second = await walkStrengthenItem(controller, bowl, "bowl");
+    assertKind(second.recorded, "FROZEN_TASK_RECORDED");
+    expect(second.recorded.queueCompleteMessage).toBe("本次需要强化的词已经完成。");
+    expect(second.recorded.continueAvailable).toBe(false);
+    expect(second.verify.task.lexemeId).toBe(FOUR_TARGETS[1].lexemeId);
+    expect(
+      learning
+        .listEvidenceForUser(V1_PLACEHOLDER_USER_ID)
+        .filter(
+          (item) =>
+            item.outcome === EvidenceOutcome.ASSISTED_CORRECT &&
+            item.hintCount > 0 &&
+            [FOUR_TARGETS[0].lexemeId, FOUR_TARGETS[1].lexemeId].includes(
+              item.lexemeId,
+            ),
+        )
+        .map((item) => item.lexemeId),
+    ).toEqual([FOUR_TARGETS[0].lexemeId, FOUR_TARGETS[1].lexemeId]);
+
+    const stored = await repository.get({
+      runId: bowl.handle.runId,
+      userId: V1_PLACEHOLDER_USER_ID,
+    });
+    expect(stored?.probe?.strengthenQueue?.completed).toHaveLength(2);
+    const afterDone = await controller.continueProbe({
+      runId: second.recorded.handle.runId,
+      revision: second.recorded.handle.revision,
+    });
+    expect(afterDone.kind).toBe("ERROR");
+  });
+
+  it("keeps mixed BUILD and STRENGTHEN as separate operations", async () => {
+    const { controller, learningTasks } = createMealLabHarness({
+      beginAt: "PROBE",
+    });
+    const summary = await reachSummary(controller, learningTasks, [
+      true,
+      false,
+      false,
+      false,
+    ]);
+    expect(summary.canHandoffToStrengthen).toBe(true);
+    expect(summary.canHandoffToBuild).toBe(true);
+    expect(summary.items[0]?.summary).toBe("加强记忆连接");
+    expect(summary.items[2]?.summary).toBe("建立情境记忆");
+    expect(summary.items[1]?.capabilityNote).toBe("建立记忆体验尚未实现");
+    const build = await controller.continueProbe({
+      runId: summary.handle.runId,
+      revision: summary.handle.revision,
+      intent: "START_BUILD",
+    });
+    assertKind(build, "GUIDED");
+    expect(build.context.settingLabel).toContain("教学阶段");
   });
 });
