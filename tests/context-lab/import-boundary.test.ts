@@ -24,6 +24,7 @@ const SERVER_ROOTS = [
   join(process.cwd(), "src/server/context-lab"),
   join(process.cwd(), "src/app/play/context-lab/page.tsx"),
   join(process.cwd(), "src/app/play/context-lab/actions.ts"),
+  join(process.cwd(), "src/app/play/context-lab/memory-probe/route.ts"),
 ];
 
 const SUBMIT_ADAPTER = join(

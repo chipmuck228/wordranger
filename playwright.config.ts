@@ -28,6 +28,8 @@ export default defineConfig({
       PLACEMENT_REVIEW_WRITE_ENABLED: "1",
       CONTEXT_LAB_ENABLED: "1",
       CONTEXT_LAB_RUNTIME: "memory",
+      CONTEXT_LAB_E2E: "1",
+      CONTEXT_LAB_E2E_PROBE_ENABLED: "1",
     },
   },
 });

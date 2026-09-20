@@ -253,7 +253,7 @@ Tested presentation viewports:
 1440 × 900
 ```
 
-Playwright binds the preview server to `127.0.0.1` and sets `CONTEXT_LAB_ENABLED=1` plus `CONTEXT_LAB_RUNTIME=memory`.
+Playwright binds the preview server to `127.0.0.1` and sets `CONTEXT_LAB_ENABLED=1`, `CONTEXT_LAB_RUNTIME=memory`, `CONTEXT_LAB_E2E=1`, and `CONTEXT_LAB_E2E_PROBE_ENABLED=1`. The memory probe stays 404 unless that dedicated probe flag is set on an explicit local/test host. Do not add the probe flags to ordinary development env files. Deployed hosts and `CONTEXT_LAB_RUNTIME=supabase` always 404 the probe.
 
 Validators live next to the types.
 

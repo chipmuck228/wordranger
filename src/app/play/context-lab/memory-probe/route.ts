@@ -5,14 +5,14 @@ import {
   getMemoryContextLabStoresForTests,
   resetMemoryContextLabRepositoryForTests,
 } from "@/server/context-lab/create-context-lab-runtime";
-import { isContextLabEnabled } from "@/server/context-lab/is-context-lab-enabled";
-import { resolveContextLabRuntimeMode } from "@/server/context-lab/context-lab-runtime-mode";
+import { isContextLabE2eProbeEnabled } from "@/server/context-lab/is-context-lab-e2e-probe-enabled";
 
 /**
- * Memory-runtime inspection for Playwright. Never expose AnswerKey.
+ * Playwright-only memory inspection. Never expose AnswerKey.
+ * Closed unless CONTEXT_LAB_E2E_PROBE_ENABLED=1 on an explicit local/test host.
  */
 export async function GET(): Promise<NextResponse> {
-  if (!isMemoryProbeEnabled()) {
+  if (!isContextLabE2eProbeEnabled()) {
     return NextResponse.json({ ok: false }, { status: 404 });
   }
   createContextLabRuntime();
@@ -31,20 +31,9 @@ export async function GET(): Promise<NextResponse> {
 }
 
 export async function POST(): Promise<NextResponse> {
-  if (!isMemoryProbeEnabled()) {
+  if (!isContextLabE2eProbeEnabled()) {
     return NextResponse.json({ ok: false }, { status: 404 });
   }
   resetMemoryContextLabRepositoryForTests();
   return NextResponse.json({ ok: true, reset: true });
-}
-
-function isMemoryProbeEnabled(): boolean {
-  if (!isContextLabEnabled()) {
-    return false;
-  }
-  try {
-    return resolveContextLabRuntimeMode() === "memory";
-  } catch {
-    return false;
-  }
 }
