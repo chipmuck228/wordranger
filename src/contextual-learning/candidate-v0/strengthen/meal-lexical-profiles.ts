@@ -4,10 +4,8 @@
  * This file is not a second authored truth.
  */
 
-import {
-  HOME_BREAKFAST_FRAME_ID,
-  MEAL_SCENE_CONTENT_PACK,
-} from "../content/packs/meal/meal-scene-content";
+import { HOME_BREAKFAST_FRAME_ID } from "../content/packs/meal/meal-scene-content";
+import { experimentalMealContextLabPack } from "../content/experimental-meal-runtime-pack";
 import { snapshotSceneContentFromPack } from "../content/snapshot-from-pack";
 import {
   findResolvedLexeme,
@@ -46,13 +44,13 @@ export type MealLexemeLoader = (canonicalKey: string) => {
 
 function mealSnapshot() {
   return snapshotSceneContentFromPack(
-    MEAL_SCENE_CONTENT_PACK,
+    experimentalMealContextLabPack(),
     HOME_BREAKFAST_FRAME_ID,
   );
 }
 
 /** @deprecated Candidate compatibility projection. Prefer Scene Content pack. */
-export const MEAL_PROBE_STRENGTHEN_ENTITY_BINDINGS = MEAL_SCENE_CONTENT_PACK.lexemes
+export const MEAL_PROBE_STRENGTHEN_ENTITY_BINDINGS = experimentalMealContextLabPack().lexemes
   .slice()
   .map((lexeme) => {
     const binding = lexeme.membership.frameBindings.find(
@@ -120,7 +118,7 @@ export function resolveMealLexicalStrengthenProfiles(input: {
   const profiles: MealLexicalStrengthenProfile[] = [];
   for (const identity of identities.identities) {
     if (!input.allowedEntityIds.includes(identity.entityId)) {
-      return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
+      continue;
     }
     const lexeme = input.loadLexeme(identity.canonicalKey);
     const displayLabel =

@@ -78,7 +78,7 @@ Choice responses declare `candidates` and `correctCandidateIds`. The compiler co
 
 | Case | Skeleton | What it proves |
 | --- | --- | --- |
-| Meal | `meal-setting-v0` | One skeleton, three frames. Scene Content authors Home Breakfast and Restaurant Meal natively. Picnic still uses compatibility projection. BUILD is guided present / observe / contrast then assessable RECALL. STRENGTHEN recall-weakness is guided reconnect / fade then frozen recall. STRENGTHEN IDENTIFY remains assessable and unsupported. `meal-scene-expansion-batch-01` is a Candidate / not-approved cup expansion; see `docs/CONTEXTUAL_MEAL_EXPANSION_BATCH_01_CANDIDATE.md`. |
+| Meal | `meal-setting-v0` | One skeleton, three frames. Scene Content authors Home Breakfast and Restaurant Meal natively. Picnic still uses compatibility projection. BUILD is guided present / observe / contrast then assessable RECALL. STRENGTHEN recall-weakness is guided reconnect / fade then frozen recall. STRENGTHEN IDENTIFY remains assessable and unsupported. `meal-scene-expansion-batch-01` is Candidate V0 / fingerprint-bound / `APPROVED_FOR_EXPERIMENT` only for experimental Context Lab; not Standard and not production `/train`. See `docs/CONTEXTUAL_MEAL_EXPANSION_BATCH_01_CANDIDATE.md`. |
 | School Challenge | `goal-directed-challenge-v0` | Abstract words bind as property / action / state / outcome / grounded claim. Local success is not general ability. CLAIM_CHOICE does not compile. |
 | Borrowing-Sharing | `temporary-resource-access-v0` | Same transfer event; requester perspective is `borrow`, owner perspective is `lend`. Contextual RELATION_CHOICE does not compile. |
 
@@ -205,7 +205,7 @@ The server page creates and persists the first run before render. Refresh before
 
 After a frozen task has been submitted, retrying the same `taskId` reconciles to the existing `LearningEvidence`. Refresh still starts a new experimental run and will assign a new deterministic task if the learner walks the flow again.
 
-`重新体验` calls the server restart/start operation, receives a new run ID, and begins at progress `1 / 4`. The previous run is abandoned and is not learning truth. Expiry/cleanup of abandoned experimental runs is a later gap.
+`重新体验` calls the server restart/start operation, receives a new run ID, and begins at the first step of the current experimental plan. The previous run is abandoned and is not learning truth. Expiry/cleanup of abandoned experimental runs is a later gap. Meal Context Lab Probe now uses the five-word experiment pack (original four plus cup).
 
 ### Frozen task Evidence loop
 

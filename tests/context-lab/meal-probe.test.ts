@@ -18,7 +18,7 @@ import { AnswerMode, PromptMode } from "@/domain/learning/evidence.types";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 
 const OTHER_USER = "00000000-0000-4000-8000-000000000099";
-const LEMMAS = ["soup", "bowl", "spoon", "fork"] as const;
+const LEMMAS = ["soup", "bowl", "spoon", "fork", "cup"] as const;
 
 function probeHarness() {
   return createMealLabHarness({ beginAt: "PROBE" });
@@ -176,7 +176,7 @@ describe("Meal cold Probe orchestration", () => {
       text: "写出当前物品的英文单词",
     });
     expect(first.progress.current).toBe(1);
-    expect(visibleProbeText(first)).not.toMatch(/\bsoup\b|\bbowl\b|\bspoon\b|\bfork\b/i);
+    expect(visibleProbeText(first)).not.toMatch(/\bsoup\b|\bbowl\b|\bspoon\b|\bfork\b|\bcup\b/i);
     expect(collectKeys(first).has("targets")).toBe(false);
     for (const field of FORBIDDEN_CLIENT_FIELDS) {
       expect(collectKeys(first).has(field)).toBe(false);
@@ -281,10 +281,10 @@ describe("Meal cold Probe orchestration", () => {
     );
   });
 
-  it("produces four routing results and only hands off spoon BUILD", async () => {
+  it("produces five routing results and hands off BUILD after all-wrong Probe", async () => {
     const { controller, learningTasks, repository } = probeHarness();
     let screen: ContextLabCurrentScreen = await controller.start();
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       screen = await continueFrom(controller, screen);
       screen = await submitTyping(controller, screen, "nope");
       screen = await continueFrom(controller, screen);
@@ -292,7 +292,7 @@ describe("Meal cold Probe orchestration", () => {
     }
     screen = await continueFrom(controller, screen);
     assertKind(screen, "PROBE_SUMMARY");
-    expect(screen.items).toHaveLength(4);
+    expect(screen.items).toHaveLength(5);
     expect(screen.items.every((item) => item.summary === "建立情境记忆")).toBe(true);
     expect(screen.canHandoffToBuild).toBe(true);
     expect(screen.canHandoffToStrengthen).toBe(false);
@@ -303,7 +303,7 @@ describe("Meal cold Probe orchestration", () => {
       runId: screen.handle.runId,
       userId: V1_PLACEHOLDER_USER_ID,
     });
-    expect(routingResultsForProbe(stored!.probe!)).toHaveLength(4);
+    expect(routingResultsForProbe(stored!.probe!)).toHaveLength(5);
     const json = JSON.stringify(
       serializeContextLabRunState({
         experienceRun: stored!.experienceRun,
@@ -359,6 +359,8 @@ describe("Meal cold Probe orchestration", () => {
     screen = await submitTyping(controller, screen, "nope");
     screen = await continueFrom(controller, screen);
     screen = await submitChoice(controller, learningTasks, screen, false);
+    screen = await continueFrom(controller, screen);
+    screen = await submitTyping(controller, screen, "cup");
     screen = await continueFrom(controller, screen);
     assertKind(screen, "PROBE_SUMMARY");
     expect(screen.items[2]?.summary).toBe("加强记忆连接");

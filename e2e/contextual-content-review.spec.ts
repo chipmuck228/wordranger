@@ -77,10 +77,22 @@ test.describe("readonly review host", () => {
     );
 
     await page.goto(REVIEW_URL);
-    await expect(page.getByText("Candidate / 尚未进入实验")).toBeVisible();
+    await expect(page.getByText("Candidate V0 / 已进入实验 Context Lab")).toBeVisible();
     const reviewRequests: string[] = [];
     page.on("request", (request) => reviewRequests.push(request.url()));
-    await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
+    await expect(page.getByTestId("review-human-status")).toHaveText("APPROVED");
+    await expect(page.getByTestId("review-stale-state")).toHaveText("CURRENT");
+    await expect(page.getByTestId("review-registry-status")).toHaveText("APPROVED_FOR_EXPERIMENT");
+    await expect(page.getByTestId("review-experiment-notice")).toHaveText(
+      "已进入实验 Context Lab，不代表 Standard 或生产批准",
+    );
+    await expect(page.getByTestId("review-promotion-scope")).toContainText("EXPERIMENT_ONLY");
+    await expect(page.getByTestId("review-revision")).toHaveText("1");
+    await expect(page.getByTestId("review-fingerprint")).toHaveText(
+      "51dc51dc1a321f2af03126d75db1823e59eed61f7e3168c47f4b360611997a40",
+    );
+    await expect(page.getByText("Standard approved")).toHaveCount(0);
+    await expect(page.getByText("production approval")).toHaveCount(0);
     await expect(page.getByTestId("review-readonly")).toBeVisible();
     await expect(page.getByRole("button", { name: "通过审核" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "需要修改" })).toBeDisabled();
@@ -120,7 +132,7 @@ test.describe("readonly review host", () => {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ reducedMotion: "reduce" });
       await page.goto(REVIEW_URL);
-      await expect(page.getByRole("heading", { name: "Candidate / 尚未进入实验" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Candidate V0 / 已进入实验 Context Lab" })).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
       expect(overflow, `${viewport.width}x${viewport.height}`).toBe(false);
       await page.keyboard.press("Tab");
@@ -131,17 +143,17 @@ test.describe("readonly review host", () => {
 test.describe("writable review host", () => {
   test.use({ baseURL: "http://127.0.0.1:3319" });
 
-  test("can save 需要修改 and still show CANDIDATE registry status", async ({
+  test("can save 需要修改 without changing the experiment registry status", async ({
     page,
   }) => {
     await page.goto(REVIEW_URL);
     await page.getByRole("button", { name: "需要修改" }).click();
     await page.getByLabel("Required revisions").fill("Tighten contrast copy.");
     await page.getByRole("button", { name: "确认" }).click();
-    await expect(page.getByText("已保存人工审核记录。Registry 仍为 CANDIDATE。")).toBeVisible();
+    await expect(page.getByText("已保存人工审核记录。不会修改 registry 或 promotion。")).toBeVisible();
     await page.reload();
     await expect(page.getByTestId("review-human-status")).toHaveText("REVISE");
-    await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
+    await expect(page.getByTestId("review-registry-status")).toHaveText("APPROVED_FOR_EXPERIMENT");
   });
 
   test("rejects a conflicting decision and refreshes the current review record", async ({
@@ -181,6 +193,6 @@ test.describe("writable review host", () => {
     );
     await expect(page.getByTestId("review-human-status")).toHaveText("APPROVED");
     await expect(page.getByTestId("review-revision")).toHaveText(String(pageRevision + 1));
-    await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
+    await expect(page.getByTestId("review-registry-status")).toHaveText("APPROVED_FOR_EXPERIMENT");
   });
 });

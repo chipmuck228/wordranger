@@ -1,11 +1,11 @@
 # Review packet
 
-Status: Candidate / Experimental / Not Approved
+Status: Candidate V0 / Experimental / APPROVED_FOR_EXPERIMENT only
 
 This file is machine-generated. It is not a human approval.
 
 - Pack: `meal-scene-expansion-batch-01`
-- Registry status: `CANDIDATE`
+- Registry status: `APPROVED_FOR_EXPERIMENT`
 - Target: `16ea1697-0049-55fe-9181-03d129352a17` / `cup#drink-container`
 - Canonical key: `lex-0346-1`
 - Content fingerprint: `51dc51dc1a321f2af03126d75db1823e59eed61f7e3168c47f4b360611997a40`
@@ -14,18 +14,19 @@ This file is machine-generated. It is not a human approval.
 
 ## Notices
 
-- “通过审核”只记录人工审核结果。
-- 内容仍是 Candidate。
-- 进入实验运行需要后续独立代码变更和提交。
+- 已进入实验 Context Lab，不代表 Standard 或生产批准
+- Candidate V0 / APPROVED_FOR_EXPERIMENT only.
+- 不是 Standard，也不接入生产 /train。
 - 机器验证通过不等于人工批准。
+- 保存审核决定不会修改 registry 或 promotion。
 - LOCAL_INTERNAL_REVIEWER is not a production identity.
 
 ## Machine checks
 
 - PASS CONTENT_VALID: Scene Content validator passed.
-- PASS REGISTRY_CANDIDATE: Registry status is CANDIDATE.
-- PASS NOT_APPROVED_RUNTIME: Expansion pack is not returned by getApprovedExperimentSceneContent.
-- PASS APPROVED_PACK_UNCHANGED: Approved Context Lab pack is still the four-word fixture.
+- PASS REGISTRY_STATUS: Registry status is APPROVED_FOR_EXPERIMENT.
+- PASS EXPERIMENT_RUNTIME: Expansion pack is APPROVED_FOR_EXPERIMENT only.
+- PASS ORIGINAL_FOUR_WORD_PACK_UNCHANGED: Original four-word Meal pack remains identifiable.
 - PASS PROBE_NO_FORM_LEAK: Probe student copy does not include the target form.
 
 ## Home breakfast (`home-breakfast-v0`)

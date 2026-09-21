@@ -1,11 +1,14 @@
 /**
  * Scene Content registry. Runtime may load APPROVED_FOR_EXPERIMENT only.
+ * Expansion cup is experiment-only after a fingerprint-bound attestation.
  */
 
 import { SceneContentErrorCode } from "./errors";
 import { cloneFrozen, deepFreeze } from "./immutable";
 import { MEAL_SCENE_CONTENT_PACK } from "./packs/meal/meal-scene-content";
 import { MEAL_SCENE_EXPANSION_BATCH_01_PACK } from "./packs/meal/meal-scene-expansion-batch-01";
+import { MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION } from "./packs/meal/meal-scene-expansion-batch-01-promotion";
+import { attestationIsStructurallyBound } from "./validate-experiment-promotion";
 import type {
   ContextualSceneContentPack,
   ContextualSceneContentRegistryEntry,
@@ -19,6 +22,13 @@ function compileRegistry(
   const compiled: ContextualSceneContentRegistryEntry[] = [];
   for (const entry of entries) {
     if (!entry.packId || entry.packId !== entry.pack.id || ids.has(entry.packId)) {
+      continue;
+    }
+    if (
+      entry.status === "APPROVED_FOR_EXPERIMENT" &&
+      entry.packId === MEAL_SCENE_EXPANSION_BATCH_01_PACK.id &&
+      !attestationIsStructurallyBound(entry)
+    ) {
       continue;
     }
     ids.add(entry.packId);
@@ -38,8 +48,9 @@ const ENTRIES = compileRegistry([
   },
   {
     packId: MEAL_SCENE_EXPANSION_BATCH_01_PACK.id,
-    status: "CANDIDATE",
+    status: "APPROVED_FOR_EXPERIMENT",
     pack: MEAL_SCENE_EXPANSION_BATCH_01_PACK,
+    promotion: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
   },
 ]);
 
@@ -66,3 +77,12 @@ export function getApprovedExperimentSceneContent(
 export function registryStatusFor(packId: string): SceneContentRegistryStatus | null {
   return ENTRIES.find((entry) => entry.packId === packId)?.status ?? null;
 }
+
+export function registryEntryFor(
+  packId: string,
+): ContextualSceneContentRegistryEntry | null {
+  const entry = ENTRIES.find((item) => item.packId === packId);
+  return entry ? cloneFrozen(entry) : null;
+}
+
+export { compileRegistry as compileSceneContentRegistryForTests };

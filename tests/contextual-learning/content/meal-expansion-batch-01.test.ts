@@ -401,16 +401,22 @@ describe("Meal expansion batch 01 plan generation", () => {
 });
 
 describe("Meal expansion batch 01 approval isolation", () => {
-  it("registers the batch as CANDIDATE and keeps it out of approved runtime", () => {
+  it("registers the batch as APPROVED_FOR_EXPERIMENT beside the original four-word pack", () => {
     expect(MEAL_SCENE_EXPANSION_BATCH_01_PACK.id).toBe(
       MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID,
     );
-    expect(MEAL_SCENE_EXPANSION_BATCH_01_PACK.provenance.status).toBe("CANDIDATE");
-    expect(registryStatusFor(MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID)).toBe("CANDIDATE");
-    expect(getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID)).toEqual({
-      ok: false,
-      reason: SceneContentErrorCode.CONTENT_REGISTRY_UNAPPROVED,
-    });
+    expect(MEAL_SCENE_EXPANSION_BATCH_01_PACK.provenance.status).toBe(
+      "APPROVED_FOR_EXPERIMENT",
+    );
+    expect(registryStatusFor(MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID)).toBe(
+      "APPROVED_FOR_EXPERIMENT",
+    );
+    const expansion = getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID);
+    expect(expansion.ok).toBe(true);
+    if (expansion.ok) {
+      expect(expansion.pack.lexemes.map((lexeme) => lexeme.id)).toContain("meal-cup");
+      expect(expansion.pack.lexemes).toHaveLength(5);
+    }
     const approved = getApprovedExperimentSceneContent(MEAL_SCENE_CONTENT_PACK.id);
     expect(approved.ok).toBe(true);
     if (approved.ok) {
@@ -421,35 +427,38 @@ describe("Meal expansion batch 01 approval isolation", () => {
       listSceneContentRegistry().some(
         (entry) =>
           entry.packId === MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID &&
-          entry.status === "CANDIDATE",
+          entry.status === "APPROVED_FOR_EXPERIMENT",
       ),
     ).toBe(true);
   });
 
-  it("lets the expansion pack hold more words while Context Lab stays on the four-word probe queue", () => {
+  it("lets Meal Context Lab Probe read the five-word expansion pack", () => {
     const expansionSnapshot = snapshotSceneContentFromPack(
       MEAL_SCENE_EXPANSION_BATCH_01_PACK,
       homeBreakfastFrame.id,
     );
-    expect(expansionSnapshot?.lexemes.length).toBeGreaterThan(4);
+    expect(expansionSnapshot?.lexemes.length).toBe(5);
     expect(projectProbeTargets(expansionSnapshot!).map((item) => item.entityId)).toContain(
       "home-cup",
     );
     const approvedTargets = mealColdProbeTargets();
-    expect(approvedTargets).toHaveLength(4);
+    expect(approvedTargets).toHaveLength(5);
     expect(approvedTargets.map((item) => item.entityId)).toEqual([
       "home-soup",
       "home-bowl",
       "home-spoon",
       "home-fork",
+      "home-cup",
     ]);
     expect(HOME_BREAKFAST_SCENE_ENTITY_IDS).toEqual([
       "home-soup",
       "home-bowl",
       "home-spoon",
       "home-fork",
+      "home-cup",
     ]);
-    expect(mappedMealEntity("home-cup")).toBeUndefined();
+    expect(mappedMealEntity("home-cup")?.label).toBe("杯子");
+    expect(approvedTargets.some((item) => item.entityId.includes("plate"))).toBe(false);
   });
 
   it("does not leak cup answers from the Candidate fixture into approved public presentation", () => {

@@ -64,6 +64,7 @@ describe("Meal lexical STRENGTHEN profiles", () => {
     }
     expect(listed.identities.map((item) => item.entityId)).toEqual([
       ...HOME_BREAKFAST_SCENE_ENTITY_IDS,
+      "home-cup",
     ]);
     for (const identity of listed.identities) {
       const member = MEAL_SCENE_CLUSTER.members.find(

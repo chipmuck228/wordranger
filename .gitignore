@@ -44,3 +44,7 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# Untracked local content-review records stay ignored by default.
+# Already-tracked cup HUMAN review JSON remains tracked by Git.
+docs/contextual-content-reviews/**/human-review.record.json

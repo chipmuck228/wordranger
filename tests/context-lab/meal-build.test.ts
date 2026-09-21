@@ -119,9 +119,14 @@ async function reachSummary(
   learningTasks: InMemoryLearningTaskRepository,
   recognitionCorrect: readonly boolean[],
 ) {
+  const readyLemmas = ["soup", "bowl", "spoon", "fork", "cup"] as const;
   let screen: ContextLabCurrentScreen = await controller.start();
-  for (let index = 0; index < 4; index += 1) {
+  for (let index = 0; index < readyLemmas.length; index += 1) {
     screen = await continueFrom(controller, screen);
+    if (index >= recognitionCorrect.length) {
+      screen = await submitTyping(controller, screen, readyLemmas[index]!);
+      continue;
+    }
     screen = await submitTyping(controller, screen, "nope");
     screen = await continueFrom(controller, screen);
     screen = await submitChoice(

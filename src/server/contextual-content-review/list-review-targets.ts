@@ -1,3 +1,4 @@
+import { registryStatusFor } from "@/contextual-learning/candidate-v0/content";
 import { fileContentReviewRepository } from "./file-content-review-repository";
 import { currentContentFingerprint } from "./project-review-packet";
 import { CONTENT_REVIEW_TARGETS, reviewHref } from "./review-target-registry";
@@ -20,7 +21,7 @@ export async function listContentReviewTargets(): Promise<ContentReviewListItem[
           ? record.decision
           : "Candidate / 待人工审核",
       frameLabels: ["Home Breakfast", "Restaurant Meal"],
-      registryStatus: "CANDIDATE",
+      registryStatus: registryStatusFor(spec.packId) ?? "DRAFT",
     });
   }
   return items;

@@ -8,7 +8,7 @@ async function main() {
         ok: true,
         fingerprint: result.fingerprint,
         stale: result.stale,
-        registryStatus: "CANDIDATE",
+        registryStatus: result.registryStatus,
       },
       null,
       2,

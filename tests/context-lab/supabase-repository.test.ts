@@ -146,7 +146,8 @@ describe("Context Lab Supabase repository", () => {
     });
     let screen = await controller.start();
     const recognitionCorrect = [false, false, true, false];
-    for (let index = 0; index < 4; index += 1) {
+    const readyLemmas = ["soup", "bowl", "spoon", "fork", "cup"] as const;
+    for (let index = 0; index < readyLemmas.length; index += 1) {
       if (screen.kind !== "PROBE_INTRO" && screen.kind !== "PROBE_TASK_RECORDED") {
         throw new Error(screen.kind);
       }

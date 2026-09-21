@@ -30,7 +30,11 @@ export function ReviewWorkspace({
     <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-6 overflow-x-hidden px-4 py-8">
       <header className="space-y-2">
         <p className="text-muted-foreground text-xs">内部内容审核</p>
-        <h1 className="text-2xl font-semibold">Candidate / 尚未进入实验</h1>
+        <h1 className="text-2xl font-semibold">
+          {packet.pack.registryStatus === "APPROVED_FOR_EXPERIMENT"
+            ? "Candidate V0 / 已进入实验 Context Lab"
+            : "Candidate / 尚未进入实验"}
+        </h1>
         <dl className="grid gap-2 text-sm md:grid-cols-2">
           <div>
             <dt className="text-muted-foreground">Pack ID</dt>
@@ -64,6 +68,14 @@ export function ReviewWorkspace({
           </div>
         </dl>
         <p className="text-sm">机器验证通过不等于人工批准</p>
+        {packet.pack.registryStatus === "APPROVED_FOR_EXPERIMENT" ? (
+          <p data-testid="review-experiment-notice" className="text-sm">
+            已进入实验 Context Lab，不代表 Standard 或生产批准
+          </p>
+        ) : null}
+        {packet.promotionScope ? (
+          <p data-testid="review-promotion-scope">Scope: {packet.promotionScope}</p>
+        ) : null}
         <div role="tablist" aria-label="场景切换" className="flex flex-wrap gap-2">
           {packet.frames.map((item) => (
             <button

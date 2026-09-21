@@ -24,12 +24,33 @@ describe("Content review packet projection", () => {
     expect(packet).not.toBeNull();
     const bundled = bundledSceneLexemeLoader(packet!.target.canonicalKey);
     expect(packet!.pack.packId).toBe(MEAL_SCENE_EXPANSION_BATCH_01_PACK.id);
-    expect(packet!.pack.registryStatus).toBe("CANDIDATE");
+    expect(packet!.pack.registryStatus).toBe("APPROVED_FOR_EXPERIMENT");
     expect(packet!.target.lexemeId).toBe(bundled!.id);
     expect(packet!.target.displayForm).toBe(bundled!.display.trim() || bundled!.lemma);
     expect(packet!.target.meaningsZh).toEqual([...bundled!.meaningsZh]);
     expect(packet!.target.phonetic).toBe(bundled!.ipa[0]);
     expect(packet!.reviewRevision).toBe(0);
+  });
+
+  it("shows the committed APPROVED review against the experiment registry", () => {
+    const record = JSON.parse(
+      readFileSync(
+        "docs/contextual-content-reviews/meal-expansion-batch-01-cup/human-review.record.json",
+        "utf8",
+      ),
+    );
+    const packet = projectContentReviewPacket({ spec, record, writeEnabled: false })!;
+    expect(packet.reviewStatus).toBe("APPROVED");
+    expect(packet.staleState).toBe("CURRENT");
+    expect(packet.pack.registryStatus).toBe("APPROVED_FOR_EXPERIMENT");
+    expect(packet.promotionScope).toBe("EXPERIMENT_ONLY");
+    expect(packet.reviewRevision).toBe(1);
+    expect(packet.notices.some((item) => item.includes("已进入实验 Context Lab"))).toBe(true);
+    expect(JSON.stringify(packet)).not.toMatch(/PRODUCTION_APPROVED|Standard approved|production approval/i);
+    expect(packet.machineChecks.find((item) => item.id === "EXPERIMENT_RUNTIME")?.ok).toBe(true);
+    expect(
+      packet.machineChecks.find((item) => item.id === "ORIGINAL_FOUR_WORD_PACK_UNCHANGED")?.ok,
+    ).toBe(true);
   });
 
   it("keeps Home and Restaurant facts on their own frames", () => {

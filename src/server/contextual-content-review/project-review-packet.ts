@@ -508,7 +508,7 @@ export function projectContentReviewPacket(input: {
   });
   const approved = getApprovedExperimentSceneContent(pack.id);
   const approvedRuntime = getApprovedExperimentSceneContent(MEAL_SCENE_CONTENT_PACK.id);
-  const registryStatus = registryStatusFor(pack.id);
+  const registryStatus = registryStatusFor(pack.id) ?? "DRAFT";
   const probeLeak = frames.some((frame) =>
     frame.steps.some((step) => step.stage === "PROBE_ACTIVE_RECALL" && step.audit.answerLeakage === "fail"),
   );
@@ -519,19 +519,23 @@ export function projectContentReviewPacket(input: {
       detail: validated.ok ? "Scene Content validator passed." : "Validator failed.",
     },
     {
-      id: "REGISTRY_CANDIDATE",
-      ok: registryStatus === "CANDIDATE" && pack.provenance.status === "CANDIDATE",
-      detail: `Registry status is ${registryStatus ?? "missing"}.`,
+      id: "REGISTRY_STATUS",
+      ok:
+        registryStatus === pack.provenance.status &&
+        (registryStatus === "CANDIDATE" || registryStatus === "APPROVED_FOR_EXPERIMENT"),
+      detail: `Registry status is ${registryStatus}.`,
     },
     {
-      id: "NOT_APPROVED_RUNTIME",
-      ok: !approved.ok,
-      detail: "Expansion pack is not returned by getApprovedExperimentSceneContent.",
+      id: "EXPERIMENT_RUNTIME",
+      ok: approved.ok && pack.provenance.status === "APPROVED_FOR_EXPERIMENT",
+      detail: approved.ok
+        ? "Expansion pack is APPROVED_FOR_EXPERIMENT only."
+        : "Expansion pack is not approved for experiment.",
     },
     {
-      id: "APPROVED_PACK_UNCHANGED",
-      ok: Boolean(approvedRuntime.ok && approvedRuntime.ok && approvedRuntime.pack.lexemes.length === 4),
-      detail: "Approved Context Lab pack is still the four-word fixture.",
+      id: "ORIGINAL_FOUR_WORD_PACK_UNCHANGED",
+      ok: Boolean(approvedRuntime.ok && approvedRuntime.pack.lexemes.length === 4),
+      detail: "Original four-word Meal pack remains identifiable.",
     },
     {
       id: "PROBE_NO_FORM_LEAK",
@@ -552,9 +556,11 @@ export function projectContentReviewPacket(input: {
     staleState: stale,
     writeEnabled: input.writeEnabled ?? isContextualContentReviewWriteEnabled(),
     reviewRevision: record?.revision ?? 0,
+    promotionScope:
+      registryStatus === "APPROVED_FOR_EXPERIMENT" ? "EXPERIMENT_ONLY" : undefined,
     pack: {
       packId: pack.id,
-      registryStatus: "CANDIDATE",
+      registryStatus,
       contentFingerprint: fingerprint,
       title: input.spec.title,
     },
@@ -573,10 +579,13 @@ export function projectContentReviewPacket(input: {
     machineChecks,
     humanReview: record ?? undefined,
     notices: [
-      "“通过审核”只记录人工审核结果。",
-      "内容仍是 Candidate。",
-      "进入实验运行需要后续独立代码变更和提交。",
+      registryStatus === "APPROVED_FOR_EXPERIMENT"
+        ? "已进入实验 Context Lab，不代表 Standard 或生产批准"
+        : "“通过审核”只记录人工审核结果。",
+      "Candidate V0 / APPROVED_FOR_EXPERIMENT only.",
+      "不是 Standard，也不接入生产 /train。",
       "机器验证通过不等于人工批准。",
+      "保存审核决定不会修改 registry 或 promotion。",
       "LOCAL_INTERNAL_REVIEWER is not a production identity.",
     ],
   };

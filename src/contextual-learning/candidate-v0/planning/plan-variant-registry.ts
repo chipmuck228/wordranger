@@ -54,6 +54,7 @@ const MEAL_PROBE_LEXICAL: readonly LexemeSenseRef[] = [
   MEAL_SENSE.bowl,
   MEAL_SENSE.spoon,
   MEAL_SENSE.fork,
+  MEAL_SENSE.cup,
 ];
 const SCHOOL_ABSTRACT: readonly LexemeSenseRef[] = [
   SCHOOL_SENSE.ability,

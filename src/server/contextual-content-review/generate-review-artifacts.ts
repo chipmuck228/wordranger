@@ -35,7 +35,7 @@ function renderPacketMarkdown(packet: ContentReviewPacket): string {
     .join("\n");
   return `# Review packet
 
-Status: Candidate / Experimental / Not Approved
+Status: Candidate V0 / Experimental / APPROVED_FOR_EXPERIMENT only
 
 This file is machine-generated. It is not a human approval.
 
@@ -87,6 +87,7 @@ function publicManifest(packet: ContentReviewPacket) {
 export async function generateMealBatch01CupReviewArtifacts(): Promise<{
   fingerprint: string;
   stale: boolean;
+  registryStatus: string;
 }> {
   const spec = CONTENT_REVIEW_TARGETS[0];
   if (!spec) {
@@ -140,5 +141,6 @@ export async function generateMealBatch01CupReviewArtifacts(): Promise<{
   return {
     fingerprint: packet.pack.contentFingerprint,
     stale: packet.staleState === "STALE_REVIEW",
+    registryStatus: packet.pack.registryStatus,
   };
 }

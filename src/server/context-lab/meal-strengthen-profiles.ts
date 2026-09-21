@@ -15,7 +15,7 @@ import {
 import type { MealLexicalStrengthenProfile } from "@/contextual-learning/candidate-v0/strengthen/types";
 import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import {
-  HOME_BREAKFAST_SCENE_ENTITY_IDS,
+  HOME_BREAKFAST_FRAME_ENTITY_IDS,
   mappedMealEntity,
 } from "./meal-presentation-map";
 
@@ -25,7 +25,7 @@ export function loadMealLexicalStrengthenProfiles():
   return resolveMealLexicalStrengthenProfiles({
     loadLexeme: bundledSceneLexemeLoader,
     displayLabelForEntity: (entityId) => mappedMealEntity(entityId)?.label ?? null,
-    allowedEntityIds: HOME_BREAKFAST_SCENE_ENTITY_IDS,
+    allowedEntityIds: HOME_BREAKFAST_FRAME_ENTITY_IDS,
   });
 }
 
@@ -48,7 +48,7 @@ export function loadMealLexicalBuildProfiles():
   return resolveMealLexicalBuildProfiles({
     loadLexeme: bundledSceneLexemeLoader,
     displayLabelForEntity: (entityId) => mappedMealEntity(entityId)?.label ?? null,
-    allowedEntityIds: HOME_BREAKFAST_SCENE_ENTITY_IDS,
+    allowedEntityIds: HOME_BREAKFAST_FRAME_ENTITY_IDS,
   });
 }
 

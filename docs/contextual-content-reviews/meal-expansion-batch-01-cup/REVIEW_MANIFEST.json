@@ -1,7 +1,7 @@
 {
   "schemaVersion": "candidate-v0",
   "packId": "meal-scene-expansion-batch-01",
-  "registryStatus": "CANDIDATE",
+  "registryStatus": "APPROVED_FOR_EXPERIMENT",
   "contentFingerprint": "51dc51dc1a321f2af03126d75db1823e59eed61f7e3168c47f4b360611997a40",
   "target": {
     "lexemeId": "16ea1697-0049-55fe-9181-03d129352a17",
@@ -20,19 +20,19 @@
       "detail": "Scene Content validator passed."
     },
     {
-      "id": "REGISTRY_CANDIDATE",
+      "id": "REGISTRY_STATUS",
       "ok": true,
-      "detail": "Registry status is CANDIDATE."
+      "detail": "Registry status is APPROVED_FOR_EXPERIMENT."
     },
     {
-      "id": "NOT_APPROVED_RUNTIME",
+      "id": "EXPERIMENT_RUNTIME",
       "ok": true,
-      "detail": "Expansion pack is not returned by getApprovedExperimentSceneContent."
+      "detail": "Expansion pack is APPROVED_FOR_EXPERIMENT only."
     },
     {
-      "id": "APPROVED_PACK_UNCHANGED",
+      "id": "ORIGINAL_FOUR_WORD_PACK_UNCHANGED",
       "ok": true,
-      "detail": "Approved Context Lab pack is still the four-word fixture."
+      "detail": "Original four-word Meal pack remains identifiable."
     },
     {
       "id": "PROBE_NO_FORM_LEAK",

@@ -1,5 +1,6 @@
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
 import type { PublicSceneLexemePresentation } from "@/contextual-learning/candidate-v0/content/project-public-presentation";
+import type { SceneContentRegistryStatus } from "@/contextual-learning/candidate-v0/content/types";
 import type { LexemeSenseRef } from "@/contextual-learning/candidate-v0/domain/types";
 
 export const CONTENT_REVIEW_SCHEMA_VERSION = "candidate-v0" as const;
@@ -96,9 +97,10 @@ export interface ContentReviewPacket {
   staleState: ContentReviewStaleState;
   writeEnabled: boolean;
   reviewRevision: number;
+  promotionScope?: "EXPERIMENT_ONLY";
   pack: {
     packId: string;
-    registryStatus: "CANDIDATE";
+    registryStatus: SceneContentRegistryStatus;
     contentFingerprint: string;
     title: string;
   };
@@ -126,7 +128,7 @@ export interface ContentReviewListItem {
   targetLabel: string;
   statusLabel: string;
   frameLabels: string[];
-  registryStatus: "CANDIDATE";
+  registryStatus: SceneContentRegistryStatus;
 }
 
 export type SaveContentReviewResult =

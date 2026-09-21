@@ -4,9 +4,9 @@
  * This file is not a second authored truth.
  */
 
-import { MEAL_SCENE_CONTENT_PACK } from "../content/packs/meal/meal-scene-content";
 import { snapshotSceneContentFromPack } from "../content/snapshot-from-pack";
 import { HOME_BREAKFAST_FRAME_ID } from "../content/packs/meal/meal-scene-content";
+import { experimentalMealContextLabPack } from "../content/experimental-meal-runtime-pack";
 import { projectBuildProfile } from "../content/project-from-resolved";
 import {
   MEAL_PROBE_STRENGTHEN_ENTITY_BINDINGS,
@@ -22,7 +22,7 @@ import type { MealLexicalBuildProfile, MealBuildSceneBinding } from "./types";
 
 function mealSnapshot() {
   return snapshotSceneContentFromPack(
-    MEAL_SCENE_CONTENT_PACK,
+    experimentalMealContextLabPack(),
     HOME_BREAKFAST_FRAME_ID,
   );
 }

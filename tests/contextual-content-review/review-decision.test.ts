@@ -46,12 +46,16 @@ describe("Content review decisions", () => {
     expect(saved.record.decision).toBe("APPROVED");
     expect(saved.record.revision).toBe(1);
     expect(saved.record.reviewer).toBe("LOCAL_INTERNAL_REVIEWER");
-    expect(MEAL_SCENE_EXPANSION_BATCH_01_PACK.provenance.status).toBe("CANDIDATE");
-    expect(registryStatusFor(MEAL_SCENE_EXPANSION_BATCH_01_PACK.id)).toBe("CANDIDATE");
+    expect(MEAL_SCENE_EXPANSION_BATCH_01_PACK.provenance.status).toBe(
+      "APPROVED_FOR_EXPERIMENT",
+    );
+    expect(registryStatusFor(MEAL_SCENE_EXPANSION_BATCH_01_PACK.id)).toBe(
+      "APPROVED_FOR_EXPERIMENT",
+    );
     const approved = getApprovedExperimentSceneContent(MEAL_SCENE_CONTENT_PACK.id);
     expect(approved.ok && approved.pack.lexemes).toHaveLength(4);
     expect(getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_01_PACK.id).ok).toBe(
-      false,
+      true,
     );
   });
 

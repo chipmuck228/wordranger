@@ -34,6 +34,7 @@ describe("Meal Context Lab controller", () => {
       "碗",
       "勺子",
       "叉子",
+      "杯子",
     ]);
   });
 
@@ -199,7 +200,7 @@ describe("Meal Context Lab controller", () => {
     expect(JSON.stringify(screen)).not.toContain("exactAcceptedTexts");
   });
 
-  it("restart creates a new run ID at progress 1 / 4", async () => {
+  it("restart creates a new run ID at progress 1 / 6", async () => {
     const { controller } = createMealLabHarness();
     const first = await controller.start();
     assertGuided(first);

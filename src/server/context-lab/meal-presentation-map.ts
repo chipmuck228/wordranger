@@ -8,9 +8,9 @@ import type {
   ContextEntityRole,
   PublicContextEntity,
 } from "@/components/context-lab/types";
-import { MEAL_SCENE_CONTENT_PACK } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-content";
 import { snapshotSceneContentFromPack } from "@/contextual-learning/candidate-v0/content/snapshot-from-pack";
 import { HOME_BREAKFAST_FRAME_ID } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-content";
+import { experimentalMealContextLabPack } from "@/contextual-learning/candidate-v0/content/experimental-meal-runtime-pack";
 
 export { HOME_BREAKFAST_FRAME_ID };
 
@@ -22,24 +22,31 @@ function mealPresentationRole(role: string): ContextEntityRole | undefined {
 }
 
 const snapshot = snapshotSceneContentFromPack(
-  MEAL_SCENE_CONTENT_PACK,
+  experimentalMealContextLabPack(),
   HOME_BREAKFAST_FRAME_ID,
 );
 
 export const HOME_BREAKFAST_SCENE_ENTITY_IDS = (snapshot?.frame.presentationOrder ??
   []) as readonly string[];
 
+export const HOME_BREAKFAST_FRAME_ENTITY_IDS = (snapshot?.frame.entityIds ??
+  []) as readonly string[];
+
 const HOME_BREAKFAST_ENTITIES: Record<
   string,
   { label: string; role: ContextEntityRole }
-> = Object.fromEntries(
-  (snapshot?.lexemes ?? []).flatMap((lexeme) => {
-    const role = mealPresentationRole(lexeme.presentationRole);
-    return role
-      ? [[lexeme.entityId, { label: lexeme.displayLabel, role }]]
-      : [];
-  }),
-);
+> = {
+  ...Object.fromEntries(
+    (snapshot?.lexemes ?? []).flatMap((lexeme) => {
+      const role = mealPresentationRole(lexeme.presentationRole);
+      return role
+        ? [[lexeme.entityId, { label: lexeme.displayLabel, role }]]
+        : [];
+    }),
+  ),
+  // Frame-only beverage entity for cup contains(); not a Probe target.
+  "home-drink": { label: "饮料", role: "FOOD" },
+};
 
 const HOME_BREAKFAST_COPY = {
   title: snapshot?.frame.title ?? "",

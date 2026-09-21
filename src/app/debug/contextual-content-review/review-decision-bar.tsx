@@ -45,7 +45,11 @@ export function ReviewDecisionBar({
       notes: trimmed,
     });
     setBusy(false);
-    setMessage(result.ok ? "已保存人工审核记录。Registry 仍为 CANDIDATE。" : result.message ?? "保存失败");
+    setMessage(
+      result.ok
+        ? "已保存人工审核记录。不会修改 registry 或 promotion。"
+        : result.message ?? "保存失败",
+    );
     if (result.ok) {
       setPending(null);
       router.refresh();

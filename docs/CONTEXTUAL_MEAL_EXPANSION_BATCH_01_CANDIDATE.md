@@ -1,8 +1,9 @@
 # Contextual Meal Expansion Batch 01
 
-> Status: **Candidate / Experimental / Not Approved**
+> Status: **Candidate V0 / human-reviewed / APPROVED_FOR_EXPERIMENT only**
 >
-> This is not a Standard and is not 1600-word coverage.
+> Fingerprint-bound cup is approved for experimental Context Lab use.
+> This is not a Standard, not production `/train`, and not 1600-word coverage.
 
 ## 1. Batch goal
 
@@ -73,33 +74,42 @@ bindings. This batch does not implement that refactor.
 The Scene catalog / Scene Content pack is the available vocabulary for
 a scene. The Probe planner still selects a limited queue.
 
-This batch does **not** enlarge the Context Lab Probe count. The
-approved runtime pack is still soup / bowl / spoon / fork. The
-Candidate expansion pack can contain more words without sending those
-words to the browser.
+The original four-word pack `meal-home-breakfast-v0` remains
+identifiable. After fingerprint-bound human review, Meal Context Lab
+Probe reads the expansion pack and includes cup as a fifth target.
 
-## 7. Human review / approval gate
+plate / drink / eat / choose are still not executable.
 
-Pack status is `CANDIDATE`.
+## 7. Human review / experiment promotion
 
-- `getApprovedExperimentSceneContent` does not return this batch.
-- `/play/context-lab` still loads `meal-home-breakfast-v0`.
-- LLM or agent output must not flip the status to
-  `APPROVED_FOR_EXPERIMENT`.
-- There is no `STANDARD` or `PRODUCTION_APPROVED` status.
+cup is human-reviewed and fingerprint-bound:
+
+- review decision `APPROVED`
+- review revision `1`
+- content fingerprint
+  `51dc51dc1a321f2af03126d75db1823e59eed61f7e3168c47f4b360611997a40`
+
+Promotion is a committed Candidate V0 attestation with scope
+`EXPERIMENT_ONLY`. It is `APPROVED_FOR_EXPERIMENT` only.
+
+- Not Standard
+- Not production `/train`
+- Saving a review decision still does not change registry
+- LLM or page buttons cannot create a promotion
+- There is no `STANDARD` or `PRODUCTION_APPROVED` status
 
 ## 7a. Internal content review
 
-Internal reviewers can inspect this Candidate pack at
+Internal reviewers can inspect this pack at
 `/debug/contextual-content-review/meal-expansion-batch-01/cup`
 when Debug Tools and the review gate are enabled.
 
-A human `APPROVED` decision is not pack promotion and does not change
-registry status.
+The review page shows the live registry status. A later content change
+must fail closed as `STALE_REVIEW` and break promotion validation.
 
 ## 8. This is not 1600-word coverage
 
-The Meal catalog still has nine reviewed members. The approved
-experiment pack still has four executable words. This batch adds one
-Candidate-only executable word. That is a data-path proof, not lexicon
+The Meal catalog still has nine reviewed members. The original
+four-word experiment pack remains. This batch adds one
+fingerprint-bound experimental executable word. That is not lexicon
 completion.

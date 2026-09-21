@@ -196,10 +196,31 @@ export type SceneContentRegistryStatus =
   | "CANDIDATE"
   | "APPROVED_FOR_EXPERIMENT";
 
+export const CANDIDATE_V0_EXPERIMENT_PROMOTION_KIND =
+  "CANDIDATE_V0_EXPERIMENT_PROMOTION" as const;
+
+export type ExperimentPromotionScope = "EXPERIMENT_ONLY";
+
+export interface CandidateV0ExperimentPromotionAttestation {
+  schemaVersion: typeof SCENE_CONTENT_SCHEMA_VERSION;
+  kind: typeof CANDIDATE_V0_EXPERIMENT_PROMOTION_KIND;
+  packId: string;
+  reviewKey: string;
+  target: LexemeSenseRef;
+  approvedContentFingerprint: string;
+  approvedReviewRevision: number;
+  approvalDecision: "APPROVED";
+  reviewRecordSourcePath: string;
+  promotionScope: ExperimentPromotionScope;
+  promotedAt: string;
+  sourceRefs: readonly string[];
+}
+
 export interface ContextualSceneContentRegistryEntry {
   packId: string;
   status: SceneContentRegistryStatus;
   pack: ContextualSceneContentPack;
+  promotion?: CandidateV0ExperimentPromotionAttestation;
 }
 
 export interface SceneLexemeLoader {

@@ -1,10 +1,10 @@
 /**
  * Meal Scene expansion batch 01.
- * Candidate / Experimental / Not Approved.
+ * Candidate V0 / APPROVED_FOR_EXPERIMENT only after fingerprint-bound
+ * human review. Not Standard. Not production /train.
  *
  * Adds the first catalog-mapped Meal word that already has honest
- * entity/fact grounding: cup. Not loaded by /play/context-lab.
- * Not 1600-word coverage.
+ * entity/fact grounding: cup. Not 1600-word coverage.
  */
 
 import { MEAL_SENSE } from "../../../fixtures/meal/knowledge";
@@ -153,7 +153,7 @@ function attachCup(pack: ContextualSceneContentPack): ContextualSceneContentPack
   const next = structuredClone(pack);
   next.id = MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID;
   next.provenance = {
-    status: "CANDIDATE",
+    status: "APPROVED_FOR_EXPERIMENT",
     sourceRefs: [
       ...MEAL_SCENE_CONTENT_SOURCE_REFS,
       "docs/CONTEXTUAL_MEAL_EXPANSION_BATCH_01_CANDIDATE.md",
