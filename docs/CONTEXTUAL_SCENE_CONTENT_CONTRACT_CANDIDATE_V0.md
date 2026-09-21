@@ -200,6 +200,11 @@ LLM output may only create a Candidate pack. It must not auto-approve.
 soup / bowl / spoon / fork are the migrated Meal fixture. This is not
 1600-word coverage. There is no authoring tool yet.
 
+`docs/CONTEXTUAL_MEAL_EXPANSION_BATCH_01_CANDIDATE.md` records the first
+real vocabulary expansion batch. That pack is `CANDIDATE` / not
+approved. Only currently eligible words may be authored. Context Lab
+still loads the four-word approved pack.
+
 ## 13. Synthetic fifth target
 
 `synthetic-meal-extension` is a data-only extensibility test. It is not

@@ -5,6 +5,7 @@
 import { SceneContentErrorCode } from "./errors";
 import { cloneFrozen, deepFreeze } from "./immutable";
 import { MEAL_SCENE_CONTENT_PACK } from "./packs/meal/meal-scene-content";
+import { MEAL_SCENE_EXPANSION_BATCH_01_PACK } from "./packs/meal/meal-scene-expansion-batch-01";
 import type {
   ContextualSceneContentPack,
   ContextualSceneContentRegistryEntry,
@@ -34,6 +35,11 @@ const ENTRIES = compileRegistry([
     packId: MEAL_SCENE_CONTENT_PACK.id,
     status: "APPROVED_FOR_EXPERIMENT",
     pack: MEAL_SCENE_CONTENT_PACK,
+  },
+  {
+    packId: MEAL_SCENE_EXPANSION_BATCH_01_PACK.id,
+    status: "CANDIDATE",
+    pack: MEAL_SCENE_EXPANSION_BATCH_01_PACK,
   },
 ]);
 

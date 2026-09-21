@@ -33,3 +33,20 @@ export {
   HOME_BREAKFAST_FRAME_ID,
   RESTAURANT_MEAL_FRAME_ID,
 } from "./packs/meal/meal-scene-content";
+export {
+  MEAL_SCENE_EXPANSION_BATCH_01_PACK,
+  MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID,
+  MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET,
+} from "./packs/meal/meal-scene-expansion-batch-01";
+export {
+  MEAL_EXPANSION_BATCH_01_ELIGIBILITY,
+  MEAL_EXPANSION_BATCH_01_WORDS,
+  eligibilityForExpansionWord,
+  executableExpansionBatch01Words,
+  liveExpansionEligibilitySignals,
+} from "./packs/meal/meal-scene-expansion-eligibility";
+export type {
+  MealExpansionBatch01Word,
+  MealExpansionEligibilityResult,
+  MealExpansionWordEligibility,
+} from "./packs/meal/meal-scene-expansion-eligibility";
