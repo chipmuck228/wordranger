@@ -13,7 +13,7 @@ import {
   resolveMealLexicalStrengthenProfiles,
 } from "@/contextual-learning/candidate-v0/strengthen/meal-lexical-profiles";
 import type { MealLexicalStrengthenProfile } from "@/contextual-learning/candidate-v0/strengthen/types";
-import { bundledVocabularyRepository } from "@/server/runtime/bundled-vocabulary";
+import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import {
   HOME_BREAKFAST_SCENE_ENTITY_IDS,
   mappedMealEntity,
@@ -23,19 +23,7 @@ export function loadMealLexicalStrengthenProfiles():
   | { ok: true; profiles: MealLexicalStrengthenProfile[] }
   | { ok: false; reason: "MEAL_TARGET_PROFILE_UNRESOLVED" } {
   return resolveMealLexicalStrengthenProfiles({
-    loadLexeme: (canonicalKey) => {
-      const lexeme = bundledVocabularyRepository().getLexemeByCanonicalKey(canonicalKey);
-      if (!lexeme) {
-        return null;
-      }
-      return {
-        id: lexeme.id,
-        display: lexeme.display,
-        lemma: lexeme.lemma,
-        meaningsZh: lexeme.meaningsZh,
-        ipa: lexeme.ipa,
-      };
-    },
+    loadLexeme: bundledSceneLexemeLoader,
     displayLabelForEntity: (entityId) => mappedMealEntity(entityId)?.label ?? null,
     allowedEntityIds: HOME_BREAKFAST_SCENE_ENTITY_IDS,
   });
@@ -58,19 +46,7 @@ export function loadMealLexicalBuildProfiles():
   | { ok: true; profiles: MealLexicalBuildProfile[] }
   | { ok: false; reason: "MEAL_TARGET_PROFILE_UNRESOLVED" } {
   return resolveMealLexicalBuildProfiles({
-    loadLexeme: (canonicalKey) => {
-      const lexeme = bundledVocabularyRepository().getLexemeByCanonicalKey(canonicalKey);
-      if (!lexeme) {
-        return null;
-      }
-      return {
-        id: lexeme.id,
-        display: lexeme.display,
-        lemma: lexeme.lemma,
-        meaningsZh: lexeme.meaningsZh,
-        ipa: lexeme.ipa,
-      };
-    },
+    loadLexeme: bundledSceneLexemeLoader,
     displayLabelForEntity: (entityId) => mappedMealEntity(entityId)?.label ?? null,
     allowedEntityIds: HOME_BREAKFAST_SCENE_ENTITY_IDS,
   });

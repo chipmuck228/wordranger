@@ -13,9 +13,9 @@ import {
   createContextualLexicalBuildPlan,
   createContextualLexicalStrengthenPlan,
 } from "../../planning/create-contextual-lexical-plans";
+import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import { MEAL_FRAMES } from "./contexts";
 import { projectResolvedMealContentOntoFrame } from "./project-resolved-onto-frame";
-import { mealSceneLexemeLoader } from "./scene-lexeme-loader";
 import {
   identityForBundledTarget,
   identityForFixtureSense,
@@ -170,7 +170,7 @@ function mealContentForFrame(frame: ContextFrame) {
     frames: MEAL_FRAMES,
     skeleton: mealSkeleton,
     cluster: MEAL_SCENE_CLUSTER,
-    loadLexeme: mealSceneLexemeLoader,
+    loadLexeme: bundledSceneLexemeLoader,
   });
   if (resolved.ok) {
     return resolved.content;

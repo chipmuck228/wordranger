@@ -27,6 +27,8 @@ import {
   createContextualLexicalBuildPlan,
   createContextualLexicalStrengthenPlan,
 } from "@/contextual-learning/candidate-v0/planning/create-contextual-lexical-plans";
+import { readFileSync, existsSync } from "node:fs";
+import { bundledVocabularyRepository } from "@/server/runtime/bundled-vocabulary";
 import { cloneMealPack, mealTestLexemeLoader, replaceFrameFacts } from "./helpers";
 
 const authorities = {
@@ -369,16 +371,34 @@ describe("Scene Content Contract schema", () => {
   });
 
   it("allows missing IPA without inventing one", () => {
-    expect(issuesOf(cloneMealPack())).toEqual([]);
+    const loadLexeme = (canonicalKey: string) => {
+      const bundled = mealTestLexemeLoader(canonicalKey);
+      return bundled ? { ...bundled, ipa: [] } : null;
+    };
+    expect(
+      validateSceneContent({
+        pack: cloneMealPack(),
+        frame: homeBreakfastFrame,
+        frames: [restaurantMealFrame],
+        skeleton: mealSkeleton,
+        cluster: MEAL_SCENE_CLUSTER,
+        loadLexeme,
+      }),
+    ).toEqual({ ok: true });
     const resolved = resolveSceneContent({
       pack: MEAL_SCENE_CONTENT_PACK,
-      ...authorities,
+      frame: homeBreakfastFrame,
+      frames: [restaurantMealFrame],
+      skeleton: mealSkeleton,
+      cluster: MEAL_SCENE_CLUSTER,
+      loadLexeme,
     });
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) {
       return;
     }
     const bowl = resolved.content.lexemes.find((item) => item.canonicalKey === "lex-0179-1");
+    expect(bowl?.displayForm).toBe("bowl");
     expect(bowl?.phonetic).toBeUndefined();
   });
 });
@@ -394,9 +414,16 @@ describe("Scene Content resolver", () => {
       return;
     }
     const soup = findResolvedLexeme(resolved.content, MEAL_SENSE.soup);
-    expect(soup?.displayForm).toBe("soup");
-    expect(soup?.meaningGloss).toBe("汤");
-    expect(soup?.phonetic).toBe("/suːp/");
+    const bowl = findResolvedLexeme(resolved.content, MEAL_SENSE.bowl);
+    const bundledSoup = bundledVocabularyRepository().getLexemeByCanonicalKey("lex-1300-1");
+    const bundledBowl = bundledVocabularyRepository().getLexemeByCanonicalKey("lex-0179-1");
+    expect(soup?.displayForm).toBe(bundledSoup?.display);
+    expect(soup?.meaningGloss).toBe(bundledSoup?.meaningsZh[0]);
+    expect(soup?.phonetic).toBe(bundledSoup?.ipa[0]);
+    expect(bowl?.displayForm).toBe(bundledBowl?.display);
+    expect(bowl?.meaningGloss).toBe(bundledBowl?.meaningsZh[0]);
+    expect(bowl?.phonetic).toBe(bundledBowl?.ipa[0]);
+    expect(bundledBowl?.ipa[0]).toBeTruthy();
     expect(soup?.target.lexemeId).toBeTruthy();
     expect(soup?.groundingFacts[0]).toMatchObject({
       predicate: "contains",
@@ -621,5 +648,21 @@ describe("Scene Content multi-frame and safety", () => {
     }).toThrow();
     const second = getApprovedExperimentSceneContent(MEAL_SCENE_CONTENT_PACK.id);
     expect(second.ok && second.pack.lexemes).toHaveLength(4);
+  });
+
+  it("does not keep a local Meal display/meaning/IPA table", () => {
+    expect(
+      existsSync(
+        "src/contextual-learning/candidate-v0/fixtures/meal/scene-lexeme-loader.ts",
+      ),
+    ).toBe(false);
+    const plans = readFileSync(
+      "src/contextual-learning/candidate-v0/fixtures/meal/plans.ts",
+      "utf8",
+    );
+    expect(plans).toContain("bundledSceneLexemeLoader");
+    expect(plans).not.toContain("MEAL_SCENE_VOCAB");
+    expect(plans).not.toContain("/suːp/");
+    expect(plans).not.toContain("匙，调羹");
   });
 });
