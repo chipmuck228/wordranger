@@ -32,6 +32,8 @@ import {
   createContextualLexicalBuildPlan,
   createContextualLexicalStrengthenPlan,
 } from "@/contextual-learning/candidate-v0/planning/create-contextual-lexical-plans";
+import { planExperience } from "@/contextual-learning/candidate-v0/planning/plan-experience";
+import { FROZEN_RUNTIME_CAPABILITIES } from "@/contextual-learning/candidate-v0/capabilities/capability-registry";
 
 const home = MEAL_BATCH_02_FRAMES.find((frame) => frame.id === "home-breakfast-v0")!;
 const restaurant = MEAL_BATCH_02_FRAMES.find((frame) => frame.id === "restaurant-meal-v0")!;
@@ -260,19 +262,65 @@ describe("Meal expansion batch 02 plate Candidate", () => {
     ).toBe(false);
   });
 
-  it("stays CANDIDATE and out of the experimental Meal runtime", () => {
-    expect(MEAL_SCENE_EXPANSION_BATCH_02_PACK.provenance.status).toBe("CANDIDATE");
-    expect(registryStatusFor(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID)).toBe("CANDIDATE");
-    expect(getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID).ok).toBe(false);
+  it("selects the six-word experimental runtime without merging packs", () => {
+    expect(MEAL_SCENE_EXPANSION_BATCH_02_PACK.provenance.status).toBe(
+      "APPROVED_FOR_EXPERIMENT",
+    );
+    expect(registryStatusFor(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID)).toBe(
+      "APPROVED_FOR_EXPERIMENT",
+    );
+    expect(getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID).ok).toBe(
+      true,
+    );
     const runtime = experimentalMealContextLabPack();
-    expect(runtime.id).toBe(MEAL_SCENE_EXPANSION_BATCH_01_PACK.id);
+    expect(runtime.id).toBe(MEAL_SCENE_EXPANSION_BATCH_02_PACK.id);
     expect(runtime.lexemes.map((item) => item.membership.presentationToken)).toEqual([
       "soup",
       "bowl",
       "spoon",
       "fork",
       "cup",
+      "plate",
     ]);
-    expect(MEAL_SCENE_EXPANSION_BATCH_02_PACK).not.toHaveProperty("promotion");
+    expect(MEAL_SCENE_EXPANSION_BATCH_01_PACK.lexemes).toHaveLength(5);
+    expect(MEAL_SCENE_EXPANSION_BATCH_01_PACK.lexemes.map((item) => item.id)).not.toContain(
+      "meal-plate",
+    );
+  });
+
+  it("plans plate only against the batch 02 runtime context", () => {
+    const typing = FROZEN_RUNTIME_CAPABILITIES.find(
+      (capability) => capability.id === "frozen-text-input:TYPE",
+    )!;
+    const input = {
+      learningNeedRef: "need-opaque-ref",
+      mode: "BUILD" as const,
+      targets: [
+        {
+          id: "target-plate-form",
+          sense: MEAL_SENSE.plate,
+          focus: "MEANING_TO_FORM" as const,
+        },
+      ],
+      allowedContextIds: ["home-breakfast-v0"],
+      runtimeCapabilities: [typing],
+      loadLexeme: bundledSceneLexemeLoader,
+    };
+    expect(planExperience(input).ok).toBe(false);
+    expect(planExperience({ ...input, runtimeContextId: "MEAL_BASE" }).ok).toBe(false);
+    const planned = planExperience({
+      ...input,
+      runtimeContextId: "MEAL_BATCH_02",
+    });
+    expect(planned.ok).toBe(true);
+    if (!planned.ok) {
+      throw new Error(planned.error.message);
+    }
+    expect(planned.trace.selectedVariantId).toBe(
+      "meal-build:home-breakfast-v0:meal-batch-02",
+    );
+    expect(planned.plan.targets.some((target) => target.sense.senseId === "plate#food-support")).toBe(
+      true,
+    );
   });
 });

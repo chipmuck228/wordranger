@@ -75,6 +75,13 @@ export {
   MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID,
   MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
 } from "./packs/meal/meal-scene-expansion-batch-02";
+export {
+  MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+  MEAL_EXPANSION_BATCH_02_PLATE_APPROVED_FINGERPRINT,
+  MEAL_EXPANSION_BATCH_02_PLATE_APPROVED_REVISION,
+  MEAL_EXPANSION_BATCH_02_PLATE_REVIEW_KEY,
+  MEAL_EXPANSION_BATCH_02_PLATE_REVIEW_RECORD_PATH,
+} from "./packs/meal/meal-scene-expansion-batch-02-promotion";
 export type {
   CandidateV0ExperimentPromotionAttestation,
   ContextualSceneContentRegistryEntry,

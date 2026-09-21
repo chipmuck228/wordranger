@@ -48,6 +48,7 @@ import {
   type ExperiencePlanningInput,
 } from "@/contextual-learning/candidate-v0/planning";
 import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
+import { experimentalMealRuntimeContextId } from "@/contextual-learning/candidate-v0/planning/meal-runtime-context";
 import {
   findPlannerFrame,
   findPlannerSkeleton,
@@ -741,8 +742,9 @@ export class MealContextLabController {
       };
     }
 
-    const frame = findPlannerFrame(planned.plan.contextFrameId);
-    const skeleton = findPlannerSkeleton(planned.plan.skeletonId);
+    const runtimeContextId = experimentalMealRuntimeContextId();
+    const frame = findPlannerFrame(planned.plan.contextFrameId, runtimeContextId);
+    const skeleton = findPlannerSkeleton(planned.plan.skeletonId, runtimeContextId);
     if (
       !frame ||
       !skeleton ||
@@ -1579,6 +1581,7 @@ export function mealBuildPlanningInput(
       allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
       runtimeCapabilities: runtime,
       loadLexeme: bundledSceneLexemeLoader,
+      runtimeContextId: experimentalMealRuntimeContextId(),
     };
   }
   return {
@@ -1594,6 +1597,7 @@ export function mealBuildPlanningInput(
     allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
     runtimeCapabilities: runtime,
     loadLexeme: bundledSceneLexemeLoader,
+    runtimeContextId: experimentalMealRuntimeContextId(),
   };
 }
 
@@ -1617,6 +1621,7 @@ export function mealStrengthenPlanningInput(
       allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
       runtimeCapabilities: runtime,
       loadLexeme: bundledSceneLexemeLoader,
+      runtimeContextId: experimentalMealRuntimeContextId(),
     };
   }
   return {
@@ -1632,6 +1637,7 @@ export function mealStrengthenPlanningInput(
     allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
     runtimeCapabilities: runtime,
     loadLexeme: bundledSceneLexemeLoader,
+    runtimeContextId: experimentalMealRuntimeContextId(),
   };
 }
 

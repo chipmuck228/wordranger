@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { V1_PLACEHOLDER_USER_ID } from "@/server/auth/v1-user";
-import { MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET } from "@/contextual-learning/candidate-v0/content";
+import { MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET } from "@/contextual-learning/candidate-v0/content";
 import { mealColdProbeTargets } from "@/server/context-lab/meal-probe-targets";
 import { routingResultsForProbe } from "@/server/context-lab/meal-probe-orchestration";
 import { createMealLabHarness } from "./helpers";
@@ -8,7 +8,7 @@ import type { ContextLabCurrentScreen } from "@/components/context-lab/types";
 import type { MealContextLabController } from "@/server/context-lab/meal-context-lab-controller";
 import type { InMemoryLearningTaskRepository } from "@/server/tasks/in-memory-learning-task-repository";
 
-const READY_LEMMAS = ["soup", "bowl", "spoon", "fork"] as const;
+const READY_LEMMAS = ["soup", "bowl", "spoon", "fork", "cup"] as const;
 
 function assertKind<K extends ContextLabCurrentScreen["kind"]>(
   screen: ContextLabCurrentScreen,
@@ -84,7 +84,7 @@ async function submitChoice(
   });
 }
 
-async function reachCupTask(
+async function reachPlateTask(
   controller: MealContextLabController,
   screen: ContextLabCurrentScreen,
 ) {
@@ -118,8 +118,8 @@ async function walkGuidedToFrozen(
   return current;
 }
 
-describe("Meal Context Lab cup routing after experiment promotion", () => {
-  it("keeps cup as the fifth stable Probe target before plate", () => {
+describe("Meal Context Lab plate routing after experiment promotion", () => {
+  it("exposes exactly six stable Probe targets ending in plate", () => {
     const targets = mealColdProbeTargets();
     expect(targets.map((item) => item.entityId)).toEqual([
       "home-soup",
@@ -129,13 +129,15 @@ describe("Meal Context Lab cup routing after experiment promotion", () => {
       "home-cup",
       "home-plate",
     ]);
+    expect(targets.some((item) => item.entityId.includes("served-food"))).toBe(false);
+    expect(targets.some((item) => item.entityId.includes("drink"))).toBe(false);
     expect(targets.some((item) => item.target.senseId === "drink#consume-liquid")).toBe(false);
-    expect(targets[4]?.target).toEqual(MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET);
+    expect(targets.at(-1)?.target).toEqual(MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET);
   });
 
-  it("routes independent cup recall to READY and skips recognition", async () => {
+  it("routes independent plate recall to READY and skips recognition", async () => {
     const { controller, repository } = createMealLabHarness({ beginAt: "PROBE" });
-    let screen: ContextLabCurrentScreen = await reachCupTask(
+    let screen: ContextLabCurrentScreen = await reachPlateTask(
       controller,
       await controller.start(),
     );
@@ -144,9 +146,7 @@ describe("Meal Context Lab cup routing after experiment promotion", () => {
       kind: "MEANING_TEXT",
       text: "写出当前物品的英文单词",
     });
-    expect(JSON.stringify(screen.task.prompt)).not.toMatch(/cup/i);
-    screen = await submitTyping(controller, screen, "cup");
-    screen = await continueFrom(controller, screen);
+    expect(JSON.stringify(screen.task.prompt)).not.toMatch(/plate/i);
     screen = await submitTyping(controller, screen, "plate");
     screen = await continueFrom(controller, screen);
     assertKind(screen, "PROBE_SUMMARY");
@@ -154,31 +154,36 @@ describe("Meal Context Lab cup routing after experiment promotion", () => {
       runId: screen.handle.runId,
       userId: V1_PLACEHOLDER_USER_ID,
     });
-    expect(
-      routingResultsForProbe(stored!.probe!).find((item) =>
-        item.target.senseId === MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET.senseId,
-      ),
-    ).toMatchObject({
-      target: MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET,
+    expect(routingResultsForProbe(stored!.probe!).at(-1)).toMatchObject({
+      target: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
       disposition: "READY",
     });
     expect(screen.canHandoffToBuild).toBe(false);
     expect(screen.canHandoffToStrengthen).toBe(false);
   });
 
-  it("routes cup recall-wrong + recognition-correct to STRENGTHEN only", async () => {
+  it("routes plate recall-wrong + recognition-correct to STRENGTHEN only", async () => {
     const { controller, learningTasks, repository } = createMealLabHarness({
       beginAt: "PROBE",
     });
-    let screen: ContextLabCurrentScreen = await reachCupTask(
+    let screen: ContextLabCurrentScreen = await reachPlateTask(
       controller,
       await controller.start(),
     );
     screen = await submitTyping(controller, screen, "nope");
     screen = await continueFrom(controller, screen);
+    assertKind(screen, "FROZEN_TASK_PREVIEW");
+    const assigned = await learningTasks.getTaskForEvaluation(screen.task.id);
+    const options =
+      assigned?.task.publicTask.responseContract.kind === "CHOICE"
+        ? assigned.task.publicTask.responseContract.options
+        : [];
+    const correct = options.find((option) =>
+      assigned?.task.answerKey.correctOptionIds.includes(option.id),
+    );
+    expect(correct?.content.text).toBe("盘子");
+    expect(options.map((option) => option.content.text)).not.toContain("板");
     screen = await submitChoice(controller, learningTasks, screen, true);
-    screen = await continueFrom(controller, screen);
-    screen = await submitTyping(controller, screen, "plate");
     screen = await continueFrom(controller, screen);
     assertKind(screen, "PROBE_SUMMARY");
     expect(screen.canHandoffToStrengthen).toBe(true);
@@ -187,29 +192,23 @@ describe("Meal Context Lab cup routing after experiment promotion", () => {
       runId: screen.handle.runId,
       userId: V1_PLACEHOLDER_USER_ID,
     });
-    expect(
-      routingResultsForProbe(stored!.probe!).find((item) =>
-        item.target.senseId === MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET.senseId,
-      ),
-    ).toMatchObject({
-      target: MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET,
+    expect(routingResultsForProbe(stored!.probe!).at(-1)).toMatchObject({
+      target: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
       disposition: "STRENGTHEN",
     });
   });
 
-  it("routes cup recall-wrong + recognition-wrong to BUILD only", async () => {
+  it("routes plate recall-wrong + recognition-wrong to BUILD only", async () => {
     const { controller, learningTasks, repository } = createMealLabHarness({
       beginAt: "PROBE",
     });
-    let screen: ContextLabCurrentScreen = await reachCupTask(
+    let screen: ContextLabCurrentScreen = await reachPlateTask(
       controller,
       await controller.start(),
     );
     screen = await submitTyping(controller, screen, "nope");
     screen = await continueFrom(controller, screen);
     screen = await submitChoice(controller, learningTasks, screen, false);
-    screen = await continueFrom(controller, screen);
-    screen = await submitTyping(controller, screen, "plate");
     screen = await continueFrom(controller, screen);
     assertKind(screen, "PROBE_SUMMARY");
     expect(screen.canHandoffToBuild).toBe(true);
@@ -218,31 +217,25 @@ describe("Meal Context Lab cup routing after experiment promotion", () => {
       runId: screen.handle.runId,
       userId: V1_PLACEHOLDER_USER_ID,
     });
-    expect(
-      routingResultsForProbe(stored!.probe!).find((item) =>
-        item.target.senseId === MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET.senseId,
-      ),
-    ).toMatchObject({
-      target: MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET,
+    expect(routingResultsForProbe(stored!.probe!).at(-1)).toMatchObject({
+      target: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
       disposition: "BUILD",
     });
   });
 });
 
-describe("Meal Context Lab cup BUILD and STRENGTHEN frozen handoff", () => {
-  it("reaches a frozen BUILD task for cup and does not write Evidence on guided steps", async () => {
+describe("Meal Context Lab plate BUILD and STRENGTHEN frozen handoff", () => {
+  it("reaches a frozen BUILD task for plate and does not write Evidence on guided steps", async () => {
     const { controller, learning, learningTasks } = createMealLabHarness({
       beginAt: "PROBE",
     });
-    let screen: ContextLabCurrentScreen = await reachCupTask(
+    let screen: ContextLabCurrentScreen = await reachPlateTask(
       controller,
       await controller.start(),
     );
     screen = await submitTyping(controller, screen, "nope");
     screen = await continueFrom(controller, screen);
     screen = await submitChoice(controller, learningTasks, screen, false);
-    screen = await continueFrom(controller, screen);
-    screen = await submitTyping(controller, screen, "plate");
     screen = await continueFrom(controller, screen);
     const evidenceAfterProbe = learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length;
     const summaryHandle = runHandle(screen);
@@ -264,10 +257,10 @@ describe("Meal Context Lab cup BUILD and STRENGTHEN frozen handoff", () => {
       expect(learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length).toBe(before);
     }
     assertKind(screen, "FROZEN_TASK_PREVIEW");
-    expect(screen.context.instruction).not.toMatch(/cup/i);
-    expect(JSON.stringify(screen.task.prompt)).not.toMatch(/cup/i);
+    expect(screen.context.instruction).not.toMatch(/plate/i);
+    expect(JSON.stringify(screen.task.prompt)).not.toMatch(/plate/i);
     const issuedTaskId = screen.task.id;
-    const first = await submitTyping(controller, screen, "cup");
+    const first = await submitTyping(controller, screen, "plate");
     const afterFirst = learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length;
     expect(afterFirst).toBeGreaterThan(evidenceAfterProbe);
     assertKind(first, "FROZEN_TASK_RECORDED");
@@ -275,24 +268,53 @@ describe("Meal Context Lab cup BUILD and STRENGTHEN frozen handoff", () => {
       runId: first.handle.runId,
       revision: first.handle.revision,
       taskId: issuedTaskId,
-      action: { kind: "TEXT_INPUT", value: "cup" },
+      action: { kind: "TEXT_INPUT", value: "plate" },
     });
     expect(learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length).toBe(afterFirst);
   });
 
-  it("reaches a frozen STRENGTHEN task for cup without duplicate Evidence on refresh", async () => {
+  it("writes one INCORRECT Evidence for a wrong plate BUILD frozen task", async () => {
     const { controller, learning, learningTasks } = createMealLabHarness({
       beginAt: "PROBE",
     });
-    let screen: ContextLabCurrentScreen = await reachCupTask(
+    let screen: ContextLabCurrentScreen = await reachPlateTask(
+      controller,
+      await controller.start(),
+    );
+    screen = await submitTyping(controller, screen, "nope");
+    screen = await continueFrom(controller, screen);
+    screen = await submitChoice(controller, learningTasks, screen, false);
+    screen = await continueFrom(controller, screen);
+    const summaryHandle = runHandle(screen);
+    screen = await controller.continueProbe({
+      runId: summaryHandle.runId,
+      revision: summaryHandle.revision,
+      intent: "START_BUILD",
+    });
+    if (screen.kind === "ERROR") {
+      throw new Error(`${screen.code}: ${screen.message}`);
+    }
+    screen = await walkGuidedToFrozen(controller, screen);
+    assertKind(screen, "FROZEN_TASK_PREVIEW");
+    const before = learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length;
+    const recorded = await submitTyping(controller, screen, "bowl");
+    assertKind(recorded, "FROZEN_TASK_RECORDED");
+    const items = learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID);
+    expect(items.length).toBe(before + 1);
+    expect(items.at(-1)?.outcome).toBe("INCORRECT");
+  });
+
+  it("reaches a frozen STRENGTHEN task for plate without duplicate Evidence on refresh", async () => {
+    const { controller, learning, learningTasks } = createMealLabHarness({
+      beginAt: "PROBE",
+    });
+    let screen: ContextLabCurrentScreen = await reachPlateTask(
       controller,
       await controller.start(),
     );
     screen = await submitTyping(controller, screen, "nope");
     screen = await continueFrom(controller, screen);
     screen = await submitChoice(controller, learningTasks, screen, true);
-    screen = await continueFrom(controller, screen);
-    screen = await submitTyping(controller, screen, "plate");
     screen = await continueFrom(controller, screen);
     const strengthenHandle = runHandle(screen);
     screen = await controller.continueProbe({
@@ -305,7 +327,7 @@ describe("Meal Context Lab cup BUILD and STRENGTHEN frozen handoff", () => {
     }
     screen = await walkGuidedToFrozen(controller, screen);
     assertKind(screen, "FROZEN_TASK_PREVIEW");
-    const recorded = await submitTyping(controller, screen, "cup");
+    const recorded = await submitTyping(controller, screen, "plate");
     const count = learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length;
     assertKind(recorded, "FROZEN_TASK_RECORDED");
     const refreshed = await controller.loadCurrent({

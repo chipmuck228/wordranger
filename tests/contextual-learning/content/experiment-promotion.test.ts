@@ -4,11 +4,17 @@ import { describe, expect, it } from "vitest";
 import {
   MEAL_EXPANSION_BATCH_01_CUP_APPROVED_FINGERPRINT,
   MEAL_EXPANSION_BATCH_01_CUP_APPROVED_REVISION,
+  MEAL_EXPANSION_BATCH_02_PLATE_APPROVED_FINGERPRINT,
+  MEAL_EXPANSION_BATCH_02_PLATE_APPROVED_REVISION,
   MEAL_SCENE_CONTENT_PACK,
   MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
   MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET,
   MEAL_SCENE_EXPANSION_BATCH_01_PACK,
   MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID,
+  MEAL_SCENE_EXPANSION_BATCH_02_PACK,
+  MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID,
+  MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+  MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
   currentPackTargetFingerprint,
   getApprovedExperimentSceneContent,
   promotionAttestationMatchesPack,
@@ -381,13 +387,239 @@ describe("registry compile fingerprint binding", () => {
   });
 });
 
+const PLATE_RECORD_PATH =
+  "docs/contextual-content-reviews/meal-expansion-batch-02-plate/human-review.record.json";
+const PLATE_MANIFEST_PATH =
+  "docs/contextual-content-reviews/meal-expansion-batch-02-plate/REVIEW_MANIFEST.json";
+const PLATE_HUMAN_PATH =
+  "docs/contextual-content-reviews/meal-expansion-batch-02-plate/HUMAN_REVIEW.md";
+const PLATE_PACKET_PATH =
+  "docs/contextual-content-reviews/meal-expansion-batch-02-plate/REVIEW_PACKET.md";
+
+function committedPlateArtifacts() {
+  return {
+    reviewRecord: JSON.parse(readFileSync(PLATE_RECORD_PATH, "utf8")),
+    manifest: JSON.parse(readFileSync(PLATE_MANIFEST_PATH, "utf8")),
+    humanMarkdown: readFileSync(PLATE_HUMAN_PATH, "utf8"),
+    packetMarkdown: readFileSync(PLATE_PACKET_PATH, "utf8"),
+  };
+}
+
+function compilePlate(
+  pack = MEAL_SCENE_EXPANSION_BATCH_02_PACK,
+  promotion = MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+) {
+  return compileSceneContentRegistryForTests([
+    {
+      packId: MEAL_SCENE_CONTENT_PACK.id,
+      status: "APPROVED_FOR_EXPERIMENT",
+      approvalBasis: "LEGACY_EXPERIMENT_BASELINE",
+      pack: MEAL_SCENE_CONTENT_PACK,
+    },
+    {
+      packId: MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID,
+      status: "APPROVED_FOR_EXPERIMENT",
+      approvalBasis: "HUMAN_REVIEW_PROMOTION",
+      pack: MEAL_SCENE_EXPANSION_BATCH_01_PACK,
+      promotion: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+    },
+    {
+      packId: MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID,
+      status: "APPROVED_FOR_EXPERIMENT",
+      approvalBasis: "HUMAN_REVIEW_PROMOTION",
+      pack,
+      promotion,
+    },
+  ]);
+}
+
+describe("fingerprint-bound plate experiment promotion", () => {
+  it("accepts the exact approved fingerprint and committed review artifacts", () => {
+    const entry = registryEntryFor(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID)!;
+    const current = currentPackTargetFingerprint(
+      MEAL_SCENE_EXPANSION_BATCH_02_PACK,
+      MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
+    );
+    expect(current).toBe(MEAL_EXPANSION_BATCH_02_PLATE_APPROVED_FINGERPRINT);
+    expect(
+      validateExperimentPromotion({
+        entry,
+        expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+        artifacts: committedPlateArtifacts(),
+      }),
+    ).toEqual({ ok: true });
+    expect(registryStatusFor(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID)).toBe(
+      "APPROVED_FOR_EXPERIMENT",
+    );
+    expect(MEAL_SCENE_EXPANSION_BATCH_02_PACK.provenance.status).toBe(
+      "APPROVED_FOR_EXPERIMENT",
+    );
+    expect(entry.approvalBasis).toBe("HUMAN_REVIEW_PROMOTION");
+    expect(MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION.approvedReviewRevision).toBe(
+      MEAL_EXPANSION_BATCH_02_PLATE_APPROVED_REVISION,
+    );
+  });
+
+  it("fails when pack content, target, packId, reviewKey, decision, fingerprint, or revision change", () => {
+    const entry = registryEntryFor(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID)!;
+    const artifacts = committedPlateArtifacts();
+    const changedPack = structuredClone(MEAL_SCENE_EXPANSION_BATCH_02_PACK);
+    const plate = changedPack.lexemes.find((lexeme) => lexeme.id === "meal-plate")!;
+    plate.build.teachInstruction = `${plate.build.teachInstruction} x`;
+    expect(
+      validateExperimentPromotion({
+        entry: { ...entry, pack: changedPack },
+        expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+        artifacts,
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateExperimentPromotion({
+        entry,
+        expectedAttestation: {
+          ...MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+          target: { ...MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET, senseId: "other" },
+        },
+        artifacts,
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateExperimentPromotion({
+        entry,
+        expectedAttestation: {
+          ...MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+          reviewKey: "other-key",
+        },
+        artifacts,
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateExperimentPromotion({
+        entry,
+        expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+        artifacts: {
+          ...artifacts,
+          reviewRecord: { ...artifacts.reviewRecord, decision: "REVISE" },
+        },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateExperimentPromotion({
+        entry,
+        expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+        artifacts: {
+          ...artifacts,
+          reviewRecord: { ...artifacts.reviewRecord, contentFingerprint: "0".repeat(64) },
+        },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateExperimentPromotion({
+        entry,
+        expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+        artifacts: {
+          ...artifacts,
+          reviewRecord: { ...artifacts.reviewRecord, revision: 2 },
+        },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateExperimentPromotion({
+        entry,
+        expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+        artifacts: { reviewRecord: null },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it("fails closed without an attestation and keeps identifiable 4/5/6 word packs", () => {
+    expect(
+      compileSceneContentRegistryForTests([
+        {
+          packId: MEAL_SCENE_CONTENT_PACK.id,
+          status: "APPROVED_FOR_EXPERIMENT",
+          approvalBasis: "LEGACY_EXPERIMENT_BASELINE",
+          pack: MEAL_SCENE_CONTENT_PACK,
+        },
+        {
+          packId: MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID,
+          status: "APPROVED_FOR_EXPERIMENT",
+          approvalBasis: "HUMAN_REVIEW_PROMOTION",
+          pack: MEAL_SCENE_EXPANSION_BATCH_01_PACK,
+          promotion: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+        },
+        {
+          packId: MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID,
+          status: "APPROVED_FOR_EXPERIMENT",
+          approvalBasis: "HUMAN_REVIEW_PROMOTION",
+          pack: MEAL_SCENE_EXPANSION_BATCH_02_PACK,
+        },
+      ]),
+    ).toEqual([]);
+    const original = getApprovedExperimentSceneContent(MEAL_SCENE_CONTENT_PACK.id);
+    const batch01 = getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID);
+    const batch02 = getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID);
+    expect(original.ok && original.pack.lexemes).toHaveLength(4);
+    expect(batch01.ok && batch01.pack.lexemes).toHaveLength(5);
+    expect(batch02.ok && batch02.pack.lexemes).toHaveLength(6);
+    expect(batch02.ok && batch02.pack.lexemes.map((item) => item.id)).toEqual([
+      ...((batch01.ok && batch01.pack.lexemes.map((item) => item.id)) || []),
+      "meal-plate",
+    ]);
+  });
+
+  it("fail-closes compile when plate content, selector, sourceRefs, or fingerprint drift", () => {
+    const changedCopy = structuredClone(MEAL_SCENE_EXPANSION_BATCH_02_PACK);
+    const plate = changedCopy.lexemes.find((lexeme) => lexeme.id === "meal-plate")!;
+    plate.build.teachInstruction = `${plate.build.teachInstruction} x`;
+    expect(compilePlate(changedCopy)).toEqual([]);
+
+    const changedSelector = structuredClone(MEAL_SCENE_EXPANSION_BATCH_02_PACK);
+    const selected = changedSelector.lexemes.find((lexeme) => lexeme.id === "meal-plate")!;
+    selected.lexicalPresentation.meaningGlossSelector = {
+      kind: "EXACT_BUNDLED_VALUE",
+      value: "盆子",
+    };
+    expect(compilePlate(changedSelector)).toEqual([]);
+
+    const changedStrengthen = structuredClone(MEAL_SCENE_EXPANSION_BATCH_02_PACK);
+    const strengthen = changedStrengthen.lexemes.find((lexeme) => lexeme.id === "meal-plate")!;
+    strengthen.strengthen.verifyInstruction = `${strengthen.strengthen.verifyInstruction} x`;
+    expect(compilePlate(changedStrengthen)).toEqual([]);
+
+    const changedTarget = structuredClone(MEAL_SCENE_EXPANSION_BATCH_02_PACK);
+    const moved = changedTarget.lexemes.find((lexeme) => lexeme.id === "meal-plate")!;
+    moved.target = { ...moved.target, senseId: "other-sense" };
+    expect(compilePlate(changedTarget)).toEqual([]);
+
+    const changedRefs = structuredClone(MEAL_SCENE_EXPANSION_BATCH_02_PACK);
+    changedRefs.provenance = {
+      ...changedRefs.provenance,
+      sourceRefs: [...changedRefs.provenance.sourceRefs, "docs/extra.md"],
+    };
+    expect(compilePlate(changedRefs)).toEqual([]);
+
+    expect(
+      compilePlate(MEAL_SCENE_EXPANSION_BATCH_02_PACK, {
+        ...MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+        approvedContentFingerprint: "0".repeat(64),
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe("review-record gitignore protection", () => {
   it("ignores future untracked review JSON and keeps the committed cup record", () => {
     const ignore = readFileSync(".gitignore", "utf8");
     expect(ignore).toContain("docs/contextual-content-reviews/**/human-review.record.json");
     expect(existsSync(RECORD_PATH)).toBe(true);
+    expect(existsSync(PLATE_RECORD_PATH)).toBe(true);
     const tracked = execFileSync("git", ["ls-files", RECORD_PATH], { encoding: "utf8" }).trim();
     expect(tracked).toBe(RECORD_PATH);
+    const trackedPlate = execFileSync("git", ["ls-files", PLATE_RECORD_PATH], {
+      encoding: "utf8",
+    }).trim();
+    expect(trackedPlate).toBe(PLATE_RECORD_PATH);
     const ignored = execFileSync(
       "git",
       ["check-ignore", "-q", "docs/contextual-content-reviews/future-target/human-review.record.json"],

@@ -48,12 +48,14 @@ describe("Candidate V0 experiment promotion boundaries", () => {
       expect(source, file).not.toContain("MEAL_SCENE_EXPANSION_BATCH_01");
       expect(source, file).not.toContain("MEAL_SCENE_EXPANSION_BATCH_02");
     }
-    const promotion = readFileSync(
+    for (const file of [
       "src/contextual-learning/candidate-v0/content/packs/meal/meal-scene-expansion-batch-01-promotion.ts",
-      "utf8",
-    );
-    expect(promotion).toContain("EXPERIMENT_ONLY");
-    expect(promotion).not.toContain("STANDARD");
-    expect(promotion).not.toContain("processEvidence");
+      "src/contextual-learning/candidate-v0/content/packs/meal/meal-scene-expansion-batch-02-promotion.ts",
+    ]) {
+      const promotion = readFileSync(file, "utf8");
+      expect(promotion, file).toContain("EXPERIMENT_ONLY");
+      expect(promotion, file).not.toContain("STANDARD");
+      expect(promotion, file).not.toContain("processEvidence");
+    }
   });
 });

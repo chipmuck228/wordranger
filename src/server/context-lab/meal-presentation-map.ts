@@ -18,6 +18,9 @@ function mealPresentationRole(role: string): ContextEntityRole | undefined {
   if (role === "FOOD" || role === "CONTAINER" || role === "TOOL") {
     return role;
   }
+  if (role === "SUPPORT") {
+    return "CONTAINER";
+  }
   return undefined;
 }
 
@@ -46,6 +49,8 @@ const HOME_BREAKFAST_ENTITIES: Record<
   ),
   // Frame-only beverage entity for cup contains(); not a Probe target.
   "home-drink": { label: "饮料", role: "FOOD" },
+  // Frame-only supported food for plate supports(); not a Probe target.
+  "home-served-food": { label: "盘中食物", role: "FOOD" },
 };
 
 const HOME_BREAKFAST_COPY = {

@@ -35,6 +35,7 @@ describe("Meal Context Lab controller", () => {
       "勺子",
       "叉子",
       "杯子",
+      "盘子",
     ]);
   });
 

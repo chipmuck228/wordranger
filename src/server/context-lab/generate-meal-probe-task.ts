@@ -12,7 +12,11 @@ import type {
   ContextualProbeSkill,
   ContextualProbeTarget,
 } from "@/contextual-learning/candidate-v0/probe/types";
+import { experimentalMealContextLabPack } from "@/contextual-learning/candidate-v0/content/experimental-meal-runtime-pack";
+import { selectBundledMeaningGloss } from "@/contextual-learning/candidate-v0/content/select-bundled-meaning-gloss";
+import { sameLexemeSense } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
 import { bundledVocabularyRepository } from "@/server/runtime/bundled-vocabulary";
+import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 
 const RECALL_PROMPT = "写出当前物品的英文单词";
 
@@ -48,7 +52,9 @@ export async function generateMealProbeTask(input: {
     answerKey: { ...created.value.answerKey, taskId },
   };
   const prepared =
-    input.skill === "ACTIVE_RECALL" ? sceneSafeRecallTask(stamped) : stamped;
+    input.skill === "ACTIVE_RECALL"
+      ? sceneSafeRecallTask(stamped)
+      : sceneSafeRecognitionTask(stamped, input.target);
   if (!matchesFrozenProbeContract(prepared, input.skill, lexemeId, input.targetLemma)) {
     return { ok: false, reason: "PROBE_TASK_SEMANTIC_MISMATCH" };
   }
@@ -80,6 +86,54 @@ function probeNeed(
         ? [PromptMode.WORD_TO_MEANING]
         : [PromptMode.MEANING_TO_WORD],
     avoidRecentTaskTypes: [],
+  };
+}
+
+function sceneSafeRecognitionTask(
+  task: GeneratedLearningTask,
+  target: ContextualProbeTarget,
+): GeneratedLearningTask {
+  const authored = experimentalMealContextLabPack().lexemes.find((lexeme) =>
+    sameLexemeSense(lexeme.target, target.target),
+  );
+  const selector = authored?.lexicalPresentation.meaningGlossSelector;
+  if (!authored || !selector) {
+    return task;
+  }
+  const bundled = bundledSceneLexemeLoader(authored.canonicalKey);
+  const gloss = selectBundledMeaningGloss({
+    meaningsZh: bundled?.meaningsZh,
+    selector,
+  });
+  if (
+    !gloss ||
+    task.publicTask.responseContract.kind !== "CHOICE" ||
+    task.answerKey.correctOptionIds.length !== 1
+  ) {
+    return task;
+  }
+  const correctId = task.answerKey.correctOptionIds[0]!;
+  const options = task.publicTask.responseContract.options.map((option) =>
+    option.id === correctId
+      ? {
+          ...option,
+          content: { ...option.content, text: gloss },
+        }
+      : option,
+  );
+  const texts = options.map((option) => option.content.text);
+  if (new Set(texts).size !== texts.length) {
+    return task;
+  }
+  return {
+    ...task,
+    publicTask: {
+      ...task.publicTask,
+      responseContract: {
+        ...task.publicTask.responseContract,
+        options,
+      },
+    },
   };
 }
 

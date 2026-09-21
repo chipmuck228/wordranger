@@ -1,7 +1,7 @@
 {
   "schemaVersion": "candidate-v0",
   "packId": "meal-scene-expansion-batch-02",
-  "registryStatus": "CANDIDATE",
+  "registryStatus": "APPROVED_FOR_EXPERIMENT",
   "contentFingerprint": "4ce843238a0b5b4ca570b335e75ed2549b9af94acf536144812ecc1c86ed032b",
   "target": {
     "lexemeId": "4ca2bd15-e50d-531b-a379-30eebab1c9c2",
@@ -23,12 +23,12 @@
     {
       "id": "REGISTRY_STATUS",
       "ok": true,
-      "detail": "Registry status is CANDIDATE."
+      "detail": "Registry status is APPROVED_FOR_EXPERIMENT."
     },
     {
       "id": "EXPERIMENT_RUNTIME",
       "ok": true,
-      "detail": "Pack remains CANDIDATE and is not approved for experiment."
+      "detail": "Expansion pack is APPROVED_FOR_EXPERIMENT only."
     },
     {
       "id": "ORIGINAL_FOUR_WORD_PACK_UNCHANGED",

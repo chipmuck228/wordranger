@@ -19,6 +19,7 @@ import {
   picnicLunchFrame,
   restaurantMealFrame,
 } from "../fixtures/meal/contexts";
+import { homeBreakfastBatch02Frame } from "../fixtures/meal/meal-batch-02-contexts";
 import { MEAL_PROFILES, MEAL_SENSE } from "../fixtures/meal/knowledge";
 import {
   createMealBuildPlan,
@@ -26,6 +27,11 @@ import {
   createMealStrengthenPlan,
 } from "../fixtures/meal/plans";
 import { mealSkeleton } from "../fixtures/meal/skeleton";
+import {
+  frameForMealRuntime,
+  skeletonForMealRuntime,
+  type MealRuntimeContextId,
+} from "./meal-runtime-context";
 import { MEAL_SUPPORTS } from "../fixtures/meal/supports";
 import { SCHOOL_FRAMES } from "../fixtures/school-challenge/contexts";
 import { SCHOOL_PROFILES, SCHOOL_SENSE } from "../fixtures/school-challenge/knowledge";
@@ -56,6 +62,10 @@ const MEAL_PROBE_LEXICAL: readonly LexemeSenseRef[] = [
   MEAL_SENSE.fork,
   MEAL_SENSE.cup,
 ];
+const MEAL_BATCH_02_PROBE_LEXICAL: readonly LexemeSenseRef[] = [
+  ...MEAL_PROBE_LEXICAL,
+  MEAL_SENSE.plate,
+];
 const SCHOOL_ABSTRACT: readonly LexemeSenseRef[] = [
   SCHOOL_SENSE.ability,
   SCHOOL_SENSE.possible,
@@ -74,37 +84,55 @@ const BORROW_TRANSFER_FRAMES = [libraryBookFrame, classroomRulerFrame];
 function mealVariant(
   kind: "build" | "strengthen" | "strengthen-recall" | "retrieve",
   frame: ContextFrame,
+  options?: {
+    runtimeContextId?: MealRuntimeContextId;
+    supportedSenses?: readonly LexemeSenseRef[];
+    idSuffix?: string;
+  },
 ): ExperiencePlanVariant {
+  const runtimeContextId = options?.runtimeContextId;
+  const supportedSenses = options?.supportedSenses ?? MEAL_PROBE_LEXICAL;
+  const idSuffix = options?.idSuffix ? `:${options.idSuffix}` : "";
   if (kind === "build") {
     return {
-      id: `meal-build:${frame.id}`,
+      id: `meal-build:${frame.id}${idSuffix}`,
       priority: 20,
       mode: "BUILD",
-      supportedSenses: MEAL_PROBE_LEXICAL,
+      supportedSenses,
       requiredSenses: [],
       contextFrameId: frame.id,
       skeletonId: mealSkeleton.id,
+      runtimeContextId,
       requiredCapabilityIds: TYPING,
       containsGuidedSteps: true,
       containsAssessableSteps: true,
       reviewStatus: "REVIEWED",
-      createPlan: (request) => createMealBuildPlan(frame, request),
+      createPlan: (request) =>
+        createMealBuildPlan(frame, {
+          ...request,
+          runtimeContextId,
+        }),
     };
   }
   if (kind === "strengthen-recall") {
     return {
-      id: `meal-strengthen-recall:${frame.id}`,
+      id: `meal-strengthen-recall:${frame.id}${idSuffix}`,
       priority: 30,
       mode: "STRENGTHEN",
-      supportedSenses: MEAL_PROBE_LEXICAL,
+      supportedSenses,
       requiredSenses: [],
       contextFrameId: frame.id,
       skeletonId: mealSkeleton.id,
+      runtimeContextId,
       requiredCapabilityIds: TYPING,
       containsGuidedSteps: true,
       containsAssessableSteps: true,
       reviewStatus: "REVIEWED",
-      createPlan: (request) => createMealRecallStrengthenPlan(frame, request),
+      createPlan: (request) =>
+        createMealRecallStrengthenPlan(frame, {
+          ...request,
+          runtimeContextId,
+        }),
     };
   }
   if (kind === "strengthen") {
@@ -247,6 +275,12 @@ function borrowVariant(
  * Picnic/restaurant/library are registered before home/classroom so tests can
  * prove insertion order is not the selection rule.
  */
+const MEAL_BATCH_02_HOME_OPTIONS = {
+  runtimeContextId: "MEAL_BATCH_02" as const,
+  supportedSenses: MEAL_BATCH_02_PROBE_LEXICAL,
+  idSuffix: "meal-batch-02",
+};
+
 const PLAN_VARIANTS: readonly ExperiencePlanVariant[] = [
   ...MEAL_FRAMES.flatMap((frame) => [
     mealVariant("retrieve", frame),
@@ -254,6 +288,12 @@ const PLAN_VARIANTS: readonly ExperiencePlanVariant[] = [
     mealVariant("strengthen-recall", frame),
     mealVariant("strengthen", frame),
   ]),
+  mealVariant("build", homeBreakfastBatch02Frame, MEAL_BATCH_02_HOME_OPTIONS),
+  mealVariant(
+    "strengthen-recall",
+    homeBreakfastBatch02Frame,
+    MEAL_BATCH_02_HOME_OPTIONS,
+  ),
   ...SCHOOL_FRAMES.flatMap((frame) => [
     schoolVariant("guided", frame),
     schoolVariant("build", frame),
@@ -297,11 +337,23 @@ export function listPlanVariants(): readonly ExperiencePlanVariant[] {
   return PLAN_VARIANTS;
 }
 
-export function findPlannerFrame(contextFrameId: string) {
+export function findPlannerFrame(
+  contextFrameId: string,
+  runtimeContextId: MealRuntimeContextId = "MEAL_BASE",
+) {
+  if (runtimeContextId === "MEAL_BATCH_02") {
+    return frameForMealRuntime(contextFrameId, runtimeContextId);
+  }
   return FRAME_BY_ID[contextFrameId];
 }
 
-export function findPlannerSkeleton(skeletonId: string) {
+export function findPlannerSkeleton(
+  skeletonId: string,
+  runtimeContextId: MealRuntimeContextId = "MEAL_BASE",
+) {
+  if (runtimeContextId === "MEAL_BATCH_02" && skeletonId === mealSkeleton.id) {
+    return skeletonForMealRuntime(runtimeContextId);
+  }
   return SKELETON_BY_ID[skeletonId];
 }
 

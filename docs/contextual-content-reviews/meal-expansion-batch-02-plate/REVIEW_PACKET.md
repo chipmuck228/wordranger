@@ -1,11 +1,11 @@
 # Review packet
 
-Status: Candidate V0 / Experimental / CANDIDATE only
+Status: Candidate V0 / Experimental / APPROVED_FOR_EXPERIMENT only
 
 This file is machine-generated. It is not a human approval.
 
 - Pack: `meal-scene-expansion-batch-02`
-- Registry status: `CANDIDATE`
+- Registry status: `APPROVED_FOR_EXPERIMENT`
 - Target: `4ca2bd15-e50d-531b-a379-30eebab1c9c2` / `plate#food-support`
 - Canonical key: `lex-1036-1`
 - Selected meaning: `盘子`
@@ -15,7 +15,7 @@ This file is machine-generated. It is not a human approval.
 
 ## Notices
 
-- “通过审核”只记录人工审核结果。
+- 已进入实验 Context Lab，不代表 Standard 或生产批准
 - Candidate V0 / APPROVED_FOR_EXPERIMENT only.
 - 不是 Standard，也不接入生产 /train。
 - 机器验证通过不等于人工批准。
@@ -25,8 +25,8 @@ This file is machine-generated. It is not a human approval.
 ## Machine checks
 
 - PASS CONTENT_VALID: Scene Content validator passed.
-- PASS REGISTRY_STATUS: Registry status is CANDIDATE.
-- PASS EXPERIMENT_RUNTIME: Pack remains CANDIDATE and is not approved for experiment.
+- PASS REGISTRY_STATUS: Registry status is APPROVED_FOR_EXPERIMENT.
+- PASS EXPERIMENT_RUNTIME: Expansion pack is APPROVED_FOR_EXPERIMENT only.
 - PASS ORIGINAL_FOUR_WORD_PACK_UNCHANGED: Original four-word Meal pack remains identifiable.
 - PASS PROBE_NO_FORM_LEAK: Probe student copy does not include the target form.
 

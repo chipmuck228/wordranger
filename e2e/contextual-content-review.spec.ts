@@ -82,8 +82,8 @@ test.describe("readonly review host", () => {
     await expect(page.getByText("Meal Expansion Batch 01")).toBeVisible();
     await expect(page.getByText("Meal Expansion Batch 02")).toBeVisible();
     await expect(page.getByText("Status: APPROVED")).toHaveCount(2);
-    await expect(page.getByText("Registry: APPROVED_FOR_EXPERIMENT")).toBeVisible();
-    await expect(page.getByText("Registry: CANDIDATE")).toBeVisible();
+    await expect(page.getByText("Registry: APPROVED_FOR_EXPERIMENT")).toHaveCount(2);
+    await expect(page.getByText("Registry: CANDIDATE")).toHaveCount(0);
 
     await page.goto(REVIEW_URL);
     await expect(page.getByText("Candidate V0 / 已进入实验 Context Lab")).toBeVisible();
@@ -132,11 +132,17 @@ test.describe("readonly review host", () => {
     expect(reviewRequests.some((url) => url.includes("submitFrozenTask"))).toBe(false);
 
     await page.goto(PLATE_REVIEW_URL);
-    await expect(page.getByText("Candidate / 尚未进入实验")).toBeVisible();
+    await expect(page.getByText("Candidate V0 / 已进入实验 Context Lab")).toBeVisible();
     await expect(page.getByTestId("review-human-status")).toHaveText("APPROVED");
-    await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
+    await expect(page.getByTestId("review-registry-status")).toHaveText("APPROVED_FOR_EXPERIMENT");
+    await expect(page.getByTestId("review-experiment-notice")).toHaveText(
+      "已进入实验 Context Lab，不代表 Standard 或生产批准",
+    );
+    await expect(page.getByTestId("review-promotion-scope")).toContainText("EXPERIMENT_ONLY");
     await expect(page.getByTestId("review-revision")).toHaveText("1");
-    await expect(page.getByTestId("review-fingerprint")).toBeVisible();
+    await expect(page.getByTestId("review-fingerprint")).toHaveText(
+      "4ce843238a0b5b4ca570b335e75ed2549b9af94acf536144812ecc1c86ed032b",
+    );
     await expect(page.locator("input[data-testid='review-fingerprint']")).toHaveCount(0);
     await expect(page.getByText("机器验证通过不等于人工批准")).toBeVisible();
     await expect(page.getByText("plate#food-support")).toBeVisible();

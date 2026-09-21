@@ -10,17 +10,22 @@ import {
 } from "../../content/packs/meal/meal-scene-content";
 import { experimentalMealContextLabPack } from "../../content/experimental-meal-runtime-pack";
 import { MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET } from "../../content/packs/meal/meal-scene-expansion-batch-01";
+import { MEAL_SCENE_EXPANSION_BATCH_01_PACK } from "../../content/packs/meal/meal-scene-expansion-batch-01";
+import { MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID } from "../../content/packs/meal/meal-scene-expansion-batch-02";
 import { resolveSceneContent } from "../../content/resolve-scene-content";
 import { snapshotSceneContentFromPack } from "../../content/snapshot-from-pack";
 import type { SceneLexemeLoader } from "../../content/types";
 import { sameLexemeSense } from "../../domain/lexeme-sense";
 import type { LexemeSenseRef } from "../../domain/types";
+import {
+  resolveMealRuntimeContext,
+  type MealRuntimeContextId,
+} from "../../planning/meal-runtime-context";
 import { MEAL_SCENE_CLUSTER } from "../../memory-routing/scene-catalog";
 import {
   createContextualLexicalBuildPlan,
   createContextualLexicalStrengthenPlan,
 } from "../../planning/create-contextual-lexical-plans";
-import { MEAL_FRAMES } from "./contexts";
 import { projectResolvedMealContentOntoFrame } from "./project-resolved-onto-frame";
 import {
   identityForBundledTarget,
@@ -40,7 +45,7 @@ import {
 } from "../shared";
 import { mealPrefixForFrame } from "./contexts";
 import { MEAL_SENSE } from "./knowledge";
-import { MEAL_SKELETON_ID, mealSkeleton } from "./skeleton";
+import { MEAL_SKELETON_ID } from "./skeleton";
 
 function spoonInterpretationTarget() {
   return {
@@ -169,15 +174,31 @@ function mealAssessableStrengthenSteps(prefix: string): ExperienceStepSpec[] {
   ];
 }
 
+function packForMealPlan(
+  runtimeContextId: MealRuntimeContextId,
+  target?: LexemeSenseRef,
+) {
+  if (runtimeContextId === "MEAL_BATCH_02") {
+    const pack = experimentalMealContextLabPack();
+    return pack.id === MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID ? pack : null;
+  }
+  if (target && sameLexemeSense(target, MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET)) {
+    return MEAL_SCENE_EXPANSION_BATCH_01_PACK;
+  }
+  return MEAL_SCENE_CONTENT_PACK;
+}
+
 function mealContentForFrame(
   frame: ContextFrame,
   loadLexeme?: SceneLexemeLoader,
   target?: LexemeSenseRef,
+  runtimeContextId: MealRuntimeContextId = "MEAL_BASE",
 ) {
-  const runtimePack =
-    target && sameLexemeSense(target, MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET)
-      ? experimentalMealContextLabPack()
-      : MEAL_SCENE_CONTENT_PACK;
+  const runtimePack = packForMealPlan(runtimeContextId, target);
+  if (!runtimePack) {
+    return null;
+  }
+  const runtime = resolveMealRuntimeContext(runtimeContextId);
   const authored = runtimePack.frames.some(
     (item) => item.frameId === frame.id,
   );
@@ -188,8 +209,8 @@ function mealContentForFrame(
     const resolved = resolveSceneContent({
       pack: runtimePack,
       frame,
-      frames: MEAL_FRAMES,
-      skeleton: mealSkeleton,
+      frames: [...runtime.frames],
+      skeleton: runtime.skeleton,
       cluster: MEAL_SCENE_CLUSTER,
       loadLexeme,
     });
@@ -224,11 +245,13 @@ export function createMealLexicalBuildPlan(input: {
   frame: ContextFrame;
   profile: MealLexicalStrengthenIdentity;
   loadLexeme?: SceneLexemeLoader;
+  runtimeContextId?: MealRuntimeContextId;
 }): LearningExperiencePlan {
   const content = mealContentForFrame(
     input.frame,
     input.loadLexeme,
     input.profile.target,
+    input.runtimeContextId,
   );
   if (!content) {
     return emptyMealBuildPlan(input.frame);
@@ -243,7 +266,11 @@ export function createMealLexicalBuildPlan(input: {
 
 export function createMealBuildPlan(
   frame: ContextFrame,
-  request?: { targets?: readonly ExperienceTarget[]; loadLexeme?: SceneLexemeLoader },
+  request?: {
+    targets?: readonly ExperienceTarget[];
+    loadLexeme?: SceneLexemeLoader;
+    runtimeContextId?: MealRuntimeContextId;
+  },
 ): LearningExperiencePlan {
   const requested = request?.targets?.[0]?.sense;
   const identity = requested
@@ -256,6 +283,7 @@ export function createMealBuildPlan(
     frame,
     profile: identity,
     loadLexeme: request?.loadLexeme,
+    runtimeContextId: request?.runtimeContextId,
   });
 }
 
@@ -263,11 +291,13 @@ export function createMealActiveRecallStrengthenPlan(input: {
   frame: ContextFrame;
   profile: MealLexicalStrengthenIdentity;
   loadLexeme?: SceneLexemeLoader;
+  runtimeContextId?: MealRuntimeContextId;
 }): LearningExperiencePlan {
   const content = mealContentForFrame(
     input.frame,
     input.loadLexeme,
     input.profile.target,
+    input.runtimeContextId,
   );
   if (!content) {
     return {
@@ -294,10 +324,16 @@ export function createMealActiveRecallStrengthenPlan(input: {
 
 export function createMealRecallStrengthenPlan(
   frame: ContextFrame,
-  request?: { targets?: readonly ExperienceTarget[]; loadLexeme?: SceneLexemeLoader },
+  request?: {
+    targets?: readonly ExperienceTarget[];
+    loadLexeme?: SceneLexemeLoader;
+    runtimeContextId?: MealRuntimeContextId;
+  },
 ): LearningExperiencePlan {
   const requested = request?.targets?.[0]?.sense;
-  const identity = requested ? identityForFixtureSense(requested) : null;
+  const identity = requested
+    ? identityForFixtureSense(requested) ?? identityForBundledTarget(requested)
+    : null;
   if (!identity || (request?.targets?.length ?? 0) !== 1) {
     return {
       id: `meal-strengthen-recall-${frame.id}-unresolved`,
@@ -317,6 +353,7 @@ export function createMealRecallStrengthenPlan(
     frame,
     profile: identity,
     loadLexeme: request?.loadLexeme,
+    runtimeContextId: request?.runtimeContextId,
   });
 }
 

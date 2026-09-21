@@ -8,15 +8,20 @@ import {
   resolveMealLexicalBuildProfiles,
 } from "@/contextual-learning/candidate-v0/build/meal-lexical-build-profiles";
 
-const FIVE_WORD_ENTITY_IDS = [
+const SIX_WORD_ENTITY_IDS = [
   "home-soup",
   "home-bowl",
   "home-spoon",
   "home-fork",
   "home-cup",
+  "home-plate",
 ] as const;
 
-const FRAME_ENTITY_IDS = [...FIVE_WORD_ENTITY_IDS, "home-drink"] as const;
+const FRAME_ENTITY_IDS = [
+  ...SIX_WORD_ENTITY_IDS,
+  "home-drink",
+  "home-served-food",
+] as const;
 
 const LABELS: Record<string, string> = {
   "home-soup": "汤",
@@ -24,7 +29,9 @@ const LABELS: Record<string, string> = {
   "home-spoon": "勺子",
   "home-fork": "叉子",
   "home-cup": "杯子",
+  "home-plate": "盘子",
   "home-drink": "饮料",
+  "home-served-food": "盘中食物",
 };
 
 const VOCAB: Record<
@@ -66,6 +73,13 @@ const VOCAB: Record<
     meaningsZh: ["茶杯"],
     ipa: ["/kʌp/"],
   },
+  "lex-1036-1": {
+    id: bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.plate),
+    display: "plate",
+    lemma: "plate",
+    meaningsZh: ["板", "片", "牌", "盘子", "盆子"],
+    ipa: ["/pleɪt/"],
+  },
 };
 
 describe("Meal lexical BUILD profiles", () => {
@@ -85,6 +99,7 @@ describe("Meal lexical BUILD profiles", () => {
       "spoon",
       "fork",
       "cup",
+      "plate",
     ]);
     for (const profile of resolved.profiles) {
       const binding = MEAL_BUILD_SCENE_BINDINGS[profile.stepToken];

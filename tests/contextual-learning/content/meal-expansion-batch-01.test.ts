@@ -444,13 +444,14 @@ describe("Meal expansion batch 01 approval isolation", () => {
       "home-cup",
     );
     const approvedTargets = mealColdProbeTargets();
-    expect(approvedTargets).toHaveLength(5);
+    expect(approvedTargets).toHaveLength(6);
     expect(approvedTargets.map((item) => item.entityId)).toEqual([
       "home-soup",
       "home-bowl",
       "home-spoon",
       "home-fork",
       "home-cup",
+      "home-plate",
     ]);
     expect(HOME_BREAKFAST_SCENE_ENTITY_IDS).toEqual([
       "home-soup",
@@ -458,9 +459,10 @@ describe("Meal expansion batch 01 approval isolation", () => {
       "home-spoon",
       "home-fork",
       "home-cup",
+      "home-plate",
     ]);
     expect(mappedMealEntity("home-cup")?.label).toBe("杯子");
-    expect(approvedTargets.some((item) => item.entityId.includes("plate"))).toBe(false);
+    expect(mappedMealEntity("home-plate")?.label).toBe("盘子");
   });
 
   it("does not leak cup answers from the Candidate fixture into approved public presentation", () => {

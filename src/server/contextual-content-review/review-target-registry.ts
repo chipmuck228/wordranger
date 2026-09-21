@@ -51,7 +51,7 @@ export const CONTENT_REVIEW_TARGETS: readonly ContentReviewTargetSpec[] = [
     targetSlug: "plate",
     title: "Meal Expansion Batch 02",
     target: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
-    expectedRegistryStatus: "CANDIDATE",
+    expectedRegistryStatus: "APPROVED_FOR_EXPERIMENT",
     artifactDirectory: artifactDirectoryFor("meal-expansion-batch-02-plate"),
     sourceRefs: MEAL_SCENE_EXPANSION_BATCH_02_PACK.provenance.sourceRefs,
     frameLabels: ["Home Breakfast", "Restaurant Meal"],

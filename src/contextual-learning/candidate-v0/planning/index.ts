@@ -10,8 +10,15 @@ export { idsCovered, matchRequestedTargetsToPlan } from "./match-targets";
 export { planExperience } from "./plan-experience";
 export {
   comparePlanVariants,
+  findPlannerFrame,
+  findPlannerSkeleton,
   listPlanVariants,
 } from "./plan-variant-registry";
+export {
+  experimentalMealRuntimeContextId,
+  mealRuntimeContextIdForPack,
+} from "./meal-runtime-context";
+export type { MealRuntimeContextId } from "./meal-runtime-context";
 export type { ExperiencePlanningError } from "./errors";
 export type { PlanExperienceOptions } from "./plan-experience";
 export type {

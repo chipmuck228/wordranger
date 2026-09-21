@@ -40,6 +40,7 @@ import {
   PLANNER_SUPPORT_BLOCKS,
   registeredPlannerSenses,
 } from "./plan-variant-registry";
+import type { MealRuntimeContextId } from "./meal-runtime-context";
 import type {
   ExperiencePlanVariant,
   ExperiencePlanningInput,
@@ -48,6 +49,12 @@ import type {
   PlanExecutability,
   RejectedTargetRequirement,
 } from "./types";
+
+function runtimeContextOf(
+  value?: MealRuntimeContextId,
+): MealRuntimeContextId {
+  return value ?? "MEAL_BASE";
+}
 
 const MODES_REQUIRE_ASSESSABLE_VERIFICATION: readonly CognitiveMode[] = [
   "PROBE",
@@ -83,7 +90,13 @@ export function planExperience(
     ? [...input.allowedContextIds]
     : undefined;
   const matching = variants.filter((variant) =>
-    variantMatchesRequest(variant, input.mode, input.targets, allowedContextIds),
+    variantMatchesRequest(
+      variant,
+      input.mode,
+      input.targets,
+      allowedContextIds,
+      runtimeContextOf(input.runtimeContextId),
+    ),
   );
   const consideredContextIds = uniqueSorted(
     matching.map((variant) => variant.contextFrameId),
@@ -366,11 +379,13 @@ function variantMatchesRequest(
   mode: CognitiveMode,
   targets: ExperienceTarget[],
   allowedContextIds?: readonly string[],
+  runtimeContextId: MealRuntimeContextId = "MEAL_BASE",
 ): boolean {
   return (
     variant.mode === mode &&
     sensesMatch(variant, targets) &&
-    contextAllowed(variant, allowedContextIds)
+    contextAllowed(variant, allowedContextIds) &&
+    runtimeContextOf(variant.runtimeContextId) === runtimeContextId
   );
 }
 
@@ -416,8 +431,9 @@ function evaluateVariant(
       reason: "Variant is not REVIEWED",
     };
   }
-  const frame = findPlannerFrame(variant.contextFrameId);
-  const skeleton = findPlannerSkeleton(variant.skeletonId);
+  const runtimeContextId = runtimeContextOf(variant.runtimeContextId);
+  const frame = findPlannerFrame(variant.contextFrameId, runtimeContextId);
+  const skeleton = findPlannerSkeleton(variant.skeletonId, runtimeContextId);
   if (!frame || !skeleton || frame.reviewStatus !== "REVIEWED" || skeleton.reviewStatus !== "REVIEWED") {
     return {
       ok: false,
@@ -439,6 +455,7 @@ function evaluateVariant(
     variant.createPlan({
       targets: input.targets,
       loadLexeme: input.loadLexeme,
+      runtimeContextId,
     }),
   );
   plan.sourceLearningNeedRef = input.learningNeedRef.trim();

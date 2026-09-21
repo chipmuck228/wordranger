@@ -102,7 +102,7 @@ async function reachSpoonStrengthenSummary(
 ) {
   let screen: ContextLabCurrentScreen = await controller.start();
   const recognitionCorrect = [false, false, true, false];
-  const readyLemmas = ["soup", "bowl", "spoon", "fork", "cup"] as const;
+  const readyLemmas = ["soup", "bowl", "spoon", "fork", "cup", "plate"] as const;
   for (let index = 0; index < readyLemmas.length; index += 1) {
     screen = await continueFrom(controller, screen);
     if (index >= recognitionCorrect.length) {
@@ -318,7 +318,7 @@ describe("Meal spoon active-recall STRENGTHEN", () => {
       beginAt: "PROBE",
     });
     let screen: ContextLabCurrentScreen = await controller.start();
-    for (let index = 0; index < 5; index += 1) {
+    for (let index = 0; index < 6; index += 1) {
       screen = await continueFrom(controller, screen);
       screen = await submitTyping(controller, screen, "nope");
       screen = await continueFrom(controller, screen);
@@ -459,7 +459,7 @@ async function reachSummary(
   learningTasks: InMemoryLearningTaskRepository,
   recognitionCorrect: readonly boolean[],
 ) {
-  const readyLemmas = ["soup", "bowl", "spoon", "fork", "cup"] as const;
+  const readyLemmas = ["soup", "bowl", "spoon", "fork", "cup", "plate"] as const;
   let screen: ContextLabCurrentScreen = await controller.start();
   for (let index = 0; index < readyLemmas.length; index += 1) {
     screen = await continueFrom(controller, screen);

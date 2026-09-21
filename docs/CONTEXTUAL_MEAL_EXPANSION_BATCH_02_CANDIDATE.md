@@ -1,18 +1,18 @@
 # Contextual Meal Expansion Batch 02
 
-> Status: **Candidate V0 / CANDIDATE / human review PENDING**
+> Status: **Candidate V0 / APPROVED_FOR_EXPERIMENT / human review APPROVED**
 >
-> plate is authored Scene Content only. It is not approved, not
-> `APPROVED_FOR_EXPERIMENT`, and not in Meal Context Lab.
-> This is not a Standard, not production `/train`, and not 1600-word coverage.
+> plate is fingerprint-bound Scene Content for the six-word experimental
+> Meal Context Lab only. It is not Standard and not production `/train`.
+> This is not 1600-word coverage.
 
 ## 1. Batch goal
 
 Add one catalog-mapped Meal word, `plate`, as a reviewable Candidate pack
 on top of the fingerprint-bound five-word experiment pack.
 
-Success is an honest CANDIDATE pack plus a PENDING human review packet.
-This batch does not promote.
+Success is a fingerprint-bound `APPROVED_FOR_EXPERIMENT` pack used only by
+`/play/context-lab`. This is not Standard promotion.
 
 ## 2. Identity
 
@@ -51,8 +51,10 @@ Each authored frame defines:
 
 ## 4. Isolation
 
-- pack provenance `CANDIDATE`
-- registry status `CANDIDATE`
-- no promotion attestation
-- `getApprovedExperimentSceneContent(batch02)` is unapproved
-- Meal Context Lab still reads batch 01: soup / bowl / spoon / fork / cup
+- pack provenance `APPROVED_FOR_EXPERIMENT`
+- registry status `APPROVED_FOR_EXPERIMENT`
+- approval basis `HUMAN_REVIEW_PROMOTION`
+- plate promotion attestation is fingerprint-bound to revision 1
+- `getApprovedExperimentSceneContent(batch02)` loads the six-word pack
+- Meal Context Lab reads batch 02: soup / bowl / spoon / fork / cup / plate
+- batch 02 frames/skeleton stay isolated from approved five-word `MEAL_FRAMES`

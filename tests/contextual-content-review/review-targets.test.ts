@@ -41,10 +41,11 @@ describe("generic content review targets", () => {
     ]);
     const plateItem = listed.find((item) => item.reviewKey === plate.reviewKey)!;
     expect(plateItem.statusLabel).toBe("APPROVED");
-    expect(plateItem.registryStatus).toBe("CANDIDATE");
+    expect(plateItem.registryStatus).toBe("APPROVED_FOR_EXPERIMENT");
     const record = await fileContentReviewRepository.get(plate.reviewKey);
     const packet = projectContentReviewPacket({ spec: plate, record, writeEnabled: false });
-    expect(packet?.pack.registryStatus).toBe("CANDIDATE");
+    expect(packet?.pack.registryStatus).toBe("APPROVED_FOR_EXPERIMENT");
+    expect(packet?.promotionScope).toBe("EXPERIMENT_ONLY");
     expect(packet?.reviewStatus).toBe("APPROVED");
     expect(packet?.reviewRevision).toBe(1);
     expect(packet?.target.senseId).toBe("plate#food-support");
@@ -92,7 +93,11 @@ describe("generic content review targets", () => {
       syncMarkdown: false,
     });
     expect(saved.ok).toBe(true);
-    expect(registryStatusFor(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID)).toBe("CANDIDATE");
-    expect(getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID).ok).toBe(false);
+    expect(registryStatusFor(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID)).toBe(
+      "APPROVED_FOR_EXPERIMENT",
+    );
+    expect(getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID).ok).toBe(
+      true,
+    );
   });
 });

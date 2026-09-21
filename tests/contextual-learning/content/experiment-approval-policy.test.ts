@@ -6,7 +6,6 @@ import {
   MEAL_SCENE_EXPANSION_BATCH_01_PACK,
   MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID,
   MEAL_SCENE_EXPANSION_BATCH_02_PACK,
-  MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID,
   getApprovedExperimentSceneContent,
   listSceneContentRegistry,
   matchesLegacyExperimentBaseline,
@@ -95,18 +94,18 @@ describe("generic experiment approval policy", () => {
   });
 
   it("accepts CANDIDATE without attestation but does not load it at runtime", () => {
+    const future = futurePack();
+    future.provenance = { ...future.provenance, status: "CANDIDATE" };
     const compiled = compileSceneContentRegistryForTests([
       {
-        packId: MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID,
+        packId: future.id,
         status: "CANDIDATE",
-        pack: MEAL_SCENE_EXPANSION_BATCH_02_PACK,
+        pack: future,
       },
     ]);
     expect(compiled).toHaveLength(1);
     expect(compiled[0]?.status).toBe("CANDIDATE");
-    expect(getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID).ok).toBe(
-      false,
-    );
+    expect(getApprovedExperimentSceneContent(future.id).ok).toBe(false);
   });
 
   it("fail-closes the entire compile on duplicate IDs", () => {

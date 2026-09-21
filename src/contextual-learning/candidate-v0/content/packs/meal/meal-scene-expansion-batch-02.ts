@@ -1,9 +1,9 @@
 /**
  * Meal Scene expansion batch 02.
- * Candidate V0 / CANDIDATE only. Not approved. Not experiment runtime.
+ * Candidate V0 / APPROVED_FOR_EXPERIMENT only after fingerprint-bound
+ * human review of plate. Not Standard. Not production /train.
  *
  * Adds plate on top of the fingerprint-bound five-word experiment pack.
- * Not Standard. Not production /train.
  */
 
 import { MEAL_SENSE } from "../../../fixtures/meal/knowledge";
@@ -156,7 +156,7 @@ function attachPlate(pack: ContextualSceneContentPack): ContextualSceneContentPa
   const next = structuredClone(pack);
   next.id = MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID;
   next.provenance = {
-    status: "CANDIDATE",
+    status: "APPROVED_FOR_EXPERIMENT",
     sourceRefs: [
       ...MEAL_SCENE_CONTENT_SOURCE_REFS,
       "docs/CONTEXTUAL_MEAL_EXPANSION_BATCH_01_CANDIDATE.md",

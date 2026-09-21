@@ -15,6 +15,7 @@ import type {
   SemanticSkeletonId,
 } from "../domain/types";
 import type { ExperiencePlanningError } from "./errors";
+import type { MealRuntimeContextId } from "./meal-runtime-context";
 
 /**
  * Candidate planner input. Intentionally omits learnerStateRef: this
@@ -38,11 +39,17 @@ export interface ExperiencePlanningInput {
    * runtime. Meal Home/Restaurant resolve requires this.
    */
   loadLexeme?: SceneLexemeLoader;
+  /**
+   * Explicit Meal runtime context. Omitted means the approved five-word
+   * baseline. Never inferred from a target lemma.
+   */
+  runtimeContextId?: MealRuntimeContextId;
 }
 
 export interface PlanVariantRequest {
   targets?: readonly ExperienceTarget[];
   loadLexeme?: SceneLexemeLoader;
+  runtimeContextId?: MealRuntimeContextId;
 }
 
 export type PlanExecutability =
@@ -95,6 +102,7 @@ export interface ExperiencePlanVariant {
   requiredSenses: readonly LexemeSenseRef[];
   contextFrameId: ContextFrameId;
   skeletonId: SemanticSkeletonId;
+  runtimeContextId?: MealRuntimeContextId;
   requiredCapabilityIds: readonly string[];
   containsGuidedSteps: boolean;
   containsAssessableSteps: boolean;

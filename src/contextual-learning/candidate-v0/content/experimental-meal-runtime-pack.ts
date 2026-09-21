@@ -5,15 +5,22 @@
 
 import { MEAL_SCENE_CONTENT_PACK } from "./packs/meal/meal-scene-content";
 import { MEAL_SCENE_EXPANSION_BATCH_01_PACK } from "./packs/meal/meal-scene-expansion-batch-01";
+import { MEAL_SCENE_EXPANSION_BATCH_02_PACK } from "./packs/meal/meal-scene-expansion-batch-02";
 import { getApprovedExperimentSceneContent } from "./scene-content-registry";
 import type { ContextualSceneContentPack } from "./types";
 
 export function experimentalMealContextLabPack(): ContextualSceneContentPack {
-  const expansion = getApprovedExperimentSceneContent(
+  const batch02 = getApprovedExperimentSceneContent(
+    MEAL_SCENE_EXPANSION_BATCH_02_PACK.id,
+  );
+  if (batch02.ok) {
+    return batch02.pack;
+  }
+  const batch01 = getApprovedExperimentSceneContent(
     MEAL_SCENE_EXPANSION_BATCH_01_PACK.id,
   );
-  if (expansion.ok) {
-    return expansion.pack;
+  if (batch01.ok) {
+    return batch01.pack;
   }
   const original = getApprovedExperimentSceneContent(MEAL_SCENE_CONTENT_PACK.id);
   if (original.ok) {
