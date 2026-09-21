@@ -46,6 +46,7 @@ describe("Candidate V0 experiment promotion boundaries", () => {
       const source = readFileSync(file, "utf8");
       expect(source, file).not.toContain("experimentalMealContextLabPack");
       expect(source, file).not.toContain("MEAL_SCENE_EXPANSION_BATCH_01");
+      expect(source, file).not.toContain("MEAL_SCENE_EXPANSION_BATCH_02");
     }
     const promotion = readFileSync(
       "src/contextual-learning/candidate-v0/content/packs/meal/meal-scene-expansion-batch-01-promotion.ts",

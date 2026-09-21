@@ -1,15 +1,15 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { ContentReviewRepository } from "./content-review-repository";
+import { safeReviewRecordPath } from "./review-artifact-path";
 import type { HumanContentReviewRecord, SaveContentReviewResult } from "./types";
 
 export function contentReviewRecordPath(reviewKey: string): string {
-  return path.join(
-    process.cwd(),
-    "docs/contextual-content-reviews",
-    reviewKey,
-    "human-review.record.json",
-  );
+  const filePath = safeReviewRecordPath(reviewKey);
+  if (!filePath) {
+    throw new Error("Unknown review target cannot control an artifact path.");
+  }
+  return filePath;
 }
 
 export class FileContentReviewRepository implements ContentReviewRepository {
@@ -18,6 +18,9 @@ export class FileContentReviewRepository implements ContentReviewRepository {
   constructor(private readonly filePathFor = contentReviewRecordPath) {}
 
   async get(reviewKey: string): Promise<HumanContentReviewRecord | null> {
+    if (!safeReviewRecordPath(reviewKey)) {
+      return null;
+    }
     return this.enqueue(() => this.read(reviewKey));
   }
 

@@ -373,6 +373,7 @@ test("Probe is the first stage and does not leak teaching before an answer", asy
 }) => {
   await page.goto("/play/context-lab");
   await expect(page.getByText("先看看你已经会了哪些词", { exact: true })).toBeVisible();
+  await expect(page.getByText("盘子", { exact: true })).toHaveCount(0);
   await expect(page.getByText("勺子 → 适合舀汤")).toHaveCount(0);
   await expect(page.getByText(/\/spuːn\/|spoon|掌握|分数/)).toHaveCount(0);
   await page.getByRole("button", { name: "开始检查" }).click();

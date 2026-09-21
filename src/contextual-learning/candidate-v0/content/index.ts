@@ -41,6 +41,7 @@ export type {
   ContextualSceneContentPack,
   ResolvedContextualSceneContent,
   ResolvedContextualSceneLexeme,
+  SceneContentApprovalBasis,
   SceneContentRegistryStatus,
   SceneLexemeLoader,
 } from "./types";
@@ -62,6 +63,11 @@ export {
   MEAL_EXPANSION_BATCH_01_CUP_REVIEW_KEY,
   MEAL_EXPANSION_BATCH_01_CUP_REVIEW_RECORD_PATH,
 } from "./packs/meal/meal-scene-expansion-batch-01-promotion";
+export {
+  MEAL_SCENE_EXPANSION_BATCH_02_PACK,
+  MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID,
+  MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
+} from "./packs/meal/meal-scene-expansion-batch-02";
 export type {
   CandidateV0ExperimentPromotionAttestation,
   ContextualSceneContentRegistryEntry,

@@ -19,8 +19,8 @@ export async function listContentReviewTargets(): Promise<ContentReviewListItem[
         ? "STALE_REVIEW"
         : record
           ? record.decision
-          : "Candidate / 待人工审核",
-      frameLabels: ["Home Breakfast", "Restaurant Meal"],
+          : "PENDING",
+      frameLabels: [...spec.frameLabels],
       registryStatus: registryStatusFor(spec.packId) ?? "DRAFT",
     });
   }

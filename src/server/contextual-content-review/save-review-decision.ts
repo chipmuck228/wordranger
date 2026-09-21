@@ -1,12 +1,12 @@
 import "server-only";
 
 import { writeFileSync } from "node:fs";
-import path from "node:path";
 import type { ContentReviewRepository } from "./content-review-repository";
 import { fileContentReviewRepository } from "./file-content-review-repository";
 import { isContextualContentReviewWriteEnabled } from "./gates";
 import { renderHumanReviewMarkdown } from "./human-review-markdown";
 import { currentContentFingerprint } from "./project-review-packet";
+import { safeReviewMarkdownPath } from "./review-artifact-path";
 import { CONTENT_REVIEW_TARGETS } from "./review-target-registry";
 import type { HumanContentReviewDecision, SaveContentReviewResult } from "./types";
 
@@ -75,12 +75,14 @@ export async function saveContentReviewDecision(input: {
     },
   });
   if (saved.ok && input.syncMarkdown !== false) {
-    const markdownPath = path.join(
-      process.cwd(),
-      "docs/contextual-content-reviews",
-      spec.reviewKey,
-      "HUMAN_REVIEW.md",
-    );
+    const markdownPath = safeReviewMarkdownPath(spec.reviewKey);
+    if (!markdownPath) {
+      return {
+        ok: false,
+        code: "CONTENT_REVIEW_INVALID",
+        message: "Review artifacts cannot be written outside the registered target directory.",
+      };
+    }
     writeFileSync(
       markdownPath,
       renderHumanReviewMarkdown({ fingerprint, record: saved.record }),

@@ -1,6 +1,6 @@
 /**
  * Scene Content registry. Runtime may load APPROVED_FOR_EXPERIMENT only.
- * Expansion cup is experiment-only after a fingerprint-bound attestation.
+ * Approval basis is explicit. Pack IDs do not decide promotion rules.
  */
 
 import { SceneContentErrorCode } from "./errors";
@@ -8,6 +8,7 @@ import { cloneFrozen, deepFreeze } from "./immutable";
 import { MEAL_SCENE_CONTENT_PACK } from "./packs/meal/meal-scene-content";
 import { MEAL_SCENE_EXPANSION_BATCH_01_PACK } from "./packs/meal/meal-scene-expansion-batch-01";
 import { MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION } from "./packs/meal/meal-scene-expansion-batch-01-promotion";
+import { MEAL_SCENE_EXPANSION_BATCH_02_PACK } from "./packs/meal/meal-scene-expansion-batch-02";
 import { promotionAttestationMatchesPack } from "./validate-experiment-promotion";
 import type {
   ContextualSceneContentPack,
@@ -15,23 +16,39 @@ import type {
   SceneContentRegistryStatus,
 } from "./types";
 
+function approvedEntryIsBound(
+  entry: ContextualSceneContentRegistryEntry,
+): boolean {
+  if (entry.approvalBasis === "LEGACY_EXPERIMENT_BASELINE") {
+    return !entry.promotion;
+  }
+  if (entry.approvalBasis === "HUMAN_REVIEW_PROMOTION") {
+    return Boolean(entry.promotion) && promotionAttestationMatchesPack(entry);
+  }
+  return false;
+}
+
+function entryCompiles(entry: ContextualSceneContentRegistryEntry): boolean {
+  if (!entry.packId || entry.packId !== entry.pack.id) {
+    return false;
+  }
+  if (entry.status === "DRAFT" || entry.status === "CANDIDATE") {
+    return !entry.approvalBasis && !entry.promotion;
+  }
+  if (entry.status === "APPROVED_FOR_EXPERIMENT") {
+    return approvedEntryIsBound(entry);
+  }
+  return false;
+}
+
 function compileRegistry(
   entries: ContextualSceneContentRegistryEntry[],
 ): ContextualSceneContentRegistryEntry[] {
   const ids = new Set<string>();
   const compiled: ContextualSceneContentRegistryEntry[] = [];
   for (const entry of entries) {
-    if (!entry.packId || entry.packId !== entry.pack.id || ids.has(entry.packId)) {
+    if (!entryCompiles(entry) || ids.has(entry.packId)) {
       continue;
-    }
-    if (entry.status === "APPROVED_FOR_EXPERIMENT") {
-      if (entry.promotion) {
-        if (!promotionAttestationMatchesPack(entry)) {
-          continue;
-        }
-      } else if (entry.packId === MEAL_SCENE_EXPANSION_BATCH_01_PACK.id) {
-        continue;
-      }
     }
     ids.add(entry.packId);
     compiled.push(deepFreeze(structuredClone(entry)));
@@ -46,13 +63,20 @@ const ENTRIES = compileRegistry([
   {
     packId: MEAL_SCENE_CONTENT_PACK.id,
     status: "APPROVED_FOR_EXPERIMENT",
+    approvalBasis: "LEGACY_EXPERIMENT_BASELINE",
     pack: MEAL_SCENE_CONTENT_PACK,
   },
   {
     packId: MEAL_SCENE_EXPANSION_BATCH_01_PACK.id,
     status: "APPROVED_FOR_EXPERIMENT",
+    approvalBasis: "HUMAN_REVIEW_PROMOTION",
     pack: MEAL_SCENE_EXPANSION_BATCH_01_PACK,
     promotion: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+  },
+  {
+    packId: MEAL_SCENE_EXPANSION_BATCH_02_PACK.id,
+    status: "CANDIDATE",
+    pack: MEAL_SCENE_EXPANSION_BATCH_02_PACK,
   },
 ]);
 
@@ -73,7 +97,7 @@ export function getApprovedExperimentSceneContent(
   if (entry.status !== "APPROVED_FOR_EXPERIMENT" || entry.packId !== entry.pack.id) {
     return { ok: false, reason: SceneContentErrorCode.CONTENT_REGISTRY_UNAPPROVED };
   }
-  if (entry.promotion && !promotionAttestationMatchesPack(entry)) {
+  if (!approvedEntryIsBound(entry)) {
     return { ok: false, reason: SceneContentErrorCode.CONTENT_REGISTRY_UNAPPROVED };
   }
   return { ok: true, pack: cloneFrozen(entry.pack) };

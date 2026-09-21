@@ -196,6 +196,10 @@ export type SceneContentRegistryStatus =
   | "CANDIDATE"
   | "APPROVED_FOR_EXPERIMENT";
 
+export type SceneContentApprovalBasis =
+  | "LEGACY_EXPERIMENT_BASELINE"
+  | "HUMAN_REVIEW_PROMOTION";
+
 export const CANDIDATE_V0_EXPERIMENT_PROMOTION_KIND =
   "CANDIDATE_V0_EXPERIMENT_PROMOTION" as const;
 
@@ -220,6 +224,7 @@ export interface ContextualSceneContentRegistryEntry {
   packId: string;
   status: SceneContentRegistryStatus;
   pack: ContextualSceneContentPack;
+  approvalBasis?: SceneContentApprovalBasis;
   promotion?: CandidateV0ExperimentPromotionAttestation;
 }
 

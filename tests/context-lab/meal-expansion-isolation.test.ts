@@ -9,6 +9,7 @@ import {
   MEAL_SCENE_CONTENT_PACK,
   MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET,
   MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID,
+  MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID,
   experimentalMealContextLabPack,
   getApprovedExperimentSceneContent,
 } from "@/contextual-learning/candidate-v0/content";
@@ -30,6 +31,11 @@ describe("Context Lab uses the fingerprint-bound five-word Meal experiment pack"
     expect(HOME_BREAKFAST_SCENE_ENTITY_IDS).toContain("home-cup");
     expect(mappedMealEntity("home-cup")?.label).toBe("杯子");
     expect(mappedMealEntity("home-plate")).toBeUndefined();
+    expect(getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID).ok).toBe(
+      false,
+    );
+    expect(runtime.lexemes.map((item) => item.id)).not.toContain("meal-plate");
+    expect(JSON.stringify(screen)).not.toMatch(/home-plate|meal-plate|plate#food-support/);
     const original = getApprovedExperimentSceneContent(MEAL_SCENE_CONTENT_PACK.id);
     expect(original.ok && original.pack.lexemes).toHaveLength(4);
     expect(screen.kind).toBe("PROBE_INTRO");

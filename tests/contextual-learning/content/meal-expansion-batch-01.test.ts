@@ -536,6 +536,10 @@ describe("Meal expansion batch 01 boundaries", () => {
       "CONSUME_FOOD_ACTION",
     );
     expect(mealSkeleton.roleDefinitions.map((role) => role.id)).not.toContain("SELECT_ACTION");
-    expect(mealSkeleton.roleDefinitions.map((role) => role.id)).not.toContain("FOOD_SUPPORT");
+    expect(
+      MEAL_SCENE_EXPANSION_BATCH_01_PACK.lexemes.some((lexeme) =>
+        lexeme.membership.frameBindings.some((binding) => binding.roleId === "FOOD_SUPPORT"),
+      ),
+    ).toBe(false);
   });
 });

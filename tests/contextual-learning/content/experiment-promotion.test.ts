@@ -288,11 +288,13 @@ function compileExpansion(
     {
       packId: MEAL_SCENE_CONTENT_PACK.id,
       status: "APPROVED_FOR_EXPERIMENT",
+      approvalBasis: "LEGACY_EXPERIMENT_BASELINE",
       pack: MEAL_SCENE_CONTENT_PACK,
     },
     {
       packId: MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID,
       status: "APPROVED_FOR_EXPERIMENT",
+      approvalBasis: "HUMAN_REVIEW_PROMOTION",
       pack,
       promotion,
     },

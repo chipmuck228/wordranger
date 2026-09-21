@@ -7,12 +7,12 @@ import {
 import type { ScenePresentationStage } from "@/contextual-learning/candidate-v0/content/project-public-presentation";
 import {
   getApprovedExperimentSceneContent,
+  registryEntryFor,
   registryStatusFor,
   resolveSceneContent,
   validateSceneContent,
 } from "@/contextual-learning/candidate-v0/content";
 import { MEAL_SCENE_CONTENT_PACK } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-content";
-import { MEAL_SCENE_EXPANSION_BATCH_01_PACK } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-expansion-batch-01";
 import type { ContextualSceneLexemeContent } from "@/contextual-learning/candidate-v0/content/types";
 import { sameLexemeSense } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
 import {
@@ -21,16 +21,17 @@ import {
   type ContextFrame,
   type ExperienceStepSpec,
   type GuidedExperienceStepSpec,
+  type LearningExperiencePlan,
 } from "@/contextual-learning/candidate-v0/domain/types";
-import { MEAL_FRAMES } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
-import {
-  createExpansionBatch01LexicalBuildPlan,
-  createExpansionBatch01LexicalStrengthenPlan,
-} from "@/contextual-learning/candidate-v0/fixtures/meal/expansion-batch-01-plans";
+import { MEAL_FRAMES, mealPrefixForFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
-import { profileMap } from "@/contextual-learning/candidate-v0/fixtures/shared";
+import { completeAll, FIXTURE_PROVENANCE, profileMap } from "@/contextual-learning/candidate-v0/fixtures/shared";
 import { MEAL_SCENE_CLUSTER } from "@/contextual-learning/candidate-v0/memory-routing/scene-catalog";
+import {
+  createContextualLexicalBuildPlan,
+  createContextualLexicalStrengthenPlan,
+} from "@/contextual-learning/candidate-v0/planning/create-contextual-lexical-plans";
 import { resolveContextSnapshot } from "@/contextual-learning/candidate-v0/validation/resolve-context";
 import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import { fingerprintContent } from "./fingerprint";
@@ -55,10 +56,58 @@ const STAGE_BY_PURPOSE: Record<string, ScenePresentationStage> = {
 };
 
 function packFor(spec: ContentReviewTargetSpec) {
-  if (spec.packId !== MEAL_SCENE_EXPANSION_BATCH_01_PACK.id) {
-    return null;
+  const entry = registryEntryFor(spec.packId);
+  return entry?.pack ?? null;
+}
+
+function emptyReviewPlan(
+  frame: ContextFrame,
+  mode: "BUILD" | "STRENGTHEN",
+): LearningExperiencePlan {
+  return {
+    id: `review-${mode.toLowerCase()}-${frame.id}-unresolved`,
+    schemaVersion: "candidate-v0",
+    mode,
+    sourceLearningNeedRef: "need-opaque-ref",
+    targets: [],
+    skeletonId: mealSkeleton.id,
+    contextFrameId: frame.id,
+    activeGoalId: "EATER_CAN_EAT_FOOD",
+    steps: [],
+    completionPolicy: completeAll([]),
+    provenance: FIXTURE_PROVENANCE,
+  };
+}
+
+function reviewLexicalPlan(input: {
+  spec: ContentReviewTargetSpec;
+  frame: ContextFrame;
+  mode: "BUILD" | "STRENGTHEN";
+}): LearningExperiencePlan {
+  const pack = packFor(input.spec);
+  if (!pack) {
+    return emptyReviewPlan(input.frame, input.mode);
   }
-  return MEAL_SCENE_EXPANSION_BATCH_01_PACK;
+  const resolved = resolveSceneContent({
+    pack,
+    frame: input.frame,
+    frames: MEAL_FRAMES.filter((item) => item.id !== "picnic-lunch-v0"),
+    skeleton: mealSkeleton,
+    cluster: MEAL_SCENE_CLUSTER,
+    loadLexeme: bundledSceneLexemeLoader,
+  });
+  if (!resolved.ok) {
+    return emptyReviewPlan(input.frame, input.mode);
+  }
+  const args = {
+    frame: input.frame,
+    content: resolved.content,
+    target: input.spec.target,
+    stepIdPrefix: mealPrefixForFrame(input.frame.id),
+  };
+  return input.mode === "BUILD"
+    ? createContextualLexicalBuildPlan(args)
+    : createContextualLexicalStrengthenPlan(args);
 }
 
 function lexemeFor(
@@ -231,14 +280,15 @@ function stepFromExperience(input: {
 }
 
 function frozenPreviewStep(input: {
+  spec: ContentReviewTargetSpec;
   frame: ContextFrame;
   lexeme: NonNullable<ReturnType<typeof findResolvedLexeme>>;
   displayForm: string;
 }): ContentReviewStep | null {
-  const plan = createExpansionBatch01LexicalBuildPlan({
+  const plan = reviewLexicalPlan({
+    spec: input.spec,
     frame: input.frame,
-    target: input.lexeme.target,
-    loadLexeme: bundledSceneLexemeLoader,
+    mode: "BUILD",
   });
   const recall = plan.steps.find(isAssessableExperienceStep);
   if (!recall) {
@@ -356,15 +406,15 @@ function buildFramePacket(input: {
   if (!lexeme) {
     return null;
   }
-  const build = createExpansionBatch01LexicalBuildPlan({
+  const build = reviewLexicalPlan({
+    spec: input.spec,
     frame: input.frame,
-    target: input.spec.target,
-    loadLexeme: bundledSceneLexemeLoader,
+    mode: "BUILD",
   });
-  const strengthen = createExpansionBatch01LexicalStrengthenPlan({
+  const strengthen = reviewLexicalPlan({
+    spec: input.spec,
     frame: input.frame,
-    target: input.spec.target,
-    loadLexeme: bundledSceneLexemeLoader,
+    mode: "STRENGTHEN",
   });
   const probePresentation = projectPublicScenePresentation({
     stage: "PROBE_ACTIVE_RECALL",
@@ -427,6 +477,7 @@ function buildFramePacket(input: {
       }),
     ),
     frozenPreviewStep({
+      spec: input.spec,
       frame: input.frame,
       lexeme,
       displayForm: input.displayForm,
@@ -527,10 +578,16 @@ export function projectContentReviewPacket(input: {
     },
     {
       id: "EXPERIMENT_RUNTIME",
-      ok: approved.ok && pack.provenance.status === "APPROVED_FOR_EXPERIMENT",
-      detail: approved.ok
-        ? "Expansion pack is APPROVED_FOR_EXPERIMENT only."
-        : "Expansion pack is not approved for experiment.",
+      ok:
+        registryStatus === "CANDIDATE"
+          ? !approved.ok && pack.provenance.status === "CANDIDATE"
+          : approved.ok && pack.provenance.status === "APPROVED_FOR_EXPERIMENT",
+      detail:
+        registryStatus === "CANDIDATE"
+          ? "Pack remains CANDIDATE and is not approved for experiment."
+          : approved.ok
+            ? "Expansion pack is APPROVED_FOR_EXPERIMENT only."
+            : "Expansion pack is not approved for experiment.",
     },
     {
       id: "ORIGINAL_FOUR_WORD_PACK_UNCHANGED",

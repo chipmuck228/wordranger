@@ -3,14 +3,15 @@ import path from "node:path";
 import { fileContentReviewRepository } from "./file-content-review-repository";
 import { renderHumanReviewMarkdown } from "./human-review-markdown";
 import { projectContentReviewPacket } from "./project-review-packet";
-import { CONTENT_REVIEW_TARGETS } from "./review-target-registry";
+import { safeReviewArtifactDirectory } from "./review-artifact-path";
+import {
+  CONTENT_REVIEW_TARGETS,
+  reviewTargetByKey,
+  type ContentReviewTargetSpec,
+} from "./review-target-registry";
 import type { ContentReviewPacket } from "./types";
 
-function reviewDir(reviewKey: string): string {
-  return path.join(process.cwd(), "docs/contextual-content-reviews", reviewKey);
-}
-
-function renderPacketMarkdown(packet: ContentReviewPacket): string {
+function renderPacketMarkdown(packet: ContentReviewPacket, spec: ContentReviewTargetSpec): string {
   const frames = packet.frames
     .map((frame) => {
       const facts = frame.facts
@@ -33,9 +34,21 @@ function renderPacketMarkdown(packet: ContentReviewPacket): string {
   const checks = packet.machineChecks
     .map((check) => `- ${check.ok ? "PASS" : "FAIL"} ${check.id}: ${check.detail}`)
     .join("\n");
+  const limitations =
+    spec.reviewKey === "meal-expansion-batch-01-cup"
+      ? `- drink / plate / eat / choose are not in this review.
+- Saving APPROVED does not change pack or registry status.
+- This is not 1600-word coverage.`
+      : `- This packet reviews only the registered target.
+- Saving APPROVED does not change pack or registry status.
+- This is not 1600-word coverage.`;
+  const statusLine =
+    packet.pack.registryStatus === "APPROVED_FOR_EXPERIMENT"
+      ? "Status: Candidate V0 / Experimental / APPROVED_FOR_EXPERIMENT only"
+      : "Status: Candidate V0 / Experimental / CANDIDATE only";
   return `# Review packet
 
-Status: Candidate V0 / Experimental / APPROVED_FOR_EXPERIMENT only
+${statusLine}
 
 This file is machine-generated. It is not a human approval.
 
@@ -59,9 +72,7 @@ ${frames}
 
 ## Known limitations
 
-- drink / plate / eat / choose are not in this review.
-- Saving APPROVED does not change pack or registry status.
-- This is not 1600-word coverage.
+${limitations}
 `;
 }
 
@@ -84,23 +95,23 @@ function publicManifest(packet: ContentReviewPacket) {
   };
 }
 
-export async function generateMealBatch01CupReviewArtifacts(): Promise<{
+export async function generateReviewArtifacts(reviewKey: string): Promise<{
   fingerprint: string;
   stale: boolean;
   registryStatus: string;
 }> {
-  const spec = CONTENT_REVIEW_TARGETS[0];
-  if (!spec) {
-    throw new Error("No explicit review target is registered.");
+  const spec = reviewTargetByKey(reviewKey);
+  const dir = safeReviewArtifactDirectory(reviewKey);
+  if (!spec || !dir) {
+    throw new Error("Unknown review target cannot generate artifacts.");
   }
   const record = await fileContentReviewRepository.get(spec.reviewKey);
   const packet = projectContentReviewPacket({ spec, record, writeEnabled: false });
   if (!packet) {
-    throw new Error("Failed to project the explicit cup review packet.");
+    throw new Error(`Failed to project the review packet for ${spec.reviewKey}.`);
   }
-  const dir = reviewDir(spec.reviewKey);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, "REVIEW_PACKET.md"), renderPacketMarkdown(packet), "utf8");
+  writeFileSync(path.join(dir, "REVIEW_PACKET.md"), renderPacketMarkdown(packet, spec), "utf8");
   writeFileSync(
     path.join(dir, "REVIEW_MANIFEST.json"),
     `${JSON.stringify(publicManifest(packet), null, 2)}\n`,
@@ -143,4 +154,18 @@ export async function generateMealBatch01CupReviewArtifacts(): Promise<{
     stale: packet.staleState === "STALE_REVIEW",
     registryStatus: packet.pack.registryStatus,
   };
+}
+
+export async function generateRegisteredReviewArtifacts(): Promise<void> {
+  for (const spec of CONTENT_REVIEW_TARGETS) {
+    await generateReviewArtifacts(spec.reviewKey);
+  }
+}
+
+export async function generateMealBatch01CupReviewArtifacts(): Promise<{
+  fingerprint: string;
+  stale: boolean;
+  registryStatus: string;
+}> {
+  return generateReviewArtifacts("meal-expansion-batch-01-cup");
 }
