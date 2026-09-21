@@ -81,9 +81,8 @@ test.describe("readonly review host", () => {
     await page.goto("/debug/contextual-content-review");
     await expect(page.getByText("Meal Expansion Batch 01")).toBeVisible();
     await expect(page.getByText("Meal Expansion Batch 02")).toBeVisible();
-    await expect(page.getByText("Status: APPROVED")).toBeVisible();
+    await expect(page.getByText("Status: APPROVED")).toHaveCount(2);
     await expect(page.getByText("Registry: APPROVED_FOR_EXPERIMENT")).toBeVisible();
-    await expect(page.getByText("Status: PENDING")).toBeVisible();
     await expect(page.getByText("Registry: CANDIDATE")).toBeVisible();
 
     await page.goto(REVIEW_URL);
@@ -134,8 +133,9 @@ test.describe("readonly review host", () => {
 
     await page.goto(PLATE_REVIEW_URL);
     await expect(page.getByText("Candidate / 尚未进入实验")).toBeVisible();
-    await expect(page.getByTestId("review-human-status")).toHaveText("PENDING");
+    await expect(page.getByTestId("review-human-status")).toHaveText("APPROVED");
     await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
+    await expect(page.getByTestId("review-revision")).toHaveText("1");
     await expect(page.getByTestId("review-fingerprint")).toBeVisible();
     await expect(page.locator("input[data-testid='review-fingerprint']")).toHaveCount(0);
     await expect(page.getByText("机器验证通过不等于人工批准")).toBeVisible();

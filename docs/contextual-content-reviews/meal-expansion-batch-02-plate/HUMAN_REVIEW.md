@@ -1,8 +1,8 @@
 # Human review
 
-Decision: PENDING
-Reviewer:
-Reviewed at:
+Decision: APPROVED
+Reviewer: LOCAL_INTERNAL_REVIEWER
+Reviewed at: 2026-09-21T16:11:21.138Z
 Reviewed fingerprint: 4ce843238a0b5b4ca570b335e75ed2549b9af94acf536144812ecc1c86ed032b
 
 Notes:

@@ -13,7 +13,10 @@ import {
   reviewTargetByKey,
 } from "@/server/contextual-content-review/review-target-registry";
 import { saveContentReviewDecision } from "@/server/contextual-content-review/save-review-decision";
-import { FileContentReviewRepository } from "@/server/contextual-content-review/file-content-review-repository";
+import {
+  FileContentReviewRepository,
+  fileContentReviewRepository,
+} from "@/server/contextual-content-review/file-content-review-repository";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -37,11 +40,13 @@ describe("generic content review targets", () => {
       "meal-expansion-batch-02-plate",
     ]);
     const plateItem = listed.find((item) => item.reviewKey === plate.reviewKey)!;
-    expect(plateItem.statusLabel).toBe("PENDING");
+    expect(plateItem.statusLabel).toBe("APPROVED");
     expect(plateItem.registryStatus).toBe("CANDIDATE");
-    const packet = projectContentReviewPacket({ spec: plate, writeEnabled: false });
+    const record = await fileContentReviewRepository.get(plate.reviewKey);
+    const packet = projectContentReviewPacket({ spec: plate, record, writeEnabled: false });
     expect(packet?.pack.registryStatus).toBe("CANDIDATE");
-    expect(packet?.reviewStatus).toBe("PENDING");
+    expect(packet?.reviewStatus).toBe("APPROVED");
+    expect(packet?.reviewRevision).toBe(1);
     expect(packet?.target.senseId).toBe("plate#food-support");
     expect(packet?.target.meaningGloss).toBe("盘子");
     expect(packet?.target.meaningsZh).toContain("盘子");

@@ -10,7 +10,7 @@ This file is machine-generated. It is not a human approval.
 - Canonical key: `lex-1036-1`
 - Selected meaning: `盘子`
 - Content fingerprint: `4ce843238a0b5b4ca570b335e75ed2549b9af94acf536144812ecc1c86ed032b`
-- Human review: PENDING
+- Human review: APPROVED
 - Stale state: CURRENT
 
 ## Notices
