@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "candidate-v0",
+  "packId": "meal-scene-expansion-batch-01",
+  "registryStatus": "CANDIDATE",
+  "contentFingerprint": "51dc51dc1a321f2af03126d75db1823e59eed61f7e3168c47f4b360611997a40",
+  "target": {
+    "lexemeId": "16ea1697-0049-55fe-9181-03d129352a17",
+    "senseId": "cup#drink-container",
+    "canonicalKey": "lex-0346-1",
+    "roleId": "DRINK_CONTAINER"
+  },
+  "frameIds": [
+    "home-breakfast-v0",
+    "restaurant-meal-v0"
+  ],
+  "machineChecks": [
+    {
+      "id": "CONTENT_VALID",
+      "ok": true,
+      "detail": "Scene Content validator passed."
+    },
+    {
+      "id": "REGISTRY_CANDIDATE",
+      "ok": true,
+      "detail": "Registry status is CANDIDATE."
+    },
+    {
+      "id": "NOT_APPROVED_RUNTIME",
+      "ok": true,
+      "detail": "Expansion pack is not returned by getApprovedExperimentSceneContent."
+    },
+    {
+      "id": "APPROVED_PACK_UNCHANGED",
+      "ok": true,
+      "detail": "Approved Context Lab pack is still the four-word fixture."
+    },
+    {
+      "id": "PROBE_NO_FORM_LEAK",
+      "ok": true,
+      "detail": "Probe student copy does not include the target form."
+    }
+  ],
+  "reviewStatus": "PENDING",
+  "staleState": "CURRENT"
+}

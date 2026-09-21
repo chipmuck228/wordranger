@@ -88,6 +88,15 @@ Pack status is `CANDIDATE`.
   `APPROVED_FOR_EXPERIMENT`.
 - There is no `STANDARD` or `PRODUCTION_APPROVED` status.
 
+## 7a. Internal content review
+
+Internal reviewers can inspect this Candidate pack at
+`/debug/contextual-content-review/meal-expansion-batch-01/cup`
+when Debug Tools and the review gate are enabled.
+
+A human `APPROVED` decision is not pack promotion and does not change
+registry status.
+
 ## 8. This is not 1600-word coverage
 
 The Meal catalog still has nine reviewed members. The approved

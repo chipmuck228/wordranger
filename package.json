@@ -17,7 +17,8 @@
     "import:curated-placement": "tsx scripts/import-curated-placement.ts",
     "export:curated-placement": "tsx scripts/export-curated-placement.ts",
     "generate:provisional-placement": "tsx scripts/generate-provisional-placement.ts",
-    "contextual:coverage": "tsx scripts/contextual-coverage.ts"
+    "contextual:coverage": "tsx scripts/contextual-coverage.ts",
+    "contextual:review:meal-batch-01-cup": "tsx scripts/generate-meal-batch-01-cup-review.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
