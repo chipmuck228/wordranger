@@ -99,6 +99,16 @@ export interface ContextualFrameContent {
   presentationOrder: string[];
 }
 
+export type BundledMeaningGlossSelector =
+  | {
+      kind: "EXACT_BUNDLED_VALUE";
+      value: string;
+    }
+  | {
+      kind: "BUNDLED_INDEX";
+      index: number;
+    };
+
 export interface ContextualSceneLexemeContent {
   id: string;
   target: LexemeSenseRef;
@@ -119,6 +129,7 @@ export interface ContextualSceneLexemeContent {
     meaningGlossSource: "BUNDLED_VOCABULARY";
     phoneticSource: "BUNDLED_VOCABULARY";
     displayLabel: string;
+    meaningGlossSelector?: BundledMeaningGlossSelector;
   };
   grounding: ContextualLexemeGrounding;
   contrastBindings: ContextualContrastBinding[];

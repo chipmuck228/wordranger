@@ -117,28 +117,9 @@ function containsCupDrinkOnEveryFrame(): boolean {
   });
 }
 
-function supportsPlateFoodOnEveryFrame(): boolean {
-  return MEAL_FRAMES.every((frame) => {
-    const plate = frame.entityBindings.find((entity) => entity.roleId === "FOOD_SUPPORT");
-    const served = frame.entityBindings.find((entity) => entity.roleId === "SUPPORTED_FOOD");
-    return frame.initialFacts.some(
-      (fact) =>
-        fact.id === `${mealPrefixForFrame(frame.id)}-fact-supports-plate-food` &&
-        fact.predicate === "supports" &&
-        fact.arguments[0]?.kind === "ENTITY" &&
-        fact.arguments[0].entityId === plate?.entityId &&
-        fact.arguments[1]?.kind === "ENTITY" &&
-        fact.arguments[1].entityId === served?.entityId,
-    );
-  });
-}
-
 function factGroundingExists(word: MealExpansionBatch01Word): boolean {
   if (word === "cup" || word === "drink") {
     return containsCupDrinkOnEveryFrame();
-  }
-  if (word === "plate") {
-    return supportsPlateFoodOnEveryFrame();
   }
   return false;
 }
@@ -182,15 +163,15 @@ export const MEAL_EXPANSION_BATCH_01_ELIGIBILITY: readonly MealExpansionWordElig
     canonicalKey: BUNDLED_LEXEME_BINDINGS.plate.canonicalKey,
     exactSenseId: MEAL_SENSE.plate.senseId,
     catalogRole: "FOOD_SUPPORT",
-    skeletonRoleExists: true,
-    frameBindingExists: true,
-    factGroundingExists: true,
-    bindingKind: "NAMES_ENTITY",
+    skeletonRoleExists: false,
+    frameBindingExists: false,
+    factGroundingExists: false,
+    bindingKind: "NONE",
     probeEligible: false,
     buildEligible: false,
     strengthenEligible: false,
     result: "REQUIRES_FRAME_CONTENT",
-    gap: "Batch 01 does not author plate. Frame role, entity, and supports(plate, served-food) now exist for the separate batch 02 Candidate pack.",
+    gap: "Catalog role FOOD_SUPPORT is not on the REVIEWED Meal skeleton. Home/Restaurant/Picnic have no plate entity or plate fact. Batch 02 owns an isolated Candidate frame/skeleton extension and does not edit this approved runtime.",
   },
   {
     word: "eat",

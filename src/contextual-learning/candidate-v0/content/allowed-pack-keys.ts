@@ -59,7 +59,10 @@ const LEXICAL_PRESENTATION_KEYS = keys(
   "meaningGlossSource",
   "phoneticSource",
   "displayLabel",
+  "meaningGlossSelector",
 );
+const MEANING_GLOSS_EXACT_SELECTOR_KEYS = keys("kind", "value");
+const MEANING_GLOSS_INDEX_SELECTOR_KEYS = keys("kind", "index");
 const GROUNDING_KEYS = keys("frameFacts", "requiredRelationIds");
 const FRAME_FACT_GROUP_KEYS = keys("frameId", "facts");
 const FACT_KEYS = keys("factId", "predicate", "args", "caption");
@@ -120,6 +123,18 @@ export function validatePackAllowedKeys(pack: unknown): SceneContentIssue[] {
       local.push(
         ...objectKeys(lexeme.lexicalPresentation, LEXICAL_PRESENTATION_KEYS, `${path}.lexicalPresentation`),
       );
+      if (isRecord(lexeme.lexicalPresentation) && isRecord(lexeme.lexicalPresentation.meaningGlossSelector)) {
+        const selector = lexeme.lexicalPresentation.meaningGlossSelector;
+        local.push(
+          ...objectKeys(
+            selector,
+            selector.kind === "BUNDLED_INDEX"
+              ? MEANING_GLOSS_INDEX_SELECTOR_KEYS
+              : MEANING_GLOSS_EXACT_SELECTOR_KEYS,
+            `${path}.lexicalPresentation.meaningGlossSelector`,
+          ),
+        );
+      }
       if (isRecord(lexeme.grounding)) {
         local.push(...objectKeys(lexeme.grounding, GROUNDING_KEYS, `${path}.grounding`));
         local.push(

@@ -24,8 +24,6 @@ function mealEntities(prefix: string, labels: {
   fork: string;
   drink: string;
   cup: string;
-  plate: string;
-  servedFood: string;
 }): EntityBinding[] {
   return [
     {
@@ -88,21 +86,6 @@ function mealEntities(prefix: string, labels: {
         { sense: MEAL_SENSE.cup, bindingKind: "NAMES_ENTITY" },
       ],
     },
-    {
-      entityId: `${prefix}-plate`,
-      roleId: "FOOD_SUPPORT",
-      label: labels.plate,
-      conceptIds: [],
-      lexemeSenseBindings: [
-        { sense: MEAL_SENSE.plate, bindingKind: "NAMES_ENTITY" },
-      ],
-    },
-    {
-      entityId: `${prefix}-served-food`,
-      roleId: "SUPPORTED_FOOD",
-      label: labels.servedFood,
-      conceptIds: [],
-    },
   ];
 }
 
@@ -122,11 +105,6 @@ function mealFacts(prefix: string): ContextFrame["initialFacts"] {
       "suitable_for",
       [entityArg(`${prefix}-spoon`), entityArg(`${prefix}-soup`)],
       `${prefix}-fact-suitable-for-spoon-soup`,
-    ),
-    fact(
-      "supports",
-      [entityArg(`${prefix}-plate`), entityArg(`${prefix}-served-food`)],
-      `${prefix}-fact-supports-plate-food`,
     ),
   ];
 }
@@ -167,8 +145,6 @@ export const homeBreakfastFrame = mealFrame(
     fork: "Home fork",
     drink: "Milk",
     cup: "Home cup",
-    plate: "Home plate",
-    servedFood: "Food on the plate",
   },
   "A child is eating breakfast soup at the kitchen table.",
 );
@@ -185,8 +161,6 @@ export const restaurantMealFrame = mealFrame(
     fork: "Restaurant fork",
     drink: "Tea",
     cup: "Restaurant cup",
-    plate: "Restaurant plate",
-    servedFood: "Food on the plate",
   },
   "A customer is served soup at a restaurant table.",
 );
@@ -203,8 +177,6 @@ export const picnicLunchFrame = mealFrame(
     fork: "Picnic fork",
     drink: "Juice",
     cup: "Picnic cup",
-    plate: "Picnic plate",
-    servedFood: "Food on the plate",
   },
   "Friends eat packed soup outdoors.",
 );

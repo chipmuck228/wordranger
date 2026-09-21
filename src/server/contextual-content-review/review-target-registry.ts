@@ -23,6 +23,7 @@ export interface ContentReviewTargetSpec {
   artifactDirectory: string;
   sourceRefs: readonly string[];
   frameLabels: readonly string[];
+  runtimeContext: "MEAL_BASE" | "MEAL_BATCH_02";
 }
 
 function artifactDirectoryFor(reviewKey: string): string {
@@ -41,6 +42,7 @@ export const CONTENT_REVIEW_TARGETS: readonly ContentReviewTargetSpec[] = [
     artifactDirectory: artifactDirectoryFor("meal-expansion-batch-01-cup"),
     sourceRefs: MEAL_SCENE_EXPANSION_BATCH_01_PACK.provenance.sourceRefs,
     frameLabels: ["Home Breakfast", "Restaurant Meal"],
+    runtimeContext: "MEAL_BASE",
   },
   {
     reviewKey: "meal-expansion-batch-02-plate",
@@ -53,6 +55,7 @@ export const CONTENT_REVIEW_TARGETS: readonly ContentReviewTargetSpec[] = [
     artifactDirectory: artifactDirectoryFor("meal-expansion-batch-02-plate"),
     sourceRefs: MEAL_SCENE_EXPANSION_BATCH_02_PACK.provenance.sourceRefs,
     frameLabels: ["Home Breakfast", "Restaurant Meal"],
+    runtimeContext: "MEAL_BATCH_02",
   },
 ];
 

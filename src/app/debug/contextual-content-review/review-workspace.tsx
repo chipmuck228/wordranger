@@ -44,6 +44,10 @@ export function ReviewWorkspace({
             <dt className="text-muted-foreground">Target</dt>
             <dd data-testid="review-target-sense">{packet.target.senseId}</dd>
           </div>
+          <div>
+            <dt className="text-muted-foreground">Selected meaning</dt>
+            <dd data-testid="review-meaning-gloss">{packet.target.meaningGloss}</dd>
+          </div>
           <div className="md:col-span-2">
             <dt className="text-muted-foreground">content fingerprint</dt>
             <dd data-testid="review-fingerprint" className="break-all">

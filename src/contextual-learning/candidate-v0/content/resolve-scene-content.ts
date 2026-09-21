@@ -10,6 +10,7 @@ import { SceneContentErrorCode } from "./errors";
 import { connectFactIdFor, resolvedBuildForFrame, resolvedFactsForFrame } from "./frame-facts";
 import { frameBindingFor } from "./frame-binding";
 import { cloneFrozen } from "./immutable";
+import { selectBundledMeaningGloss } from "./select-bundled-meaning-gloss";
 import { validateSceneContent } from "./validate-scene-content";
 import type {
   ContextualSceneContentPack,
@@ -95,7 +96,11 @@ function resolveLexeme(
   }
   const bundled = loadLexeme(lexeme.canonicalKey);
   const displayForm = bundled?.display.trim() || bundled?.lemma.trim() || "";
-  const meaningGloss = bundled?.meaningsZh[0]?.trim() || "";
+  const meaningGloss =
+    selectBundledMeaningGloss({
+      meaningsZh: bundled?.meaningsZh,
+      selector: lexeme.lexicalPresentation.meaningGlossSelector,
+    }) ?? "";
   const phonetic = bundled?.ipa[0]?.trim() || undefined;
   if (!bundled || bundled.id !== lexeme.target.lexemeId || !displayForm || !meaningGloss) {
     return null;

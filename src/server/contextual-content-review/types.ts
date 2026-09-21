@@ -111,6 +111,7 @@ export interface ContentReviewPacket {
     displayForm: string;
     lemma: string;
     meaningsZh: string[];
+    meaningGloss: string;
     phonetic?: string;
     roleId: string;
     displayLabel: string;

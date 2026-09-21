@@ -4,7 +4,10 @@
  */
 
 import { createHash } from "node:crypto";
-import type { ContextualSceneLexemeContent } from "./types";
+import type {
+  ContextualSceneContentPack,
+  ContextualSceneLexemeContent,
+} from "./types";
 
 function sortedJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
@@ -65,7 +68,16 @@ export function contentFingerprintPayload(input: {
     },
     contrastBindings: input.lexeme.contrastBindings,
     sourceRefs: [],
+    ...(input.lexeme.lexicalPresentation.meaningGlossSelector
+      ? {
+          meaningGlossSelector: input.lexeme.lexicalPresentation.meaningGlossSelector,
+        }
+      : {}),
   };
+}
+
+export function fingerprintAuthoredPack(pack: ContextualSceneContentPack): string {
+  return createHash("sha256").update(sortedJson(pack)).digest("hex");
 }
 
 export function fingerprintContent(input: {

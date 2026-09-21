@@ -174,6 +174,8 @@ describe("Meal expansion batch 01 bundled identity", () => {
     expect(lexeme?.displayForm).toBe(bundled!.display.trim() || bundled!.lemma);
     expect(lexeme?.meaningGloss).toBe(bundled!.meaningsZh[0]);
     expect(lexeme?.phonetic).toBe(bundled!.ipa[0]);
+    expect(resolved.content.lexemes.map((item) => item.entityId)).not.toContain("home-plate");
+    expect(resolved.content.frame.entityIds).not.toContain("home-plate");
     expect(JSON.stringify(cup)).not.toContain(bundled!.ipa[0] ?? "no-ipa");
     expect(JSON.stringify(cup)).not.toContain(bundled!.meaningsZh[0] ?? "no-gloss");
     expect(cup).not.toHaveProperty("displayForm");

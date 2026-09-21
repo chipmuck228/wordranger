@@ -55,7 +55,12 @@ This file is machine-generated. It is not a human approval.
 - Pack: \`${packet.pack.packId}\`
 - Registry status: \`${packet.pack.registryStatus}\`
 - Target: \`${packet.target.lexemeId}\` / \`${packet.target.senseId}\`
-- Canonical key: \`${packet.target.canonicalKey}\`
+- Canonical key: \`${packet.target.canonicalKey}\`${
+    spec.reviewKey === "meal-expansion-batch-01-cup"
+      ? ""
+      : `
+- Selected meaning: \`${packet.target.meaningGloss}\``
+  }
 - Content fingerprint: \`${packet.pack.contentFingerprint}\`
 - Human review: ${packet.reviewStatus}
 - Stale state: ${packet.staleState}
@@ -76,7 +81,7 @@ ${limitations}
 `;
 }
 
-function publicManifest(packet: ContentReviewPacket) {
+function publicManifest(packet: ContentReviewPacket, spec: ContentReviewTargetSpec) {
   return {
     schemaVersion: packet.schemaVersion,
     packId: packet.pack.packId,
@@ -87,6 +92,9 @@ function publicManifest(packet: ContentReviewPacket) {
       senseId: packet.target.senseId,
       canonicalKey: packet.target.canonicalKey,
       roleId: packet.target.roleId,
+      ...(spec.reviewKey === "meal-expansion-batch-01-cup"
+        ? {}
+        : { meaningGloss: packet.target.meaningGloss }),
     },
     frameIds: packet.frames.map((frame) => frame.frameId),
     machineChecks: packet.machineChecks,
@@ -114,7 +122,7 @@ export async function generateReviewArtifacts(reviewKey: string): Promise<{
   writeFileSync(path.join(dir, "REVIEW_PACKET.md"), renderPacketMarkdown(packet, spec), "utf8");
   writeFileSync(
     path.join(dir, "REVIEW_MANIFEST.json"),
-    `${JSON.stringify(publicManifest(packet), null, 2)}\n`,
+    `${JSON.stringify(publicManifest(packet, spec), null, 2)}\n`,
     "utf8",
   );
   const humanPath = path.join(dir, "HUMAN_REVIEW.md");

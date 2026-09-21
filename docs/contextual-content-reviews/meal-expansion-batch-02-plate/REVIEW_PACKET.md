@@ -8,7 +8,8 @@ This file is machine-generated. It is not a human approval.
 - Registry status: `CANDIDATE`
 - Target: `4ca2bd15-e50d-531b-a379-30eebab1c9c2` / `plate#food-support`
 - Canonical key: `lex-1036-1`
-- Content fingerprint: `cb2bda5a0f7924276307960aa20c0a6a4d3ba02754f1ebf25022ab490e8997ac`
+- Selected meaning: `盘子`
+- Content fingerprint: `4ce843238a0b5b4ca570b335e75ed2549b9af94acf536144812ecc1c86ed032b`
 - Human review: PENDING
 - Stale state: CURRENT
 

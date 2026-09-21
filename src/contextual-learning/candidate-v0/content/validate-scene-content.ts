@@ -14,6 +14,7 @@ import {
   type SceneContentValidation,
 } from "./errors";
 import { validatePackAllowedKeys } from "./allowed-pack-keys";
+import { selectBundledMeaningGloss } from "./select-bundled-meaning-gloss";
 import { sameAuthoredAndFrameFactArgs } from "./fact-args";
 import { connectBindings, frameFactsFor } from "./frame-facts";
 import { frameBindingFor } from "./frame-binding";
@@ -253,7 +254,10 @@ export function validateSceneContent(input: {
 
     const bundled = loadLexeme(lexeme.canonicalKey);
     const displayForm = bundled?.display.trim() || bundled?.lemma.trim() || "";
-    const gloss = bundled?.meaningsZh[0]?.trim() || "";
+    const gloss = selectBundledMeaningGloss({
+      meaningsZh: bundled?.meaningsZh,
+      selector: lexeme.lexicalPresentation.meaningGlossSelector,
+    });
     if (!bundled || bundled.id !== lexeme.target.lexemeId) {
       issues.push(
         issue(SceneContentErrorCode.CONTENT_BUNDLED_IDENTITY_MISMATCH, `${path}.target`),
@@ -266,7 +270,12 @@ export function validateSceneContent(input: {
     }
     if (!gloss) {
       issues.push(
-        issue(SceneContentErrorCode.CONTENT_MEANING_GLOSS_MISSING, `${path}.meaningGloss`),
+        issue(
+          lexeme.lexicalPresentation.meaningGlossSelector || (bundled?.meaningsZh.length ?? 0) > 1
+            ? SceneContentErrorCode.CONTENT_MEANING_GLOSS_SELECTOR_INVALID
+            : SceneContentErrorCode.CONTENT_MEANING_GLOSS_MISSING,
+          `${path}.lexicalPresentation.meaningGlossSelector`,
+        ),
       );
     }
     if (

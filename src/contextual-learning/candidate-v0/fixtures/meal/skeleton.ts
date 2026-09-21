@@ -27,18 +27,6 @@ export const mealSkeleton: SemanticSkeleton = {
       cardinality: "OPTIONAL_ONE",
       accepts: [],
     },
-    {
-      id: "FOOD_SUPPORT",
-      label: "Food support",
-      cardinality: "OPTIONAL_ONE",
-      accepts: [],
-    },
-    {
-      id: "SUPPORTED_FOOD",
-      label: "Supported food",
-      cardinality: "OPTIONAL_ONE",
-      accepts: [],
-    },
   ],
   relationDefinitions: [
     {
@@ -46,14 +34,6 @@ export const mealSkeleton: SemanticSkeleton = {
       label: "Contains food",
       fromRole: "FOOD_CONTAINER",
       toRole: "FOOD",
-      directionality: "DIRECTED",
-      temporalScope: "STATE",
-    },
-    {
-      id: "SUPPORTS_FOOD",
-      label: "Supports food",
-      fromRole: "FOOD_SUPPORT",
-      toRole: "SUPPORTED_FOOD",
       directionality: "DIRECTED",
       temporalScope: "STATE",
     },

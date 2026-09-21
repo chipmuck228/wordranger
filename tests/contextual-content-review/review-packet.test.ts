@@ -28,6 +28,7 @@ describe("Content review packet projection", () => {
     expect(packet!.target.lexemeId).toBe(bundled!.id);
     expect(packet!.target.displayForm).toBe(bundled!.display.trim() || bundled!.lemma);
     expect(packet!.target.meaningsZh).toEqual([...bundled!.meaningsZh]);
+    expect(packet!.target.meaningGloss).toBe(bundled!.meaningsZh[0]);
     expect(packet!.target.phonetic).toBe(bundled!.ipa[0]);
     expect(packet!.reviewRevision).toBe(0);
   });

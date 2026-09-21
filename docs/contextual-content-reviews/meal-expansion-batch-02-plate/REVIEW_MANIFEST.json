@@ -2,12 +2,13 @@
   "schemaVersion": "candidate-v0",
   "packId": "meal-scene-expansion-batch-02",
   "registryStatus": "CANDIDATE",
-  "contentFingerprint": "cb2bda5a0f7924276307960aa20c0a6a4d3ba02754f1ebf25022ab490e8997ac",
+  "contentFingerprint": "4ce843238a0b5b4ca570b335e75ed2549b9af94acf536144812ecc1c86ed032b",
   "target": {
     "lexemeId": "4ca2bd15-e50d-531b-a379-30eebab1c9c2",
     "senseId": "plate#food-support",
     "canonicalKey": "lex-1036-1",
-    "roleId": "FOOD_SUPPORT"
+    "roleId": "FOOD_SUPPORT",
+    "meaningGloss": "盘子"
   },
   "frameIds": [
     "home-breakfast-v0",

@@ -4,6 +4,7 @@
  * This file is not a second authored truth.
  */
 
+import { selectBundledMeaningGloss } from "../content/select-bundled-meaning-gloss";
 import { HOME_BREAKFAST_FRAME_ID } from "../content/packs/meal/meal-scene-content";
 import { experimentalMealContextLabPack } from "../content/experimental-meal-runtime-pack";
 import { snapshotSceneContentFromPack } from "../content/snapshot-from-pack";
@@ -126,7 +127,14 @@ export function resolveMealLexicalStrengthenProfiles(input: {
       findResolvedLexeme(snapshot, identity.target)?.displayLabel ??
       "";
     const displayForm = lexeme?.display.trim() || lexeme?.lemma.trim() || "";
-    const meaningGloss = lexeme?.meaningsZh[0]?.trim() || "";
+    const authored = experimentalMealContextLabPack().lexemes.find((item) =>
+      sameLexemeSense(item.target, identity.target),
+    );
+    const meaningGloss =
+      selectBundledMeaningGloss({
+        meaningsZh: lexeme?.meaningsZh,
+        selector: authored?.lexicalPresentation.meaningGlossSelector,
+      }) ?? "";
     const phonetic = lexeme?.ipa[0]?.trim() || undefined;
     if (
       !lexeme ||

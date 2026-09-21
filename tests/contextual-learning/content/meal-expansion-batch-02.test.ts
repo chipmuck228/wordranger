@@ -5,15 +5,23 @@ import {
   MEAL_SCENE_EXPANSION_BATCH_02_PACK,
   MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID,
   MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
+  currentPackTargetFingerprint,
   experimentalMealContextLabPack,
+  fingerprintContent,
   getApprovedExperimentSceneContent,
   registryStatusFor,
   resolveSceneContent,
+  selectBundledMeaningGloss,
   validateSceneContent,
 } from "@/contextual-learning/candidate-v0/content";
 import { sameLexemeSense } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
-import { MEAL_FRAMES } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
+import { MEAL_FRAMES, homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_SENSE } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
+import {
+  MEAL_BATCH_02_FRAMES,
+  homeBreakfastBatch02Frame,
+} from "@/contextual-learning/candidate-v0/fixtures/meal/meal-batch-02-contexts";
+import { mealBatch02Skeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/meal-batch-02-skeleton";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
 import { MEAL_SCENE_CLUSTER } from "@/contextual-learning/candidate-v0/memory-routing/scene-catalog";
 import {
@@ -25,8 +33,9 @@ import {
   createContextualLexicalStrengthenPlan,
 } from "@/contextual-learning/candidate-v0/planning/create-contextual-lexical-plans";
 
-const home = MEAL_FRAMES.find((frame) => frame.id === "home-breakfast-v0")!;
-const restaurant = MEAL_FRAMES.find((frame) => frame.id === "restaurant-meal-v0")!;
+const home = MEAL_BATCH_02_FRAMES.find((frame) => frame.id === "home-breakfast-v0")!;
+const restaurant = MEAL_BATCH_02_FRAMES.find((frame) => frame.id === "restaurant-meal-v0")!;
+const authoredFrames = [home, restaurant];
 
 function plateLexeme() {
   const matches = MEAL_SCENE_EXPANSION_BATCH_02_PACK.lexemes.filter((lexeme) =>
@@ -50,13 +59,23 @@ describe("Meal expansion batch 02 plate Candidate", () => {
     expect(bundled?.display).toBe("plate");
     expect(bundled?.lemma).toBe("plate");
     expect(bundled?.meaningsZh).toEqual(["板", "片", "牌", "盘子", "盆子"]);
+    expect(bundled?.meaningsZh[3]).toBe("盘子");
     expect(bundled?.ipa).toEqual(["/pleɪt/"]);
     expect(plate.lexicalPresentation.displayFormSource).toBe("BUNDLED_VOCABULARY");
+    expect(plate.lexicalPresentation.meaningGlossSelector).toEqual({
+      kind: "EXACT_BUNDLED_VALUE",
+      value: "盘子",
+    });
+    expect(bundled?.meaningsZh).toContain(
+      plate.lexicalPresentation.meaningGlossSelector?.kind === "EXACT_BUNDLED_VALUE"
+        ? plate.lexicalPresentation.meaningGlossSelector.value
+        : "",
+    );
     expect(JSON.stringify(plate)).not.toContain("meaningsZh");
     expect(JSON.stringify(plate)).not.toContain("/pleɪt/");
   });
 
-  it("authors Home and Restaurant plate facts without disguising plate as a bowl", () => {
+  it("authors Home and Restaurant plate facts on isolated batch 02 frames", () => {
     const plate = plateLexeme();
     expect(plate.membership.frameBindings.map((item) => item.roleId)).toEqual([
       "FOOD_SUPPORT",
@@ -87,12 +106,51 @@ describe("Meal expansion batch 02 plate Candidate", () => {
     );
   });
 
-  it("validates the pack and keeps Probe from leaking the English form", () => {
+  it("keeps approved MEAL_FRAMES and mealSkeleton free of plate extensions", () => {
+    expect(
+      MEAL_FRAMES.flatMap((frame) => frame.entityBindings.map((item) => item.entityId)),
+    ).not.toEqual(expect.arrayContaining(["home-plate", "rest-plate"]));
+    expect(
+      MEAL_FRAMES.flatMap((frame) => frame.initialFacts.map((item) => item.id)),
+    ).not.toEqual(expect.arrayContaining(["home-fact-supports-plate-food"]));
+    expect(mealSkeleton.roleDefinitions.map((role) => role.id)).not.toContain("FOOD_SUPPORT");
+    expect(mealSkeleton.roleDefinitions.map((role) => role.id)).not.toContain("SUPPORTED_FOOD");
+    expect(mealSkeleton.relationDefinitions.map((item) => item.id)).not.toContain("SUPPORTS_FOOD");
+    expect(MEAL_BATCH_02_FRAMES.some((frame) =>
+      frame.entityBindings.some((item) => item.entityId === "home-plate"),
+    )).toBe(true);
+    expect(mealBatch02Skeleton.roleDefinitions.map((role) => role.id)).toContain("FOOD_SUPPORT");
+    const mutated = structuredClone(homeBreakfastBatch02Frame);
+    mutated.entityBindings.push({
+      entityId: "home-plate-mutated",
+      roleId: "FOOD_SUPPORT",
+      label: "mutated",
+      conceptIds: [],
+    });
+    expect(
+      homeBreakfastFrame.entityBindings.some((item) => item.entityId === "home-plate-mutated"),
+    ).toBe(false);
+    expect(
+      homeBreakfastBatch02Frame.entityBindings.some((item) => item.entityId === "home-plate-mutated"),
+    ).toBe(false);
+  });
+
+  it("validates only against batch 02 frames/skeleton and resolves 盘子", () => {
+    expect(
+      validateSceneContent({
+        pack: MEAL_SCENE_EXPANSION_BATCH_02_PACK,
+        frame: MEAL_FRAMES[0]!,
+        frames: MEAL_FRAMES.filter((item) => item.id !== "picnic-lunch-v0"),
+        skeleton: mealSkeleton,
+        cluster: MEAL_SCENE_CLUSTER,
+        loadLexeme: bundledSceneLexemeLoader,
+      }).ok,
+    ).toBe(false);
     const validated = validateSceneContent({
       pack: MEAL_SCENE_EXPANSION_BATCH_02_PACK,
       frame: home,
-      frames: [home, restaurant],
-      skeleton: mealSkeleton,
+      frames: authoredFrames,
+      skeleton: mealBatch02Skeleton,
       cluster: MEAL_SCENE_CLUSTER,
       loadLexeme: bundledSceneLexemeLoader,
     });
@@ -100,8 +158,8 @@ describe("Meal expansion batch 02 plate Candidate", () => {
     const resolved = resolveSceneContent({
       pack: MEAL_SCENE_EXPANSION_BATCH_02_PACK,
       frame: home,
-      frames: [home, restaurant],
-      skeleton: mealSkeleton,
+      frames: authoredFrames,
+      skeleton: mealBatch02Skeleton,
       cluster: MEAL_SCENE_CLUSTER,
       loadLexeme: bundledSceneLexemeLoader,
     });
@@ -111,7 +169,8 @@ describe("Meal expansion batch 02 plate Candidate", () => {
     }
     const plate = resolved.content.lexemes.find((item) => item.entityId === "home-plate")!;
     expect(plate.displayForm).toBe("plate");
-    expect(plate.meaningGloss).toBe("板");
+    expect(plate.meaningGloss).toBe("盘子");
+    expect(plate.meaningGloss).not.toBe("板");
     expect(plate.phonetic).toBe("/pleɪt/");
     expect(plate.probe.recallInstruction.toLowerCase()).not.toContain("plate");
     expect(plate.build.groundInstruction.toLowerCase()).not.toContain("plate");
@@ -142,6 +201,63 @@ describe("Meal expansion batch 02 plate Candidate", () => {
           step.executionIntent.guidedActivityKind === "RECONNECT_FORM",
       ),
     ).toBe(true);
+  });
+
+  it("fail-closes missing or invalid meaning selectors and binds the selector into the fingerprint", () => {
+    const bundled = bundledSceneLexemeLoader(BUNDLED_LEXEME_BINDINGS.plate.canonicalKey)!;
+    expect(
+      selectBundledMeaningGloss({
+        meaningsZh: bundled.meaningsZh,
+      }),
+    ).toBeNull();
+    expect(
+      selectBundledMeaningGloss({
+        meaningsZh: bundled.meaningsZh,
+        selector: { kind: "EXACT_BUNDLED_VALUE", value: "碟子" },
+      }),
+    ).toBeNull();
+    expect(
+      selectBundledMeaningGloss({
+        meaningsZh: bundled.meaningsZh,
+        selector: { kind: "EXACT_BUNDLED_VALUE", value: "" },
+      }),
+    ).toBeNull();
+    expect(
+      selectBundledMeaningGloss({
+        meaningsZh: bundled.meaningsZh,
+        selector: { kind: "BUNDLED_INDEX", index: 3 },
+      }),
+    ).toBe("盘子");
+    const plate = plateLexeme();
+    const baseline = currentPackTargetFingerprint(
+      MEAL_SCENE_EXPANSION_BATCH_02_PACK,
+      MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
+    );
+    const changed = structuredClone(plate);
+    changed.lexicalPresentation.meaningGlossSelector = {
+      kind: "BUNDLED_INDEX",
+      index: 3,
+    };
+    expect(
+      fingerprintContent({
+        packId: MEAL_SCENE_EXPANSION_BATCH_02_PACK.id,
+        lexeme: changed,
+        sourceRefs: MEAL_SCENE_EXPANSION_BATCH_02_PACK.provenance.sourceRefs,
+      }),
+    ).not.toBe(baseline);
+    const missing = structuredClone(MEAL_SCENE_EXPANSION_BATCH_02_PACK);
+    const missingPlate = missing.lexemes.find((item) => item.id === "meal-plate")!;
+    delete missingPlate.lexicalPresentation.meaningGlossSelector;
+    expect(
+      validateSceneContent({
+        pack: missing,
+        frame: home,
+        frames: authoredFrames,
+        skeleton: mealBatch02Skeleton,
+        cluster: MEAL_SCENE_CLUSTER,
+        loadLexeme: bundledSceneLexemeLoader,
+      }).ok,
+    ).toBe(false);
   });
 
   it("stays CANDIDATE and out of the experimental Meal runtime", () => {

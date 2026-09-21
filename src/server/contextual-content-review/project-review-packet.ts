@@ -24,8 +24,11 @@ import {
   type LearningExperiencePlan,
 } from "@/contextual-learning/candidate-v0/domain/types";
 import { MEAL_FRAMES, mealPrefixForFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
+import { MEAL_BATCH_02_FRAMES } from "@/contextual-learning/candidate-v0/fixtures/meal/meal-batch-02-contexts";
+import { mealBatch02Skeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/meal-batch-02-skeleton";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
+import { selectBundledMeaningGloss } from "@/contextual-learning/candidate-v0/content/select-bundled-meaning-gloss";
 import { completeAll, FIXTURE_PROVENANCE, profileMap } from "@/contextual-learning/candidate-v0/fixtures/shared";
 import { MEAL_SCENE_CLUSTER } from "@/contextual-learning/candidate-v0/memory-routing/scene-catalog";
 import {
@@ -60,6 +63,25 @@ function packFor(spec: ContentReviewTargetSpec) {
   return entry?.pack ?? null;
 }
 
+function reviewRuntimeContext(spec: ContentReviewTargetSpec): {
+  frames: readonly ContextFrame[];
+  authoredFrames: readonly ContextFrame[];
+  skeleton: typeof mealSkeleton;
+} {
+  if (spec.runtimeContext === "MEAL_BATCH_02") {
+    return {
+      frames: MEAL_BATCH_02_FRAMES,
+      authoredFrames: MEAL_BATCH_02_FRAMES.filter((item) => item.id !== "picnic-lunch-v0"),
+      skeleton: mealBatch02Skeleton,
+    };
+  }
+  return {
+    frames: MEAL_FRAMES,
+    authoredFrames: MEAL_FRAMES.filter((item) => item.id !== "picnic-lunch-v0"),
+    skeleton: mealSkeleton,
+  };
+}
+
 function emptyReviewPlan(
   frame: ContextFrame,
   mode: "BUILD" | "STRENGTHEN",
@@ -88,11 +110,12 @@ function reviewLexicalPlan(input: {
   if (!pack) {
     return emptyReviewPlan(input.frame, input.mode);
   }
+  const context = reviewRuntimeContext(input.spec);
   const resolved = resolveSceneContent({
     pack,
     frame: input.frame,
-    frames: MEAL_FRAMES.filter((item) => item.id !== "picnic-lunch-v0"),
-    skeleton: mealSkeleton,
+    frames: context.authoredFrames,
+    skeleton: context.skeleton,
     cluster: MEAL_SCENE_CLUSTER,
     loadLexeme: bundledSceneLexemeLoader,
   });
@@ -391,11 +414,12 @@ function buildFramePacket(input: {
   if (!pack) {
     return null;
   }
+  const context = reviewRuntimeContext(input.spec);
   const resolved = resolveSceneContent({
     pack,
     frame: input.frame,
-    frames: MEAL_FRAMES.filter((item) => item.id !== "picnic-lunch-v0"),
-    skeleton: mealSkeleton,
+    frames: context.authoredFrames,
+    skeleton: context.skeleton,
     cluster: MEAL_SCENE_CLUSTER,
     loadLexeme: bundledSceneLexemeLoader,
   });
@@ -537,9 +561,18 @@ export function projectContentReviewPacket(input: {
     lexeme,
     sourceRefs: pack.provenance.sourceRefs,
   });
-  const frames = MEAL_FRAMES.filter((frame) =>
-    lexeme.membership.frameBindings.some((binding) => binding.frameId === frame.id),
-  )
+  const context = reviewRuntimeContext(input.spec);
+  const meaningGloss = selectBundledMeaningGloss({
+    meaningsZh: bundled.meaningsZh,
+    selector: lexeme.lexicalPresentation.meaningGlossSelector,
+  });
+  if (!meaningGloss) {
+    return null;
+  }
+  const frames = context.frames
+    .filter((frame) =>
+      lexeme.membership.frameBindings.some((binding) => binding.frameId === frame.id),
+    )
     .map((frame) =>
       buildFramePacket({
         spec: input.spec,
@@ -551,9 +584,9 @@ export function projectContentReviewPacket(input: {
     .filter((item): item is ContentReviewFrame => Boolean(item));
   const validated = validateSceneContent({
     pack,
-    frame: MEAL_FRAMES[0]!,
-    frames: MEAL_FRAMES.filter((item) => item.id !== "picnic-lunch-v0"),
-    skeleton: mealSkeleton,
+    frame: context.authoredFrames[0]!,
+    frames: context.authoredFrames,
+    skeleton: context.skeleton,
     cluster: MEAL_SCENE_CLUSTER,
     loadLexeme: bundledSceneLexemeLoader,
   });
@@ -628,6 +661,7 @@ export function projectContentReviewPacket(input: {
       displayForm: bundled.display.trim() || bundled.lemma,
       lemma: bundled.lemma,
       meaningsZh: [...bundled.meaningsZh],
+      meaningGloss,
       phonetic: bundled.ipa[0],
       roleId: lexeme.membership.frameBindings[0]?.roleId ?? "",
       displayLabel: lexeme.lexicalPresentation.displayLabel,

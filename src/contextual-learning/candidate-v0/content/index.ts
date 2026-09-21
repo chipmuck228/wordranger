@@ -12,8 +12,14 @@ export {
 export { experimentalMealContextLabPack } from "./experimental-meal-runtime-pack";
 export {
   fingerprintContent,
+  fingerprintAuthoredPack,
   contentFingerprintPayload,
 } from "./content-fingerprint";
+export { selectBundledMeaningGloss } from "./select-bundled-meaning-gloss";
+export {
+  MEAL_LEGACY_EXPERIMENT_BASELINE,
+  matchesLegacyExperimentBaseline,
+} from "./packs/meal/meal-legacy-experiment-baseline";
 export {
   attestationIsStructurallyBound,
   currentPackTargetFingerprint,
@@ -38,6 +44,7 @@ export {
   projectPublicScenePresentation,
 } from "./project-public-presentation";
 export type {
+  BundledMeaningGlossSelector,
   ContextualSceneContentPack,
   ResolvedContextualSceneContent,
   ResolvedContextualSceneLexeme,

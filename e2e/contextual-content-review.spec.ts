@@ -140,6 +140,8 @@ test.describe("readonly review host", () => {
     await expect(page.locator("input[data-testid='review-fingerprint']")).toHaveCount(0);
     await expect(page.getByText("机器验证通过不等于人工批准")).toBeVisible();
     await expect(page.getByText("plate#food-support")).toBeVisible();
+    await expect(page.getByTestId("review-meaning-gloss")).toHaveText("盘子");
+    await expect(page.getByText("板", { exact: true })).toHaveCount(0);
     const unknown = await page.goto("/debug/contextual-content-review/missing-pack/plate");
     expect(unknown?.status()).toBe(404);
   });

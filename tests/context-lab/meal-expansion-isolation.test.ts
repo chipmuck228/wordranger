@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import { createMealLabHarness } from "./helpers";
 import { mealColdProbeTargets } from "@/server/context-lab/meal-probe-targets";
 import {
+  HOME_BREAKFAST_FRAME_ENTITY_IDS,
   HOME_BREAKFAST_SCENE_ENTITY_IDS,
   mappedMealEntity,
 } from "@/server/context-lab/meal-presentation-map";
+import { findPlannerFrame, findPlannerSkeleton } from "@/contextual-learning/candidate-v0/planning/plan-variant-registry";
+import { MEAL_FRAMES } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
+import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
 import {
   MEAL_SCENE_CONTENT_PACK,
   MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET,
@@ -31,6 +35,18 @@ describe("Context Lab uses the fingerprint-bound five-word Meal experiment pack"
     expect(HOME_BREAKFAST_SCENE_ENTITY_IDS).toContain("home-cup");
     expect(mappedMealEntity("home-cup")?.label).toBe("杯子");
     expect(mappedMealEntity("home-plate")).toBeUndefined();
+    expect(HOME_BREAKFAST_FRAME_ENTITY_IDS).not.toContain("home-plate");
+    expect(HOME_BREAKFAST_SCENE_ENTITY_IDS).not.toContain("home-plate");
+    const plannerFrame = findPlannerFrame("home-breakfast-v0");
+    expect(plannerFrame?.entityBindings.some((item) => item.entityId === "home-plate")).toBe(
+      false,
+    );
+    expect(plannerFrame?.initialFacts.some((item) => item.id?.includes("plate"))).toBe(false);
+    expect(findPlannerSkeleton("meal-setting-v0")?.roleDefinitions.map((item) => item.id)).not.toContain(
+      "FOOD_SUPPORT",
+    );
+    expect(MEAL_FRAMES[0]).toBe(plannerFrame);
+    expect(mealSkeleton.roleDefinitions.map((item) => item.id)).not.toContain("FOOD_SUPPORT");
     expect(getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID).ok).toBe(
       false,
     );

@@ -43,6 +43,12 @@ describe("generic content review targets", () => {
     expect(packet?.pack.registryStatus).toBe("CANDIDATE");
     expect(packet?.reviewStatus).toBe("PENDING");
     expect(packet?.target.senseId).toBe("plate#food-support");
+    expect(packet?.target.meaningGloss).toBe("盘子");
+    expect(packet?.target.meaningsZh).toContain("盘子");
+    expect(packet?.target.meaningGloss).not.toBe("板");
+    expect(packet?.frames.some((frame) =>
+      frame.entities.some((entity) => entity.entityId === "home-plate"),
+    )).toBe(true);
     expect(packet?.notices.some((item) => item.includes("机器验证通过不等于人工批准"))).toBe(true);
   });
 

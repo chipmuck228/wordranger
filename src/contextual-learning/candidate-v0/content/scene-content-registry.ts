@@ -5,6 +5,7 @@
 
 import { SceneContentErrorCode } from "./errors";
 import { cloneFrozen, deepFreeze } from "./immutable";
+import { matchesLegacyExperimentBaseline } from "./packs/meal/meal-legacy-experiment-baseline";
 import { MEAL_SCENE_CONTENT_PACK } from "./packs/meal/meal-scene-content";
 import { MEAL_SCENE_EXPANSION_BATCH_01_PACK } from "./packs/meal/meal-scene-expansion-batch-01";
 import { MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION } from "./packs/meal/meal-scene-expansion-batch-01-promotion";
@@ -20,7 +21,7 @@ function approvedEntryIsBound(
   entry: ContextualSceneContentRegistryEntry,
 ): boolean {
   if (entry.approvalBasis === "LEGACY_EXPERIMENT_BASELINE") {
-    return !entry.promotion;
+    return matchesLegacyExperimentBaseline(entry);
   }
   if (entry.approvalBasis === "HUMAN_REVIEW_PROMOTION") {
     return Boolean(entry.promotion) && promotionAttestationMatchesPack(entry);

@@ -24,7 +24,8 @@ This batch does not promote.
 | catalog role | `FOOD_SUPPORT` |
 | display / lemma | from bundled vocabulary |
 | IPA | `/pleɪt/` from bundled vocabulary |
-| bundled meaningsZh | `板`, `片`, `牌`, `盘子`, `盆子` — resolver still uses `[0]` |
+| bundled meaningsZh | `板`, `片`, `牌`, `盘子`, `盆子` |
+| meaning selector | exact bundled value `盘子` |
 
 The meal sense is the existing REVIEWED catalog sense `plate#food-support`,
 contrasted with `bowl#food-container`. It is not a second bowl identity
@@ -33,7 +34,10 @@ and not a guessed lemma.
 ## 3. Frames
 
 Home Breakfast and Restaurant Meal naturally include a plate beside the
-soup bowl. Picnic has the same domain entity for fixture completeness,
+soup bowl. Those plate entities live only on isolated batch 02 frames
+and skeleton. Approved `MEAL_FRAMES` / `mealSkeleton` stay five-word.
+
+Picnic has the same Candidate-only domain entity for fixture completeness,
 but this pack only authors Home and Restaurant.
 
 Each authored frame defines:

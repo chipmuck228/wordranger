@@ -77,6 +77,10 @@ function plateLexeme(): ContextualSceneLexemeContent {
       meaningGlossSource: "BUNDLED_VOCABULARY",
       phoneticSource: "BUNDLED_VOCABULARY",
       displayLabel: "盘子",
+      meaningGlossSelector: {
+        kind: "EXACT_BUNDLED_VALUE",
+        value: "盘子",
+      },
     },
     membership: {
       frameBindings: [
