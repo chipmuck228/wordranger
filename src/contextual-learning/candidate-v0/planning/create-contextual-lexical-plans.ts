@@ -8,7 +8,6 @@ import type {
   ResolvedContextualSceneContent,
   ResolvedContextualSceneLexeme,
 } from "../content/types";
-import { sameLexemeSense } from "../domain/lexeme-sense";
 import { curatedFixtureProvenance } from "../domain/provenance";
 import type {
   ContextFrame,
@@ -34,39 +33,23 @@ export interface ContextualLexicalPlanInput {
   runtimeCapabilities?: { canCompileFrozenTask: boolean };
 }
 
-function entityIdOnFrame(
-  frame: ContextFrame,
-  sense: LexemeSenseRef,
-): string | null {
-  return (
-    frame.entityBindings.find((entity) =>
-      entity.lexemeSenseBindings?.some((binding) =>
-        sameLexemeSense(binding.sense, sense),
-      ),
-    )?.entityId ?? null
-  );
-}
-
-function remapCatalogEntity(
-  catalogEntityId: string,
-  content: ResolvedContextualSceneContent,
-  frame: ContextFrame,
-): string | null {
-  const lexeme = content.lexemes.find((item) => item.entityId === catalogEntityId);
-  if (!lexeme) {
-    return null;
-  }
-  return entityIdOnFrame(frame, lexeme.fixtureSense);
-}
-
 function presentedSceneEntityIds(
   content: ResolvedContextualSceneContent,
-  frame: ContextFrame,
 ): string[] {
-  return content.frame.presentationOrder.flatMap((catalogId) => {
-    const remapped = remapCatalogEntity(catalogId, content, frame);
-    return remapped ? [remapped] : [];
-  });
+  return [...content.frame.presentationOrder];
+}
+
+function frameHasEntity(frame: ContextFrame, entityId: string): boolean {
+  return frame.entityBindings.some((entity) => entity.entityId === entityId);
+}
+
+function allEntitiesOnFrame(
+  frame: ContextFrame,
+  entityIds: readonly (string | null | undefined)[],
+): boolean {
+  return entityIds
+    .filter((entityId): entityId is string => Boolean(entityId))
+    .every((entityId) => frameHasEntity(frame, entityId));
 }
 
 function requiredRelationIds(
@@ -117,7 +100,8 @@ function canPlan(
   return Boolean(
     lexeme &&
       enabled &&
-      input.frame.skeletonId === input.content.skeletonId,
+      input.frame.skeletonId === input.content.skeletonId &&
+      frameHasEntity(input.frame, lexeme.entityId),
   );
 }
 
@@ -132,21 +116,23 @@ export function createContextualLexicalBuildPlan(
     return emptyPlan(input.frame, input.content, "BUILD");
   }
   const token = lexeme!.presentationToken;
-  const entityId = entityIdOnFrame(input.frame, lexeme!.fixtureSense);
-  const contrastCatalogId = lexeme!.contrasts[0]?.contrastEntityId;
-  const contrastEntityId = contrastCatalogId
-    ? remapCatalogEntity(contrastCatalogId, input.content, input.frame)
-    : null;
-  const relatedCatalogId = lexeme!.groundingFacts
+  const entityId = lexeme!.entityId;
+  const contrastEntityId = lexeme!.contrasts[0]?.contrastEntityId ?? null;
+  const relatedEntityId = lexeme!.groundingFacts
     .find((fact) => fact.factId === lexeme!.build.connectFactId)
     ?.args.find(
       (arg): arg is { kind: "ENTITY"; entityId: string } =>
         arg.kind === "ENTITY" && arg.entityId !== lexeme!.entityId,
     )?.entityId;
-  const relatedEntityId = relatedCatalogId
-    ? remapCatalogEntity(relatedCatalogId, input.content, input.frame)
-    : null;
-  if (!entityId || !contrastEntityId || (relatedCatalogId && !relatedEntityId)) {
+  if (
+    !contrastEntityId ||
+    !allEntitiesOnFrame(input.frame, [
+      entityId,
+      contrastEntityId,
+      relatedEntityId,
+      ...presentedSceneEntityIds(input.content),
+    ])
+  ) {
     return emptyPlan(input.frame, input.content, "BUILD");
   }
   const interpretationTargetId = `target-${token}`;
@@ -183,7 +169,7 @@ export function createContextualLexicalBuildPlan(
     },
     presentation: {
       instruction: lexeme!.build.groundInstruction,
-      presentedEntityIds: presentedSceneEntityIds(input.content, input.frame),
+      presentedEntityIds: presentedSceneEntityIds(input.content),
     },
     transition: nextOrEnd(false),
   };
@@ -311,10 +297,7 @@ export function createContextualLexicalStrengthenPlan(
     return emptyPlan(input.frame, input.content, "STRENGTHEN");
   }
   const token = lexeme!.presentationToken;
-  const entityId = entityIdOnFrame(input.frame, lexeme!.fixtureSense);
-  if (!entityId) {
-    return emptyPlan(input.frame, input.content, "STRENGTHEN");
-  }
+  const entityId = lexeme!.entityId;
   const prefix = input.stepIdPrefix;
   const targetId = `target-${token}-form`;
   const formTarget: ExperienceTarget = {

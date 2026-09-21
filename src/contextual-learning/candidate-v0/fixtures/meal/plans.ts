@@ -11,6 +11,7 @@ import {
   createContextualLexicalBuildPlan,
   createContextualLexicalStrengthenPlan,
 } from "../../planning/create-contextual-lexical-plans";
+import { projectResolvedMealContentOntoFrame } from "./project-resolved-onto-frame";
 import {
   identityForBundledTarget,
   identityForFixtureSense,
@@ -178,10 +179,13 @@ export function createMealLexicalBuildPlan(input: {
   frame: ContextFrame;
   profile: MealLexicalStrengthenIdentity;
 }): LearningExperiencePlan {
-  const content = snapshotSceneContentFromPack(
+  const catalog = snapshotSceneContentFromPack(
     MEAL_SCENE_CONTENT_PACK,
     HOME_BREAKFAST_FRAME_ID,
   );
+  const content = catalog
+    ? projectResolvedMealContentOntoFrame(catalog, input.frame)
+    : null;
   if (!content) {
     return emptyMealBuildPlan(input.frame);
   }
@@ -211,10 +215,13 @@ export function createMealActiveRecallStrengthenPlan(input: {
   frame: ContextFrame;
   profile: MealLexicalStrengthenIdentity;
 }): LearningExperiencePlan {
-  const content = snapshotSceneContentFromPack(
+  const catalog = snapshotSceneContentFromPack(
     MEAL_SCENE_CONTENT_PACK,
     HOME_BREAKFAST_FRAME_ID,
   );
+  const content = catalog
+    ? projectResolvedMealContentOntoFrame(catalog, input.frame)
+    : null;
   if (!content) {
     return {
       id: `meal-strengthen-recall-${input.frame.id}-unresolved`,

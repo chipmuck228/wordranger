@@ -99,6 +99,10 @@ The resolver binds one runtime frame at a time. It returns only lexemes
 that have a binding for that frame. `frameId` is the frame being
 resolved, never `frameBindings[0]`.
 
+The validator also requires that the bound runtime entity's
+`lexemeSenseBindings` contain `fixtureSense`. A matching entity ID
+without that sense is `CONTENT_ENTITY_SENSE_BINDING_MISMATCH`.
+
 TypeScript types are not enough. Authored JSON must pass the runtime
 validator.
 
@@ -107,7 +111,13 @@ validator.
 `createContextualLexicalBuildPlan` / `createContextualLexicalStrengthenPlan`
 read `skeletonId`, `activeGoalId`, plan ID namespace, and guided
 rationales from resolved content and the current frame. They do not
-import Meal fixtures.
+import Meal fixtures. They use the already-resolved `lexeme.entityId`
+and contrast / fact entity IDs. They do not look entities up again by
+`fixtureSense`. If a resolved ID is not on the current frame, the
+factory returns an empty plan.
+
+Same-skeleton remapping (home-breakfast snapshot → restaurant / picnic)
+belongs in the Meal wrapper, not the generic factory.
 
 Meal-specific values such as `EATER_CAN_EAT_FOOD` and `planIdNamespace:
 "meal"` live in the Meal pack or Meal wrappers. Presentation roles are

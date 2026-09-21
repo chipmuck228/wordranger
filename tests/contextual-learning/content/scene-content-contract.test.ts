@@ -109,6 +109,26 @@ describe("Scene Content Contract schema", () => {
     };
     expect(issuesOf(unknownEntity)).toContain(SceneContentErrorCode.CONTENT_ENTITY_NOT_IN_FRAME);
 
+    const senseMismatchFrame = structuredClone(homeBreakfastFrame);
+    const soupEntity = senseMismatchFrame.entityBindings.find(
+      (entity) => entity.entityId === "home-soup",
+    );
+    expect(soupEntity).toBeDefined();
+    if (soupEntity) {
+      soupEntity.lexemeSenseBindings = [];
+    }
+    const senseMismatch = validateSceneContent({
+      pack: MEAL_SCENE_CONTENT_PACK,
+      ...authorities,
+      frame: senseMismatchFrame,
+    });
+    expect(senseMismatch.ok).toBe(false);
+    if (!senseMismatch.ok) {
+      expect(senseMismatch.issues.map((item) => item.code)).toContain(
+        SceneContentErrorCode.CONTENT_ENTITY_SENSE_BINDING_MISMATCH,
+      );
+    }
+
     const unknownRole = cloneMealPack();
     unknownRole.lexemes[0] = {
       ...unknownRole.lexemes[0]!,

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
+import {
+  homeBreakfastFrame,
+  restaurantMealFrame,
+} from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_SENSE, MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
 import { MEAL_SUPPORTS } from "@/contextual-learning/candidate-v0/fixtures/meal/supports";
@@ -94,6 +97,19 @@ describe("Meal lexical BUILD plan factory", () => {
         new RegExp(`\\b${identity!.canonicalKey}\\b`, "i"),
       );
     }
+  });
+
+  it("projects the home-breakfast snapshot onto a restaurant frame", () => {
+    const identity = identityForFixtureSense(MEAL_SENSE.soup);
+    expect(identity).not.toBeNull();
+    const plan = createMealLexicalBuildPlan({
+      frame: restaurantMealFrame,
+      profile: identity!,
+    });
+    expect(plan.mode).toBe("BUILD");
+    expect(plan.steps).toHaveLength(6);
+    expect(JSON.stringify(plan)).toContain("rest-soup");
+    expect(JSON.stringify(plan)).not.toContain("home-soup");
   });
 
   it("fails closed for an unknown requested target", () => {

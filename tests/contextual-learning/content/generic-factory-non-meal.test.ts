@@ -243,5 +243,78 @@ describe("generic lexical factory is not Meal-locked", () => {
       : null).toMatchObject({
       rationale: "Show the current entity.",
     });
+    const teach = plan.steps[2];
+    expect(teach && "presentation" in teach ? teach.presentation.presentedEntityIds : null).toEqual([
+      "desk-pen",
+    ]);
+  });
+
+  it("uses the resolved lexeme.entityId instead of looking the sense up again", () => {
+    const resolved = resolveSceneContent({
+      pack,
+      frame,
+      skeleton,
+      cluster,
+      loadLexeme,
+    });
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    const decoyFirst: typeof frame = {
+      ...frame,
+      entityBindings: [
+        {
+          entityId: "desk-decoy-pen",
+          roleId: "OBJECT",
+          label: "Decoy",
+          conceptIds: [],
+          lexemeSenseBindings: [{ sense: TARGET, bindingKind: "NAMES_ENTITY" }],
+        },
+        ...frame.entityBindings,
+      ],
+    };
+    const plan = createContextualLexicalBuildPlan({
+      frame: decoyFirst,
+      content: resolved.content,
+      target: TARGET,
+      stepIdPrefix: "desk",
+    });
+    const teach = plan.steps[2];
+    expect(teach && "presentation" in teach ? teach.presentation.presentedEntityIds : null).toEqual([
+      "desk-pen",
+    ]);
+    expect(JSON.stringify(plan)).not.toContain("desk-decoy-pen");
+  });
+
+  it("returns an empty plan when the resolved entityId is not on the frame", () => {
+    const resolved = resolveSceneContent({
+      pack,
+      frame,
+      skeleton,
+      cluster,
+      loadLexeme,
+    });
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    const otherFrame: typeof frame = {
+      ...frame,
+      id: "desk-other-v0",
+      entityBindings: frame.entityBindings.map((entity) =>
+        entity.entityId === "desk-pen"
+          ? { ...entity, entityId: "desk-other-pen" }
+          : entity,
+      ),
+    };
+    const plan = createContextualLexicalBuildPlan({
+      frame: otherFrame,
+      content: resolved.content,
+      target: TARGET,
+      stepIdPrefix: "desk",
+    });
+    expect(plan.targets).toEqual([]);
+    expect(plan.steps).toEqual([]);
   });
 });

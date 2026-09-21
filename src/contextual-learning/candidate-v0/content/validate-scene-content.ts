@@ -188,9 +188,23 @@ export function validateSceneContent(input: {
         }
         tokens.add(lexeme.membership.presentationToken);
       }
-      if (!runtime.entityBindings.some((item) => item.entityId === binding.entityId)) {
+      const runtimeEntity = runtime.entityBindings.find(
+        (item) => item.entityId === binding.entityId,
+      );
+      if (!runtimeEntity) {
         issues.push(
           issue(SceneContentErrorCode.CONTENT_ENTITY_NOT_IN_FRAME, `${bindingPath}.entityId`),
+        );
+      } else if (
+        !runtimeEntity.lexemeSenseBindings?.some((item) =>
+          sameLexemeSense(item.sense, lexeme.fixtureSense),
+        )
+      ) {
+        issues.push(
+          issue(
+            SceneContentErrorCode.CONTENT_ENTITY_SENSE_BINDING_MISMATCH,
+            `${bindingPath}.fixtureSense`,
+          ),
         );
       }
       if (!skeleton.roleDefinitions.some((role) => role.id === binding.roleId)) {
