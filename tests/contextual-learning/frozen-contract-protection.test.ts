@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "./content/helpers";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { compileExperienceStep } from "@/contextual-learning/candidate-v0/compilation/compile-experience-step";
@@ -100,7 +101,7 @@ describe("Candidate V0 frozen-contract protection", () => {
   });
 
   it("emits a frozen PublicLearningTask only when a semantic projection exists", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const recall = plan.steps.find((step) => step.purpose === "RECALL");
     expect(recall && isAssessableExperienceStep(recall)).toBe(true);
     if (!recall || !isAssessableExperienceStep(recall)) {

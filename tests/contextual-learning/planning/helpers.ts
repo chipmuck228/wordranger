@@ -5,6 +5,7 @@ import { BORROW_SENSE } from "@/contextual-learning/candidate-v0/fixtures/borrow
 import { SCHOOL_SENSE } from "@/contextual-learning/candidate-v0/fixtures/school-challenge/knowledge";
 import type { CognitiveMode } from "@/contextual-learning/candidate-v0/domain/types";
 import type { ExperiencePlanningInput } from "@/contextual-learning/candidate-v0/planning";
+import { mealTestLexemeLoader } from "../content/helpers";
 
 export const TYPING_CAPABILITY = FROZEN_RUNTIME_CAPABILITIES.find(
   (capability) => capability.id === "frozen-text-input:TYPE",
@@ -81,5 +82,6 @@ export function mealInput(
     mode,
     targets: [spoonTarget()],
     runtimeCapabilities: capabilities,
+    loadLexeme: mealTestLexemeLoader,
   };
 }

@@ -25,6 +25,7 @@ export type {
   ResolvedContextualSceneContent,
   ResolvedContextualSceneLexeme,
   SceneContentRegistryStatus,
+  SceneLexemeLoader,
 } from "./types";
 export {
   MEAL_SCENE_CONTENT_PACK,

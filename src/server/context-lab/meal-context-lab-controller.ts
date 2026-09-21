@@ -47,6 +47,7 @@ import {
   planExperience,
   type ExperiencePlanningInput,
 } from "@/contextual-learning/candidate-v0/planning";
+import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import {
   findPlannerFrame,
   findPlannerSkeleton,
@@ -1577,6 +1578,7 @@ export function mealBuildPlanningInput(
       targets: [],
       allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
       runtimeCapabilities: runtime,
+      loadLexeme: bundledSceneLexemeLoader,
     };
   }
   return {
@@ -1591,6 +1593,7 @@ export function mealBuildPlanningInput(
     ],
     allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
     runtimeCapabilities: runtime,
+    loadLexeme: bundledSceneLexemeLoader,
   };
 }
 
@@ -1613,6 +1616,7 @@ export function mealStrengthenPlanningInput(
       targets: [],
       allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
       runtimeCapabilities: runtime,
+      loadLexeme: bundledSceneLexemeLoader,
     };
   }
   return {
@@ -1627,6 +1631,7 @@ export function mealStrengthenPlanningInput(
     ],
     allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
     runtimeCapabilities: runtime,
+    loadLexeme: bundledSceneLexemeLoader,
   };
 }
 

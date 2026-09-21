@@ -3,6 +3,7 @@
  * Planner contracts. Mode is supplied; learner state is not read.
  */
 
+import type { SceneLexemeLoader } from "../content/types";
 import type { ContextualMemoryRoutingDecision } from "../memory-routing/types";
 import type {
   CognitiveMode,
@@ -32,6 +33,16 @@ export interface ExperiencePlanningInput {
    * UNRESOLVED fails closed. Omitted keeps the existing happy path.
    */
   memoryRoutingDecision?: ContextualMemoryRoutingDecision;
+  /**
+   * Injected bundled-vocabulary loader. Candidate never imports server
+   * runtime. Meal Home/Restaurant resolve requires this.
+   */
+  loadLexeme?: SceneLexemeLoader;
+}
+
+export interface PlanVariantRequest {
+  targets?: readonly ExperienceTarget[];
+  loadLexeme?: SceneLexemeLoader;
 }
 
 export type PlanExecutability =
@@ -88,5 +99,5 @@ export interface ExperiencePlanVariant {
   containsGuidedSteps: boolean;
   containsAssessableSteps: boolean;
   reviewStatus: "REVIEWED";
-  createPlan: (request?: { targets?: readonly ExperienceTarget[] }) => LearningExperiencePlan;
+  createPlan: (request?: PlanVariantRequest) => LearningExperiencePlan;
 }

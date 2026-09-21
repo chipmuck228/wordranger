@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "../content/helpers";
 import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
 import {
   ExecutionErrorCode,
@@ -154,7 +155,7 @@ function expectStepNotStillIssued(run: ExperienceRun, taskId: string) {
 
 describe("Candidate V0 experience execution — creation", () => {
   it("creates a READY run whose stepRuns follow the plan", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const run = expectReadyRun(plan);
     expect(run.experienceId).toBe(plan.id);
     expect(run.planSnapshot.plan.steps).toHaveLength(plan.steps.length);
@@ -225,7 +226,7 @@ describe("Candidate V0 experience execution — guided snapshot invariants", () 
   function smuggledGuidedPlan(
     mutate: (step: Record<string, unknown>) => void,
   ): LearningExperiencePlan {
-    const base = createMealBuildPlan(homeBreakfastFrame);
+    const base = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const step = { ...(base.steps[0] as object) } as Record<string, unknown>;
     mutate(step);
     return {
@@ -756,7 +757,7 @@ describe("Candidate V0 experience execution — immutability", () => {
 
 describe("Candidate V0 experience execution — Meal guided then recall", () => {
   it("acknowledges five guided steps then issues one frozen recall", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     let run = expectReadyRun(plan);
     expect(plan.steps).toHaveLength(6);
 
@@ -841,7 +842,7 @@ describe("Candidate V0 experience execution — receipt kind isolation", () => {
       ExecutionErrorCode.EXEC_RECEIPT_KIND_MISMATCH,
     );
 
-    const meal = expectReadyRun(createMealBuildPlan(homeBreakfastFrame));
+    const meal = expectReadyRun(createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader }));
     const guided = issueCurrentStep({ run: meal, now });
     expect(guided.ok).toBe(true);
     if (!guided.ok) {

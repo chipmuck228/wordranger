@@ -21,6 +21,7 @@ import { compileExperienceStep } from "@/contextual-learning/candidate-v0/compil
 import { profileMap, supportMap } from "@/contextual-learning/candidate-v0/fixtures/shared";
 import { FROZEN_RUNTIME_CAPABILITIES } from "@/contextual-learning/candidate-v0/capabilities/capability-registry";
 import { compilationRequest } from "../helpers";
+import { mealTestLexemeLoader } from "../content/helpers";
 import { planExperience } from "@/contextual-learning/candidate-v0/planning";
 import { mealInput, TYPING_CAPABILITY } from "../planning/helpers";
 import { MEAL_BUILD_SCENE_BINDINGS } from "@/contextual-learning/candidate-v0/build/meal-lexical-build-profiles";
@@ -37,6 +38,7 @@ describe("Meal lexical BUILD plan factory", () => {
     const plan = createMealLexicalBuildPlan({
       frame: homeBreakfastFrame,
       profile: identity!,
+      loadLexeme: mealTestLexemeLoader,
     });
     expect(plan.mode).toBe("BUILD");
     expect(plan.targets.some((target) => target.sense.senseId === sense.senseId)).toBe(
@@ -106,6 +108,7 @@ describe("Meal lexical BUILD plan factory", () => {
     const plan = createMealLexicalBuildPlan({
       frame: restaurantMealFrame,
       profile: identity!,
+      loadLexeme: mealTestLexemeLoader,
     });
     expect(plan.mode).toBe("BUILD");
     expect(plan.steps).toHaveLength(6);
@@ -122,6 +125,7 @@ describe("Meal lexical BUILD plan factory", () => {
     const plan = createMealLexicalBuildPlan({
       frame: picnicLunchFrame,
       profile: identity!,
+      loadLexeme: mealTestLexemeLoader,
     });
     expect(plan.mode).toBe("BUILD");
     expect(plan.steps).toHaveLength(6);
@@ -165,6 +169,7 @@ describe("Meal lexical BUILD plan factory", () => {
       const plan = createMealLexicalBuildPlan({
         frame,
         profile: identity!,
+        loadLexeme: mealTestLexemeLoader,
       });
       expect(plan.targets).toEqual([]);
       expect(plan.steps).toEqual([]);
@@ -173,6 +178,7 @@ describe("Meal lexical BUILD plan factory", () => {
 
   it("fails closed for an unknown requested target", () => {
     const plan = createMealBuildPlan(homeBreakfastFrame, {
+      loadLexeme: mealTestLexemeLoader,
       targets: [
         {
           id: "target-unknown",
@@ -202,5 +208,58 @@ describe("Meal lexical BUILD plan factory", () => {
         identityForFixtureSense(sense)!.stepToken,
       );
     }
+  });
+
+  it("returns an unresolved plan when the authored frame has no injected loader", () => {
+    const identity = identityForFixtureSense(MEAL_SENSE.soup);
+    expect(identity).not.toBeNull();
+    const plan = createMealLexicalBuildPlan({
+      frame: homeBreakfastFrame,
+      profile: identity!,
+    });
+    expect(plan.targets).toEqual([]);
+    expect(plan.steps).toEqual([]);
+  });
+
+  it("returns an unresolved plan when the loader cannot find the lexeme", () => {
+    const identity = identityForFixtureSense(MEAL_SENSE.soup);
+    expect(identity).not.toBeNull();
+    const plan = createMealLexicalBuildPlan({
+      frame: homeBreakfastFrame,
+      profile: identity!,
+      loadLexeme: () => null,
+    });
+    expect(plan.targets).toEqual([]);
+    expect(plan.steps).toEqual([]);
+  });
+
+  it("returns an unresolved plan when the loader id does not match the pack target", () => {
+    const identity = identityForFixtureSense(MEAL_SENSE.soup);
+    expect(identity).not.toBeNull();
+    const plan = createMealLexicalBuildPlan({
+      frame: homeBreakfastFrame,
+      profile: identity!,
+      loadLexeme: (canonicalKey) => {
+        const bundled = mealTestLexemeLoader(canonicalKey);
+        return bundled ? { ...bundled, id: "lex-not-the-pack-target" } : null;
+      },
+    });
+    expect(plan.targets).toEqual([]);
+    expect(plan.steps).toEqual([]);
+  });
+
+  it("still plans when bundled IPA is missing and does not invent one", () => {
+    const identity = identityForFixtureSense(MEAL_SENSE.soup);
+    expect(identity).not.toBeNull();
+    const plan = createMealLexicalBuildPlan({
+      frame: homeBreakfastFrame,
+      profile: identity!,
+      loadLexeme: (canonicalKey) => {
+        const bundled = mealTestLexemeLoader(canonicalKey);
+        return bundled ? { ...bundled, ipa: [] } : null;
+      },
+    });
+    expect(plan.steps).toHaveLength(6);
+    expect(JSON.stringify(plan)).not.toMatch(/\/suːp\/|\/bəʊl\/|\/spuːn\/|\/fɔːk\//);
   });
 });

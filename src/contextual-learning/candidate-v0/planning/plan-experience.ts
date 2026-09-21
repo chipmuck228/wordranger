@@ -435,7 +435,12 @@ function evaluateVariant(
     };
   }
 
-  const plan = cloneValue(variant.createPlan({ targets: input.targets }));
+  const plan = cloneValue(
+    variant.createPlan({
+      targets: input.targets,
+      loadLexeme: input.loadLexeme,
+    }),
+  );
   plan.sourceLearningNeedRef = input.learningNeedRef.trim();
   const targetMatch = matchRequestedTargetsToPlan({
     variantId: variant.id,

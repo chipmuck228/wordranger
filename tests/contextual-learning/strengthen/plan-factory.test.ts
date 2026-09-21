@@ -11,6 +11,7 @@ import {
 import { identityForFixtureSense } from "@/contextual-learning/candidate-v0/strengthen/meal-lexical-profiles";
 import { isGuidedExperienceStep } from "@/contextual-learning/candidate-v0/domain/types";
 import { planExperience } from "@/contextual-learning/candidate-v0/planning";
+import { mealTestLexemeLoader } from "../content/helpers";
 import { mealInput, TYPING_CAPABILITY } from "../planning/helpers";
 
 const SENSES = [MEAL_SENSE.soup, MEAL_SENSE.bowl, MEAL_SENSE.spoon, MEAL_SENSE.fork] as const;
@@ -22,6 +23,7 @@ describe("Meal active-recall STRENGTHEN plan factory", () => {
     const plan = createMealActiveRecallStrengthenPlan({
       frame: homeBreakfastFrame,
       profile: identity!,
+      loadLexeme: mealTestLexemeLoader,
     });
     expect(plan.mode).toBe("STRENGTHEN");
     expect(plan.targets[0]?.sense).toEqual(sense);
@@ -51,6 +53,7 @@ describe("Meal active-recall STRENGTHEN plan factory", () => {
     const plan = createMealActiveRecallStrengthenPlan({
       frame: restaurantMealFrame,
       profile: identity!,
+      loadLexeme: mealTestLexemeLoader,
     });
     expect(plan.mode).toBe("STRENGTHEN");
     expect(plan.steps).toHaveLength(3);
@@ -66,6 +69,7 @@ describe("Meal active-recall STRENGTHEN plan factory", () => {
     const missing = createMealActiveRecallStrengthenPlan({
       frame: { ...restaurantMealFrame, initialFacts: [] },
       profile: identity!,
+      loadLexeme: mealTestLexemeLoader,
     });
     const reversed = createMealActiveRecallStrengthenPlan({
       frame: {
@@ -77,6 +81,7 @@ describe("Meal active-recall STRENGTHEN plan factory", () => {
         ),
       },
       profile: identity!,
+      loadLexeme: mealTestLexemeLoader,
     });
     expect(missing.steps).toEqual([]);
     expect(reversed.steps).toEqual([]);
@@ -84,6 +89,7 @@ describe("Meal active-recall STRENGTHEN plan factory", () => {
 
   it("fails closed when the requested target is missing", () => {
     const plan = createMealRecallStrengthenPlan(homeBreakfastFrame, {
+      loadLexeme: mealTestLexemeLoader,
       targets: [
         {
           id: "target-unknown",

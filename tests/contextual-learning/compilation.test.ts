@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "./content/helpers";
 import { compileExperienceStep } from "@/contextual-learning/candidate-v0/compilation/compile-experience-step";
 import { findSemanticProjection } from "@/contextual-learning/candidate-v0/compilation/semantic-projection";
 import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
@@ -136,7 +137,7 @@ describe("Candidate V0 compilation contract", () => {
   });
 
   it("compiles meal RECALL through the lexical-form whitelist and frozen evaluator", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const step = expectAssessable(
       plan.steps.find((item) => item.purpose === "RECALL"),
     );

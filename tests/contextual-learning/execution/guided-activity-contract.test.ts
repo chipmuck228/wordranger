@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "../content/helpers";
 import {
   createPublicGuidedActivity,
   guidedActivityId,
@@ -9,7 +10,7 @@ import { isGuidedExperienceStep } from "@/contextual-learning/candidate-v0/domai
 
 describe("Candidate V0 guided activity contract", () => {
   it("omits answerKey, targetSkill, and taskType from the public activity", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const step = plan.steps[0];
     expect(isGuidedExperienceStep(step)).toBe(true);
     if (!isGuidedExperienceStep(step)) {

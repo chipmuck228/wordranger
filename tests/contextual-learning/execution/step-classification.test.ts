@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "../content/helpers";
 import { classifyExperienceStep } from "@/contextual-learning/candidate-v0/execution";
 import { createSafeLexicalRecallPlan } from "@/contextual-learning/candidate-v0/fixtures/execution/safe-lexical-recall";
 import { classroomRulerFrame } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/contexts";
@@ -32,7 +33,7 @@ describe("Candidate V0 step execution classification", () => {
   });
 
   it("classifies explicit meal presentation as GUIDED_ACTIVITY", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const classification = classifyExperienceStep({
       step: plan.steps[0]!,
       resolvedTargets: [],

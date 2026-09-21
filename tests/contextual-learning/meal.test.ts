@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "./content/helpers";
 import { MEAL_FRAMES, homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
 import { isAssessableExperienceStep } from "@/contextual-learning/candidate-v0/domain/types";
@@ -32,7 +33,7 @@ describe("Candidate V0 meal case", () => {
   });
 
   it("ends the BUILD plan with reduced-support RECALL", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const last = plan.steps[plan.steps.length - 1];
     expect(isAssessableExperienceStep(last)).toBe(true);
     if (!isAssessableExperienceStep(last)) {

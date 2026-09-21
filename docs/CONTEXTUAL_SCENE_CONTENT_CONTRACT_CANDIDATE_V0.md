@@ -144,10 +144,13 @@ caller’s runtime frame is missing, reversed, or redirected.
 
 Home Breakfast and Restaurant Meal are authored frames in the Meal
 pack. The Meal wrapper calls `resolveSceneContent` against the real
-runtime frame and injects `bundledSceneLexemeLoader`. Display form,
-Chinese meaning, and IPA come only from bundled vocabulary. The wrapper
-does not keep a local Meal vocab table. If that frame is authored and
-resolve fails, planning returns an empty plan. It does not fall back to
+runtime frame. Display form, Chinese meaning, and IPA come only from an
+injected `SceneLexemeLoader`. Candidate code never imports
+`@/server/**`. The Context Lab server adapter constructs
+`bundledSceneLexemeLoader` and passes it into `planExperience`. The
+wrapper does not keep a local Meal vocab table. If that frame is
+authored and resolve fails, or the loader is missing, planning returns
+an empty plan. It does not fall back to
 `snapshotSceneContentFromPack`. `projectResolvedMealContentOntoFrame`
 remains only as Picnic compatibility. That projection rematches
 destination facts by predicate and ordered arguments and takes the

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "./content/helpers";
 import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
 import { listFrozenRuntimeCapabilities } from "@/contextual-learning/candidate-v0/capabilities/capability-registry";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
@@ -153,7 +154,7 @@ describe("Candidate V0 schema validators", () => {
   });
 
   it("rejects a guided step that smuggles an answer spec", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const guided = plan.steps[0];
     Object.assign(guided, {
       expectedResponse: {
@@ -178,7 +179,7 @@ describe("Candidate V0 schema validators", () => {
   });
 
   it("rejects a RECALL prompt that leaks the target form", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const recall = plan.steps.find((step) => step.purpose === "RECALL");
     expect(recall && isAssessableExperienceStep(recall)).toBe(true);
     if (!recall || !isAssessableExperienceStep(recall)) {

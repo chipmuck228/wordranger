@@ -8,12 +8,12 @@ import { HOME_BREAKFAST_FRAME_ID } from "../../content/packs/meal/meal-scene-con
 import { MEAL_SCENE_CONTENT_PACK } from "../../content/packs/meal/meal-scene-content";
 import { resolveSceneContent } from "../../content/resolve-scene-content";
 import { snapshotSceneContentFromPack } from "../../content/snapshot-from-pack";
+import type { SceneLexemeLoader } from "../../content/types";
 import { MEAL_SCENE_CLUSTER } from "../../memory-routing/scene-catalog";
 import {
   createContextualLexicalBuildPlan,
   createContextualLexicalStrengthenPlan,
 } from "../../planning/create-contextual-lexical-plans";
-import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import { MEAL_FRAMES } from "./contexts";
 import { projectResolvedMealContentOntoFrame } from "./project-resolved-onto-frame";
 import {
@@ -163,20 +163,26 @@ function mealAssessableStrengthenSteps(prefix: string): ExperienceStepSpec[] {
   ];
 }
 
-function mealContentForFrame(frame: ContextFrame) {
-  const resolved = resolveSceneContent({
-    pack: MEAL_SCENE_CONTENT_PACK,
-    frame,
-    frames: MEAL_FRAMES,
-    skeleton: mealSkeleton,
-    cluster: MEAL_SCENE_CLUSTER,
-    loadLexeme: bundledSceneLexemeLoader,
-  });
-  if (resolved.ok) {
-    return resolved.content;
-  }
-  if (MEAL_SCENE_CONTENT_PACK.frames.some((item) => item.frameId === frame.id)) {
-    return null;
+function mealContentForFrame(
+  frame: ContextFrame,
+  loadLexeme?: SceneLexemeLoader,
+) {
+  const authored = MEAL_SCENE_CONTENT_PACK.frames.some(
+    (item) => item.frameId === frame.id,
+  );
+  if (authored) {
+    if (!loadLexeme) {
+      return null;
+    }
+    const resolved = resolveSceneContent({
+      pack: MEAL_SCENE_CONTENT_PACK,
+      frame,
+      frames: MEAL_FRAMES,
+      skeleton: mealSkeleton,
+      cluster: MEAL_SCENE_CLUSTER,
+      loadLexeme,
+    });
+    return resolved.ok ? resolved.content : null;
   }
   const homeCatalog = snapshotSceneContentFromPack(
     MEAL_SCENE_CONTENT_PACK,
@@ -206,8 +212,9 @@ function emptyMealBuildPlan(frame: ContextFrame): LearningExperiencePlan {
 export function createMealLexicalBuildPlan(input: {
   frame: ContextFrame;
   profile: MealLexicalStrengthenIdentity;
+  loadLexeme?: SceneLexemeLoader;
 }): LearningExperiencePlan {
-  const content = mealContentForFrame(input.frame);
+  const content = mealContentForFrame(input.frame, input.loadLexeme);
   if (!content) {
     return emptyMealBuildPlan(input.frame);
   }
@@ -221,23 +228,28 @@ export function createMealLexicalBuildPlan(input: {
 
 export function createMealBuildPlan(
   frame: ContextFrame,
-  request?: { targets?: readonly ExperienceTarget[] },
+  request?: { targets?: readonly ExperienceTarget[]; loadLexeme?: SceneLexemeLoader },
 ): LearningExperiencePlan {
   const requested = request?.targets?.[0]?.sense;
   const identity = requested
     ? identityForFixtureSense(requested) ?? identityForBundledTarget(requested)
     : identityForFixtureSense(MEAL_SENSE.spoon);
-  if (!identity || (request && (request.targets?.length ?? 0) !== 1)) {
+  if (!identity || (request && request.targets && request.targets.length !== 1)) {
     return emptyMealBuildPlan(frame);
   }
-  return createMealLexicalBuildPlan({ frame, profile: identity });
+  return createMealLexicalBuildPlan({
+    frame,
+    profile: identity,
+    loadLexeme: request?.loadLexeme,
+  });
 }
 
 export function createMealActiveRecallStrengthenPlan(input: {
   frame: ContextFrame;
   profile: MealLexicalStrengthenIdentity;
+  loadLexeme?: SceneLexemeLoader;
 }): LearningExperiencePlan {
-  const content = mealContentForFrame(input.frame);
+  const content = mealContentForFrame(input.frame, input.loadLexeme);
   if (!content) {
     return {
       id: `meal-strengthen-recall-${input.frame.id}-unresolved`,
@@ -263,7 +275,7 @@ export function createMealActiveRecallStrengthenPlan(input: {
 
 export function createMealRecallStrengthenPlan(
   frame: ContextFrame,
-  request?: { targets?: readonly ExperienceTarget[] },
+  request?: { targets?: readonly ExperienceTarget[]; loadLexeme?: SceneLexemeLoader },
 ): LearningExperiencePlan {
   const requested = request?.targets?.[0]?.sense;
   const identity = requested ? identityForFixtureSense(requested) : null;
@@ -282,7 +294,11 @@ export function createMealRecallStrengthenPlan(
       provenance: FIXTURE_PROVENANCE,
     };
   }
-  return createMealActiveRecallStrengthenPlan({ frame, profile: identity });
+  return createMealActiveRecallStrengthenPlan({
+    frame,
+    profile: identity,
+    loadLexeme: request?.loadLexeme,
+  });
 }
 
 export function createMealStrengthenPlan(

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "./content/helpers";
 import { compileExperienceStep } from "@/contextual-learning/candidate-v0/compilation/compile-experience-step";
 import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
 import { sameLexemeSense } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
@@ -27,7 +28,7 @@ describe("Candidate V0 full-sense identity", () => {
   });
 
   it("fails compilation when expected senseId matches a target but lexemeId differs", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const step: AssessableExperienceStepSpec = assessable({
       id: "mismatched-lexeme",
       purpose: "RECALL",

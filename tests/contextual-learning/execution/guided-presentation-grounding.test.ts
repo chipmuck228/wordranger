@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "../content/helpers";
 import {
   ExecutionErrorCode,
   applyExperienceCommand,
@@ -113,7 +114,7 @@ function expectGroundingFailure(
 describe("Guided presentation grounding Candidate V0", () => {
   it("issues a valid Meal Guided Activity grounded in soup/spoon and suitable_for", () => {
     for (const frame of [homeBreakfastFrame, picnicLunchFrame, restaurantMealFrame]) {
-      const plan = createMealBuildPlan(frame);
+      const plan = createMealBuildPlan(frame, { loadLexeme: mealTestLexemeLoader });
       const run = expectReadyRun(plan, frame, mealSkeleton);
       const present = issueCurrentStep({ run });
       expect(present.ok).toBe(true);
@@ -156,7 +157,7 @@ describe("Guided presentation grounding Candidate V0", () => {
   });
 
   it("fails closed for an unknown presentedEntityId without stripping or issuing", () => {
-    const plan = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame), 0, {
+    const plan = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader }), 0, {
       instruction: "Look at a ghost entity.",
       presentedEntityIds: ["ghost-entity"],
     });
@@ -171,7 +172,7 @@ describe("Guided presentation grounding Candidate V0", () => {
   });
 
   it("fails closed for an unknown presentedFactPredicate without stripping or issuing", () => {
-    const plan = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame), 1, {
+    const plan = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader }), 1, {
       instruction: "Notice a made-up relation.",
       presentedEntityIds: [`${HOME_PREFIX}-spoon`, `${HOME_PREFIX}-soup`],
       presentedFactPredicates: ["imaginary_relation"],
@@ -201,7 +202,7 @@ describe("Guided presentation grounding Candidate V0", () => {
   it("accepts multiple references only when every reference is grounded", () => {
     const valid = issueCurrentStep({
       run: expectReadyRun(
-        createMealBuildPlan(homeBreakfastFrame),
+        createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader }),
         homeBreakfastFrame,
         mealSkeleton,
       ),
@@ -212,7 +213,7 @@ describe("Guided presentation grounding Candidate V0", () => {
     }
     expect(valid.issuedActivity?.presentedEntityIds).toHaveLength(4);
 
-    const mixed = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame), 0, {
+    const mixed = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader }), 0, {
       instruction: "One unknown entity among valid ones.",
       presentedEntityIds: [
         `${HOME_PREFIX}-soup`,
@@ -230,7 +231,7 @@ describe("Guided presentation grounding Candidate V0", () => {
   });
 
   it("does not advance the experience after a grounding failure", () => {
-    const plan = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame), 0, {
+    const plan = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader }), 0, {
       instruction: "Ungrounded.",
       presentedEntityIds: ["missing-bowl"],
     });
@@ -340,7 +341,7 @@ describe("Guided presentation grounding Candidate V0", () => {
   });
 
   it("grounds against the frozen run snapshot, not a later mutated frame", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const snapshot = snapshotFor(plan, homeBreakfastFrame, mealSkeleton);
     const created = createExperienceRun({
       plan,
@@ -370,7 +371,7 @@ describe("Guided presentation grounding Candidate V0", () => {
   });
 
   it("does not infer identity from labels, prefixes, or serialized fact text", () => {
-    const labelAsId = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame), 0, {
+    const labelAsId = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader }), 0, {
       instruction: "Do not treat the label as an entity id.",
       presentedEntityIds: ["spoon"],
     });
@@ -382,7 +383,7 @@ describe("Guided presentation grounding Candidate V0", () => {
       "spoon",
     );
 
-    const prefixAsId = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame), 0, {
+    const prefixAsId = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader }), 0, {
       instruction: "Do not treat a prefix as an entity id.",
       presentedEntityIds: [HOME_PREFIX],
     });
@@ -395,7 +396,7 @@ describe("Guided presentation grounding Candidate V0", () => {
     );
 
     const substringPredicate = forgeGuidedPresentation(
-      createMealBuildPlan(homeBreakfastFrame),
+      createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader }),
       1,
       {
         instruction: "Do not substring-match predicates.",
@@ -425,7 +426,7 @@ describe("Guided presentation grounding Candidate V0", () => {
   });
 
   it("rejects a structurally forged plan at runtime even when TypeScript would allow it", () => {
-    const meal = createMealBuildPlan(homeBreakfastFrame);
+    const meal = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const forged = {
       ...meal,
       id: "forged-guided-unknown-entity",
@@ -461,7 +462,7 @@ describe("Guided presentation grounding Candidate V0", () => {
   });
 
   it("does not mutate a frozen ExperienceRun argument on grounding failure", () => {
-    const plan = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame), 0, {
+    const plan = forgeGuidedPresentation(createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader }), 0, {
       instruction: "Unknown.",
       presentedEntityIds: ["absent"],
     });

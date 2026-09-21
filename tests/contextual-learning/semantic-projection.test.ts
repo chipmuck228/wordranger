@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "./content/helpers";
 import { compileExperienceStep } from "@/contextual-learning/candidate-v0/compilation/compile-experience-step";
 import { findSemanticProjection } from "@/contextual-learning/candidate-v0/compilation/semantic-projection";
 import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
@@ -20,7 +21,7 @@ import {
 import { compilationRequest } from "./helpers";
 
 function compileMealVariant(step: AssessableExperienceStepSpec) {
-  const plan = createMealBuildPlan(homeBreakfastFrame);
+  const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
   return compileExperienceStep(
     compilationRequest({
       plan,

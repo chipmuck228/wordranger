@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "../content/helpers";
 import {
   ExecutionErrorCode,
   createExperienceRun,
@@ -78,7 +79,7 @@ function issueGuided(
 
 describe("Candidate V0 run-bound Guided Activity identity", () => {
   it("gives two runs of the same plan different activity IDs without using timestamps", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const step = plan.steps[0];
     expect(isGuidedExperienceStep(step)).toBe(true);
     if (!isGuidedExperienceStep(step)) {
@@ -107,7 +108,7 @@ describe("Candidate V0 run-bound Guided Activity identity", () => {
   });
 
   it("rejects a run-A receipt against run B and still accepts the valid run-B receipt", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const first = issueGuided(plan, homeBreakfastFrame, mealSkeleton, "run-a");
     const second = issueGuided(plan, homeBreakfastFrame, mealSkeleton, "run-b");
     const beforeIndex = second.run.currentStepIndex;
@@ -167,7 +168,7 @@ describe("Candidate V0 run-bound Guided Activity identity", () => {
   });
 
   it("ignores extra issue-time identity fields and still grounds against the snapshot", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const step = plan.steps[0];
     expect(isGuidedExperienceStep(step)).toBe(true);
     if (!isGuidedExperienceStep(step)) {
@@ -240,7 +241,7 @@ describe("Candidate V0 run-bound Guided Activity identity", () => {
       runId: string;
     }> = [
       {
-        plan: createMealBuildPlan(homeBreakfastFrame),
+        plan: createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader }),
         frame: homeBreakfastFrame,
         skeleton: mealSkeleton,
         runId: "run-meal",

@@ -660,7 +660,8 @@ describe("Scene Content multi-frame and safety", () => {
       "src/contextual-learning/candidate-v0/fixtures/meal/plans.ts",
       "utf8",
     );
-    expect(plans).toContain("bundledSceneLexemeLoader");
+    expect(plans).not.toContain("bundledSceneLexemeLoader");
+    expect(plans).toContain("SceneLexemeLoader");
     expect(plans).not.toContain("MEAL_SCENE_VOCAB");
     expect(plans).not.toContain("/suːp/");
     expect(plans).not.toContain("匙，调羹");

@@ -12,6 +12,12 @@ import type { SceneLexemeLoader } from "@/contextual-learning/candidate-v0/conte
 
 export const mealTestLexemeLoader: SceneLexemeLoader = bundledSceneLexemeLoader;
 
+export function withMealLoader<T extends object>(
+  request?: T,
+): T & { loadLexeme: SceneLexemeLoader } {
+  return { ...(request as T), loadLexeme: mealTestLexemeLoader };
+}
+
 export function cloneMealPack(): ContextualSceneContentPack {
   return structuredClone(MEAL_SCENE_CONTENT_PACK);
 }
