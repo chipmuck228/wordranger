@@ -287,6 +287,117 @@ describe("generic lexical factory is not Meal-locked", () => {
     expect(JSON.stringify(plan)).not.toContain("desk-decoy-pen");
   });
 
+  it("returns an empty plan when content.frame.frameId does not match the runtime frame", () => {
+    const resolved = resolveSceneContent({
+      pack,
+      frame,
+      skeleton,
+      cluster,
+      loadLexeme,
+    });
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    const sameEntitiesOtherId: typeof frame = {
+      ...frame,
+      id: "desk-other-v0",
+    };
+    const plan = createContextualLexicalBuildPlan({
+      frame: sameEntitiesOtherId,
+      content: resolved.content,
+      target: TARGET,
+      stepIdPrefix: "desk",
+    });
+    expect(plan.targets).toEqual([]);
+    expect(plan.steps).toEqual([]);
+  });
+
+  it("returns an empty plan when authored facts are missing or reversed on the runtime frame", () => {
+    const fact = {
+      id: "desk-fact-near-pen-paper",
+      predicate: "near",
+      arguments: [
+        { kind: "ENTITY" as const, entityId: "desk-pen" },
+        { kind: "ENTITY" as const, entityId: "desk-paper" },
+      ],
+      truth: true as const,
+    };
+    const framed: typeof frame = { ...frame, initialFacts: [fact] };
+    const packed: typeof pack = structuredClone(pack);
+    packed.frames[0] = {
+      ...packed.frames[0]!,
+      factIds: [fact.id],
+    };
+    packed.lexemes[0] = {
+      ...packed.lexemes[0]!,
+      grounding: {
+        frameFacts: [
+          {
+            frameId: frame.id,
+            facts: [
+              {
+                factId: fact.id,
+                predicate: "near",
+                args: [
+                  { kind: "ENTITY", entityId: "desk-pen" },
+                  { kind: "ENTITY", entityId: "desk-paper" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      build: {
+        ...packed.lexemes[0]!.build,
+        connectFactByFrame: [{ frameId: frame.id, factId: fact.id }],
+      },
+    };
+    const resolved = resolveSceneContent({
+      pack: packed,
+      frame: framed,
+      skeleton,
+      cluster,
+      loadLexeme,
+    });
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    const happy = createContextualLexicalBuildPlan({
+      frame: framed,
+      content: resolved.content,
+      target: TARGET,
+      stepIdPrefix: "desk",
+    });
+    expect(happy.steps).toHaveLength(6);
+
+    const missing = createContextualLexicalBuildPlan({
+      frame: { ...framed, initialFacts: [] },
+      content: resolved.content,
+      target: TARGET,
+      stepIdPrefix: "desk",
+    });
+    const reversed = createContextualLexicalBuildPlan({
+      frame: {
+        ...framed,
+        initialFacts: [
+          {
+            ...fact,
+            arguments: [...fact.arguments].reverse(),
+          },
+        ],
+      },
+      content: resolved.content,
+      target: TARGET,
+      stepIdPrefix: "desk",
+    });
+    expect(missing.targets).toEqual([]);
+    expect(missing.steps).toEqual([]);
+    expect(reversed.targets).toEqual([]);
+    expect(reversed.steps).toEqual([]);
+  });
+
   it("returns an empty plan when the resolved entityId is not on the frame", () => {
     const resolved = resolveSceneContent({
       pack,

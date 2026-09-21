@@ -60,6 +60,28 @@ describe("Meal active-recall STRENGTHEN plan factory", () => {
     expect(JSON.stringify(plan)).not.toContain("home-fact-");
   });
 
+  it("fails closed when restaurant initialFacts are missing or reversed", () => {
+    const identity = identityForFixtureSense(MEAL_SENSE.soup);
+    expect(identity).not.toBeNull();
+    const missing = createMealActiveRecallStrengthenPlan({
+      frame: { ...restaurantMealFrame, initialFacts: [] },
+      profile: identity!,
+    });
+    const reversed = createMealActiveRecallStrengthenPlan({
+      frame: {
+        ...restaurantMealFrame,
+        initialFacts: restaurantMealFrame.initialFacts.map((item) =>
+          item.id === "rest-fact-contains-bowl-soup"
+            ? { ...item, arguments: [...item.arguments].reverse() }
+            : item,
+        ),
+      },
+      profile: identity!,
+    });
+    expect(missing.steps).toEqual([]);
+    expect(reversed.steps).toEqual([]);
+  });
+
   it("fails closed when the requested target is missing", () => {
     const plan = createMealRecallStrengthenPlan(homeBreakfastFrame, {
       targets: [

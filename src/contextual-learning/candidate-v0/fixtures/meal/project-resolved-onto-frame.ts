@@ -1,7 +1,8 @@
 /**
  * Compatibility projection for Meal frames that are not yet authored
- * in the Scene Content pack (Picnic today). Home and Restaurant use
- * direct pack snapshot / resolveSceneContent instead.
+ * in the Scene Content pack (Picnic today). Home and Restaurant resolve
+ * the caller's real runtime frame and fail closed if that frame is
+ * invalid. They do not fall back to a pack snapshot.
  *
  * Meal-only remapping of a home-breakfast snapshot onto another
  * same-skeleton Meal frame. Generic plan factories must not do this

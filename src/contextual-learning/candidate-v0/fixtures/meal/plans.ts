@@ -6,12 +6,16 @@ import type {
 } from "../../domain/types";
 import { HOME_BREAKFAST_FRAME_ID } from "../../content/packs/meal/meal-scene-content";
 import { MEAL_SCENE_CONTENT_PACK } from "../../content/packs/meal/meal-scene-content";
+import { resolveSceneContent } from "../../content/resolve-scene-content";
 import { snapshotSceneContentFromPack } from "../../content/snapshot-from-pack";
+import { MEAL_SCENE_CLUSTER } from "../../memory-routing/scene-catalog";
 import {
   createContextualLexicalBuildPlan,
   createContextualLexicalStrengthenPlan,
 } from "../../planning/create-contextual-lexical-plans";
+import { MEAL_FRAMES } from "./contexts";
 import { projectResolvedMealContentOntoFrame } from "./project-resolved-onto-frame";
+import { mealSceneLexemeLoader } from "./scene-lexeme-loader";
 import {
   identityForBundledTarget,
   identityForFixtureSense,
@@ -30,7 +34,7 @@ import {
 } from "../shared";
 import { mealPrefixForFrame } from "./contexts";
 import { MEAL_SENSE } from "./knowledge";
-import { MEAL_SKELETON_ID } from "./skeleton";
+import { MEAL_SKELETON_ID, mealSkeleton } from "./skeleton";
 
 function spoonInterpretationTarget() {
   return {
@@ -160,9 +164,19 @@ function mealAssessableStrengthenSteps(prefix: string): ExperienceStepSpec[] {
 }
 
 function mealContentForFrame(frame: ContextFrame) {
-  const authored = snapshotSceneContentFromPack(MEAL_SCENE_CONTENT_PACK, frame.id);
-  if (authored) {
-    return authored;
+  const resolved = resolveSceneContent({
+    pack: MEAL_SCENE_CONTENT_PACK,
+    frame,
+    frames: MEAL_FRAMES,
+    skeleton: mealSkeleton,
+    cluster: MEAL_SCENE_CLUSTER,
+    loadLexeme: mealSceneLexemeLoader,
+  });
+  if (resolved.ok) {
+    return resolved.content;
+  }
+  if (MEAL_SCENE_CONTENT_PACK.frames.some((item) => item.frameId === frame.id)) {
+    return null;
   }
   const homeCatalog = snapshotSceneContentFromPack(
     MEAL_SCENE_CONTENT_PACK,

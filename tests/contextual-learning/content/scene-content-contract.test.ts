@@ -581,6 +581,35 @@ describe("Scene Content multi-frame and safety", () => {
     expect(JSON.stringify(resolvedRestaurant.content.lexemes)).not.toContain("home-fact-");
   });
 
+  it("does not plan from a restaurant snapshot when the runtime facts do not match", () => {
+    const snapshot = snapshotSceneContentFromPack(
+      MEAL_SCENE_CONTENT_PACK,
+      restaurantMealFrame.id,
+    );
+    expect(snapshot).not.toBeNull();
+    const missing = createContextualLexicalBuildPlan({
+      frame: { ...restaurantMealFrame, initialFacts: [] },
+      content: snapshot!,
+      target: MEAL_SENSE.soup,
+      stepIdPrefix: "rest",
+    });
+    const reversed = createContextualLexicalBuildPlan({
+      frame: {
+        ...restaurantMealFrame,
+        initialFacts: restaurantMealFrame.initialFacts.map((item) =>
+          item.id === "rest-fact-contains-bowl-soup"
+            ? { ...item, arguments: [...item.arguments].reverse() }
+            : item,
+        ),
+      },
+      content: snapshot!,
+      target: MEAL_SENSE.soup,
+      stepIdPrefix: "rest",
+    });
+    expect(missing.steps).toEqual([]);
+    expect(reversed.steps).toEqual([]);
+  });
+
   it("returns an immutable registry pack copy", () => {
     const first = getApprovedExperimentSceneContent(MEAL_SCENE_CONTENT_PACK.id);
     expect(first.ok).toBe(true);

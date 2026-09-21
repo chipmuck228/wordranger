@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   homeBreakfastFrame,
+  picnicLunchFrame,
   restaurantMealFrame,
 } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_SENSE, MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
@@ -114,6 +115,61 @@ describe("Meal lexical BUILD plan factory", () => {
     expect(JSON.stringify(plan)).not.toContain("home-soup");
     expect(JSON.stringify(plan)).not.toContain("home-fact-");
   });
+
+  it("still projects Picnic, which is not authored in the pack", () => {
+    const identity = identityForFixtureSense(MEAL_SENSE.soup);
+    expect(identity).not.toBeNull();
+    const plan = createMealLexicalBuildPlan({
+      frame: picnicLunchFrame,
+      profile: identity!,
+    });
+    expect(plan.mode).toBe("BUILD");
+    expect(plan.steps).toHaveLength(6);
+    expect(plan.contextFrameId).toBe(picnicLunchFrame.id);
+    expect(JSON.stringify(plan)).toContain("picnic-soup");
+    expect(JSON.stringify(plan)).not.toContain("home-soup");
+  });
+
+  it.each([
+    [
+      "missing initialFacts",
+      { ...restaurantMealFrame, initialFacts: [] as typeof restaurantMealFrame.initialFacts },
+    ],
+    [
+      "reversed contains arguments",
+      {
+        ...restaurantMealFrame,
+        initialFacts: restaurantMealFrame.initialFacts.map((item) =>
+          item.id === "rest-fact-contains-bowl-soup"
+            ? { ...item, arguments: [...item.arguments].reverse() }
+            : item,
+        ),
+      },
+    ],
+    [
+      "redirected contains predicate",
+      {
+        ...restaurantMealFrame,
+        initialFacts: restaurantMealFrame.initialFacts.map((item) =>
+          item.id === "rest-fact-contains-bowl-soup"
+            ? { ...item, predicate: "beside" }
+            : item,
+        ),
+      },
+    ],
+  ])(
+    "fails closed when the restaurant runtime frame has %s",
+    (_label, frame) => {
+      const identity = identityForFixtureSense(MEAL_SENSE.soup);
+      expect(identity).not.toBeNull();
+      const plan = createMealLexicalBuildPlan({
+        frame,
+        profile: identity!,
+      });
+      expect(plan.targets).toEqual([]);
+      expect(plan.steps).toEqual([]);
+    },
+  );
 
   it("fails closed for an unknown requested target", () => {
     const plan = createMealBuildPlan(homeBreakfastFrame, {

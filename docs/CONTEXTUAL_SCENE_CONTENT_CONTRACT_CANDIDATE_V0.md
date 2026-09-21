@@ -136,12 +136,20 @@ and contrast / fact entity IDs. They do not look entities up again by
 `fixtureSense`. If a resolved ID is not on the current frame, the
 factory returns an empty plan.
 
+The factory also requires `content.frame.frameId === frame.id`. Each
+authored fact must uniquely match `frame.initialFacts` by `factId`,
+then predicate and ordered arguments. Zero or more than one match
+fails closed. A snapshot or resolved catalog is not enough if the
+caller’s runtime frame is missing, reversed, or redirected.
+
 Home Breakfast and Restaurant Meal are authored frames in the Meal
-pack. The Meal wrapper snapshots / resolves the current frame directly.
-`projectResolvedMealContentOntoFrame` remains only as Picnic
-compatibility. That projection rematches destination facts by predicate
-and ordered arguments and takes the destination `factId`. Zero or
-multiple equivalent matches fail closed.
+pack. The Meal wrapper calls `resolveSceneContent` against the real
+runtime frame. If that frame is authored and resolve fails, planning
+returns an empty plan. It does not fall back to
+`snapshotSceneContentFromPack`. `projectResolvedMealContentOntoFrame`
+remains only as Picnic compatibility. That projection rematches
+destination facts by predicate and ordered arguments and takes the
+destination `factId`. Zero or multiple equivalent matches fail closed.
 
 Meal-specific values such as `EATER_CAN_EAT_FOOD` and `planIdNamespace:
 "meal"` live in the Meal pack or Meal wrappers. Presentation roles are

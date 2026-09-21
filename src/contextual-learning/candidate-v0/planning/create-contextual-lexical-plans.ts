@@ -3,8 +3,10 @@
  * They do not import Meal fixtures or recognize soup/bowl/spoon/fork.
  */
 
+import { sameAuthoredAndFrameFactArgs } from "../content/fact-args";
 import { findResolvedLexeme } from "../content/project-from-resolved";
 import type {
+  ResolvedContextualFact,
   ResolvedContextualSceneContent,
   ResolvedContextualSceneLexeme,
 } from "../content/types";
@@ -50,6 +52,76 @@ function allEntitiesOnFrame(
   return entityIds
     .filter((entityId): entityId is string => Boolean(entityId))
     .every((entityId) => frameHasEntity(frame, entityId));
+}
+
+function uniqueRuntimeFact(
+  frame: ContextFrame,
+  fact: Pick<ResolvedContextualFact, "factId" | "predicate" | "args">,
+): boolean {
+  const matches = frame.initialFacts.filter((item) => item.id === fact.factId);
+  if (matches.length !== 1) {
+    return false;
+  }
+  const matched = matches[0]!;
+  return (
+    matched.predicate === fact.predicate &&
+    sameAuthoredAndFrameFactArgs(fact.args, matched.arguments)
+  );
+}
+
+function sameAuthoredFact(
+  left: Pick<ResolvedContextualFact, "factId" | "predicate" | "args">,
+  right: Pick<ResolvedContextualFact, "factId" | "predicate" | "args">,
+): boolean {
+  return (
+    left.factId === right.factId &&
+    left.predicate === right.predicate &&
+    left.args.length === right.args.length &&
+    sameAuthoredAndFrameFactArgs(left.args, right.args)
+  );
+}
+
+function contentMatchesRuntimeFrame(
+  content: ResolvedContextualSceneContent,
+  frame: ContextFrame,
+): boolean {
+  if (content.frame.frameId !== frame.id) {
+    return false;
+  }
+  for (const factId of content.frame.factIds) {
+    const authored = content.lexemes
+      .flatMap((lexeme) => lexeme.groundingFacts)
+      .filter((fact) => fact.factId === factId);
+    if (authored.length === 0) {
+      if (frame.initialFacts.filter((item) => item.id === factId).length !== 1) {
+        return false;
+      }
+      continue;
+    }
+    const first = authored[0]!;
+    if (!authored.every((fact) => sameAuthoredFact(first, fact))) {
+      return false;
+    }
+    if (!uniqueRuntimeFact(frame, first)) {
+      return false;
+    }
+  }
+  for (const lexeme of content.lexemes) {
+    for (const fact of lexeme.groundingFacts) {
+      if (!uniqueRuntimeFact(frame, fact)) {
+        return false;
+      }
+    }
+    if (lexeme.build.connectFactId) {
+      const connect = lexeme.groundingFacts.filter(
+        (fact) => fact.factId === lexeme.build.connectFactId,
+      );
+      if (connect.length !== 1 || !uniqueRuntimeFact(frame, connect[0]!)) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 function requiredRelationIds(
@@ -100,8 +172,10 @@ function canPlan(
   return Boolean(
     lexeme &&
       enabled &&
+      input.content.frame.frameId === input.frame.id &&
       input.frame.skeletonId === input.content.skeletonId &&
-      frameHasEntity(input.frame, lexeme.entityId),
+      frameHasEntity(input.frame, lexeme.entityId) &&
+      contentMatchesRuntimeFrame(input.content, input.frame),
   );
 }
 
