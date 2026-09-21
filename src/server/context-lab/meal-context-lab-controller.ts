@@ -90,6 +90,10 @@ import {
 import { generateMealProbeTask } from "./generate-meal-probe-task";
 import { mealColdProbeTargets } from "./meal-probe-targets";
 import {
+  validateActiveExperienceQueue,
+  type ExperienceQueueOperation,
+} from "./validate-active-experience-queue";
+import {
   currentBuildQueueItem,
   markBuildQueueItemCompleted,
 } from "@/contextual-learning/candidate-v0/build/queue";
@@ -229,6 +233,10 @@ export class MealContextLabController {
     if (record.revision !== input.revision) {
       return staleRunScreen();
     }
+    const misaligned = rejectInvalidExperienceQueue(record, "ACKNOWLEDGE");
+    if (misaligned) {
+      return misaligned;
+    }
     if (record.experienceRun.status !== "GUIDED_ACTIVITY_ISSUED") {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
         recoverable: true,
@@ -336,6 +344,15 @@ export class MealContextLabController {
     });
     if (!record) {
       return notFoundRunScreen();
+    }
+    if (record.experienceRun.status !== "COMPLETED") {
+      const misaligned = rejectInvalidExperienceQueue(record, "SUBMIT", {
+        code: CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED,
+        message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
+      });
+      if (misaligned) {
+        return misaligned;
+      }
     }
     if (record.probe && isProbeSubmissionPhase(record.probe.phase)) {
       return this.submitProbeTask(record, input);
@@ -489,6 +506,10 @@ export class MealContextLabController {
     if (rejectedContinue) {
       return rejectedContinue;
     }
+    const misaligned = rejectInvalidExperienceQueue(record, "CONTINUE");
+    if (misaligned) {
+      return misaligned;
+    }
     if (input.intent === "START_BUILD" || input.intent === "START_STRENGTHEN") {
       return this.handoffFromProbe(record, input.intent);
     }
@@ -564,6 +585,13 @@ export class MealContextLabController {
     feedback: ReturnType<typeof contextLabFeedbackFromEvaluation>;
     retryOnCasConflict?: boolean;
   }): Promise<ContextLabCurrentScreen> {
+    const misaligned = rejectInvalidExperienceQueue(
+      input.record,
+      "COMPLETE_AFTER_EVIDENCE",
+    );
+    if (misaligned) {
+      return misaligned;
+    }
     const recorded = recordFrozenTaskCompletion({
       run: input.record.experienceRun,
       receipt: {
@@ -588,7 +616,7 @@ export class MealContextLabController {
 
     const nextProbe = completeExperienceAfterEvidence({
       probe: input.record.probe,
-      plan: input.record.experienceRun.planSnapshot.plan,
+      experienceRun: input.record.experienceRun,
     });
     if (nextProbe && "screen" in nextProbe) {
       return nextProbe.screen;
@@ -795,6 +823,10 @@ export class MealContextLabController {
   private async presentStoredRun(
     record: ContextLabRunRecord,
   ): Promise<ContextLabCurrentScreen> {
+    const aligned = rejectInvalidExperienceQueue(record, "PRESENT");
+    if (aligned) {
+      return aligned;
+    }
     if (
       record.probe &&
       record.probe.phase !== "BUILD_HANDOFF" &&
@@ -808,10 +840,6 @@ export class MealContextLabController {
         return this.presentIssuedProbeTask(record);
       }
       return this.presentProbe(record);
-    }
-    const aligned = rejectMisalignedQueue(record);
-    if (aligned) {
-      return aligned;
     }
     const run = record.experienceRun;
     const current = run.stepRuns[run.currentStepIndex];
@@ -1788,15 +1816,25 @@ function recordSupportExposureOnProbe(input: {
 
 function completeExperienceAfterEvidence(input: {
   probe: MealProbeOrchestration | null;
-  plan: LearningExperiencePlan;
+  experienceRun: ExperienceRun;
 }): MealProbeOrchestration | { screen: ContextLabCurrentScreen } | null {
+  const misaligned = rejectInvalidExperienceQueue(
+    {
+      probe: input.probe,
+      experienceRun: input.experienceRun,
+    },
+    "COMPLETE_AFTER_EVIDENCE",
+  );
+  if (misaligned) {
+    return { screen: misaligned };
+  }
   if (!input.probe) {
     return input.probe;
   }
   if (input.probe.experienceMode === "BUILD") {
     return completeBuildAfterEvidence({
       probe: input.probe,
-      plan: input.plan,
+      plan: input.experienceRun.planSnapshot.plan,
     });
   }
   if (input.probe.experienceMode !== "STRENGTHEN") {
@@ -1811,7 +1849,12 @@ function completeExperienceAfterEvidence(input: {
       }),
     };
   }
-  const profile = mealProfileForTarget(input.plan.targets[0]?.sense ?? { lexemeId: "", senseId: "" });
+  const profile = mealProfileForTarget(
+    input.experienceRun.planSnapshot.plan.targets[0]?.sense ?? {
+      lexemeId: "",
+      senseId: "",
+    },
+  );
   if (!profile) {
     return {
       screen: errorScreen(CONTEXT_LAB_ERROR_CODES.PLANNER_FAILURE, {
@@ -1939,45 +1982,27 @@ function experienceRecordedCopy(
   };
 }
 
-function rejectMisalignedQueue(
-  record: ContextLabRunRecord,
+function rejectInvalidExperienceQueue(
+  record: Pick<ContextLabRunRecord, "probe" | "experienceRun">,
+  operation: ExperienceQueueOperation,
+  options?: {
+    code?: (typeof CONTEXT_LAB_ERROR_CODES)[keyof typeof CONTEXT_LAB_ERROR_CODES];
+    message?: string;
+  },
 ): ContextLabCurrentScreen | null {
-  const probe = record.probe;
-  if (!probe) {
+  const result = validateActiveExperienceQueue({
+    probe: record.probe,
+    experienceRun: record.experienceRun,
+    operation,
+  });
+  if (result.ok) {
     return null;
   }
-  const planId = record.experienceRun.planSnapshot.plan.id;
-  if (probe.phase === "BUILD_HANDOFF") {
-    const queue = requireBuildQueue(probe);
-    if (!queue.ok) {
-      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
-        recoverable: false,
-        detail: queue.reason,
-      });
-    }
-    if (queue.queue.currentPlanId !== planId) {
-      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
-        recoverable: false,
-        detail: "BUILD_QUEUE_PLAN_MISMATCH",
-      });
-    }
-  }
-  if (probe.phase === "STRENGTHEN_HANDOFF") {
-    const queue = requireStrengthenQueue(probe);
-    if (!queue.ok) {
-      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
-        recoverable: false,
-        detail: queue.reason,
-      });
-    }
-    if (queue.queue.currentPlanId !== planId) {
-      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
-        recoverable: false,
-        detail: "STRENGTHEN_QUEUE_PLAN_MISMATCH",
-      });
-    }
-  }
-  return null;
+  return errorScreen(options?.code ?? CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+    recoverable: false,
+    message: options?.message,
+    detail: result.reason,
+  });
 }
 
 function rejectMalformedContinue(input: {

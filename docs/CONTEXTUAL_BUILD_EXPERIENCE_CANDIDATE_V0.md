@@ -80,6 +80,12 @@ Probe summary after the server revalidates eligibility.
 
 The queue is Candidate orchestration, not the Scheduler.
 
+Queue / ExperienceRun alignment is a mutation invariant. The same
+fail-closed check runs before `acknowledge`, `submitFrozenTask`,
+`continueProbe`, queue completion, and restore. A mismatched
+`currentPlanId` cannot be advanced by calling a server action while
+skipping `loadCurrent`.
+
 ## Frozen hintCount
 
 Meal BUILD final recall keeps frozen `hintCount = 0`. Guided teaching

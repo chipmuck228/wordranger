@@ -650,4 +650,49 @@ describe("Meal four-target active-recall STRENGTHEN", () => {
     expect(build.context.title).toBe("建立碗的情境记忆");
     expect(build.context.settingLabel).toContain("教学阶段");
   });
+
+  it("rejects STRENGTHEN acknowledge and submit on a mismatched currentPlanId", async () => {
+    const { controller, learningTasks, repository } = createMealLabHarness({
+      beginAt: "PROBE",
+    });
+    const reconnect = await enterStrengthen(controller, learningTasks);
+    const stored = await repository.get({
+      runId: reconnect.handle.runId,
+      userId: V1_PLACEHOLDER_USER_ID,
+    });
+    stored!.probe!.strengthenQueue = {
+      ...stored!.probe!.strengthenQueue!,
+      currentPlanId: "other-plan",
+    };
+    const saved = await repository.saveIfRevision({
+      runId: stored!.id,
+      userId: V1_PLACEHOLDER_USER_ID,
+      expectedRevision: stored!.revision,
+      nextRun: stored!.experienceRun,
+      nextProbe: stored!.probe,
+      updatedAt: "2026-09-20T00:00:01.000Z",
+    });
+    expect(saved.ok).toBe(true);
+    const latest = await repository.get({
+      runId: reconnect.handle.runId,
+      userId: V1_PLACEHOLDER_USER_ID,
+    });
+    const acknowledged = await controller.acknowledge({
+      runId: latest!.id,
+      revision: latest!.revision,
+      activityId: reconnect.activity.id,
+    });
+    expect(acknowledged.kind).toBe("ERROR");
+    expect(acknowledged.kind === "ERROR" ? acknowledged.code : "").toContain(
+      "STRENGTHEN_QUEUE_PLAN_MISMATCH",
+    );
+    expect(
+      (await repository.get({ runId: latest!.id, userId: V1_PLACEHOLDER_USER_ID }))
+        ?.revision,
+    ).toBe(latest!.revision);
+    expect(
+      (await repository.get({ runId: latest!.id, userId: V1_PLACEHOLDER_USER_ID }))
+        ?.experienceRun.currentStepIndex,
+    ).toBe(latest!.experienceRun.currentStepIndex);
+  });
 });

@@ -13,6 +13,8 @@ import {
 } from "./helpers";
 import type { ContextLabCurrentScreen } from "@/components/context-lab/types";
 import type { MealContextLabController } from "@/server/context-lab/meal-context-lab-controller";
+import type { ContextLabRunRecord } from "@/server/context-lab/context-lab-run.types";
+import type { InMemoryContextLabRunRepository } from "@/server/context-lab/in-memory-context-lab-run-repository";
 import type { InMemoryLearningTaskRepository } from "@/server/tasks/in-memory-learning-task-repository";
 
 function assertKind<K extends ContextLabCurrentScreen["kind"]>(
@@ -134,7 +136,7 @@ async function reachSummary(
   return screen;
 }
 
-async function walkBuildItem(
+async function walkBuildToPreview(
   controller: MealContextLabController,
   ground: ContextLabCurrentScreen,
   lemma: string,
@@ -162,7 +164,18 @@ async function walkBuildItem(
   return {
     fade: current,
     verify,
-    recorded: await submitTyping(controller, verify, lemma),
+  };
+}
+
+async function walkBuildItem(
+  controller: MealContextLabController,
+  ground: ContextLabCurrentScreen,
+  lemma: string,
+) {
+  const preview = await walkBuildToPreview(controller, ground, lemma);
+  return {
+    ...preview,
+    recorded: await submitTyping(controller, preview.verify, lemma),
   };
 }
 
@@ -384,4 +397,187 @@ describe("Meal four-target BUILD queue", () => {
     } as never);
     expect(hinted.kind).toBe("ERROR");
   });
+
+  it("rejects acknowledge, submit, and continue on a corrupted queue without loadCurrent", async () => {
+    const { controller, learningTasks, repository, learning } = createMealLabHarness({
+      beginAt: "PROBE",
+    });
+    const summary = await reachSummary(controller, learningTasks, [
+      false,
+      true,
+      true,
+      false,
+    ]);
+    const ground = await controller.continueProbe({
+      runId: summary.handle.runId,
+      revision: summary.handle.revision,
+      intent: "START_BUILD",
+    });
+    assertKind(ground, "GUIDED");
+    const afterPlanSwap = await persistProbeMutation(repository, ground.handle.runId, (record) => {
+      record.probe!.buildQueue = {
+        ...record.probe!.buildQueue!,
+        currentPlanId: "other-plan",
+      };
+    });
+    const acknowledged = await controller.acknowledge({
+      runId: afterPlanSwap.id,
+      revision: afterPlanSwap.revision,
+      activityId: ground.activity.id,
+    });
+    expect(acknowledged.kind).toBe("ERROR");
+    expect(acknowledged.kind === "ERROR" ? acknowledged.code : "").toContain(
+      "BUILD_QUEUE_PLAN_MISMATCH",
+    );
+    expect(
+      (await repository.get({ runId: afterPlanSwap.id, userId: V1_PLACEHOLDER_USER_ID }))
+        ?.revision,
+    ).toBe(afterPlanSwap.revision);
+
+    const restoredPlan = await persistProbeMutation(repository, ground.handle.runId, (record) => {
+      record.probe!.buildQueue = {
+        ...record.probe!.buildQueue!,
+        currentPlanId: record.experienceRun.planSnapshot.plan.id,
+      };
+    });
+    const preview = await walkBuildToPreview(
+      controller,
+      {
+        ...ground,
+        handle: { runId: restoredPlan.id, revision: restoredPlan.revision },
+      },
+      "soup",
+    );
+    const beforeEvidence = learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length;
+    const afterSubmitSwap = await persistProbeMutation(
+      repository,
+      preview.verify.handle.runId,
+      (record) => {
+        record.probe!.buildQueue = {
+          ...record.probe!.buildQueue!,
+          currentPlanId: "other-plan",
+        };
+      },
+    );
+    const submitted = await controller.submitFrozenTask({
+      runId: afterSubmitSwap.id,
+      revision: afterSubmitSwap.revision,
+      taskId: preview.verify.task.id,
+      action: { kind: "TEXT_INPUT", value: "soup" },
+    });
+    expect(submitted.kind).toBe("ERROR");
+    expect(submitted.kind === "ERROR" ? submitted.code : "").toContain(
+      "BUILD_QUEUE_PLAN_MISMATCH",
+    );
+    expect(learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID)).toHaveLength(
+      beforeEvidence,
+    );
+  });
+
+  it("does not continue a recorded BUILD queue that still has a currentPlanId", async () => {
+    const { controller, learningTasks, repository } = createMealLabHarness({
+      beginAt: "PROBE",
+    });
+    const summary = await reachSummary(controller, learningTasks, [
+      false,
+      true,
+      true,
+      false,
+    ]);
+    const soup = await controller.continueProbe({
+      runId: summary.handle.runId,
+      revision: summary.handle.revision,
+      intent: "START_BUILD",
+    });
+    const first = await walkBuildItem(controller, soup, "soup");
+    assertKind(first.recorded, "FROZEN_TASK_RECORDED");
+    const corrupted = await persistProbeMutation(
+      repository,
+      first.recorded.handle.runId,
+      (record) => {
+        record.probe!.buildQueue = {
+          ...record.probe!.buildQueue!,
+          currentPlanId: "stale-plan",
+        };
+      },
+    );
+    const continued = await controller.continueProbe({
+      runId: corrupted.id,
+      revision: corrupted.revision,
+    });
+    expect(continued.kind).toBe("ERROR");
+    expect(continued.kind === "ERROR" ? continued.code : "").toContain(
+      "BUILD_QUEUE_PHASE_INVARIANT",
+    );
+    const latest = await repository.get({
+      runId: corrupted.id,
+      userId: V1_PLACEHOLDER_USER_ID,
+    });
+    expect(latest?.probe?.phase).toBe("BUILD_ITEM_RECORDED");
+    expect(latest?.probe?.buildQueue?.currentIndex).toBe(1);
+  });
+
+  it("rejects START_BUILD from ROUTING_SUMMARY when a queue still has an active plan", async () => {
+    const { controller, learningTasks, repository } = createMealLabHarness({
+      beginAt: "PROBE",
+    });
+    const summary = await reachSummary(controller, learningTasks, [
+      false,
+      false,
+      false,
+      false,
+    ]);
+    const ground = await controller.continueProbe({
+      runId: summary.handle.runId,
+      revision: summary.handle.revision,
+      intent: "START_BUILD",
+    });
+    assertKind(ground, "GUIDED");
+    const corrupted = await persistProbeMutation(repository, ground.handle.runId, (record) => {
+      record.probe!.phase = "ROUTING_SUMMARY";
+    });
+    const restarted = await controller.continueProbe({
+      runId: corrupted.id,
+      revision: corrupted.revision,
+      intent: "START_BUILD",
+    });
+    expect(restarted.kind).toBe("ERROR");
+    expect(restarted.kind === "ERROR" ? restarted.code : "").toContain(
+      "ACTIVE_PLAN_ID_NOT_ALLOWED",
+    );
+  });
 });
+
+async function persistProbeMutation(
+  repository: InMemoryContextLabRunRepository,
+  runId: string,
+  mutate: (record: ContextLabRunRecord) => void,
+): Promise<ContextLabRunRecord> {
+  const stored = await repository.get({
+    runId,
+    userId: V1_PLACEHOLDER_USER_ID,
+  });
+  if (!stored?.probe) {
+    throw new Error("missing probe");
+  }
+  mutate(stored);
+  const saved = await repository.saveIfRevision({
+    runId: stored.id,
+    userId: V1_PLACEHOLDER_USER_ID,
+    expectedRevision: stored.revision,
+    nextRun: stored.experienceRun,
+    nextProbe: stored.probe,
+    updatedAt: "2026-09-20T00:00:01.000Z",
+  });
+  if (!saved.ok) {
+    throw new Error(saved.reason);
+  }
+  const latest = await repository.get({
+    runId,
+    userId: V1_PLACEHOLDER_USER_ID,
+  });
+  if (!latest) {
+    throw new Error("missing after mutation");
+  }
+  return latest;
+}
