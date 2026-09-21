@@ -66,20 +66,44 @@ function syntheticPack(): ContextualSceneContentPack {
   const fork = pack.lexemes.find((item) => item.id === "meal-fork")!;
   pack.id = "synthetic-meal-extension";
   pack.provenance = { ...pack.provenance, status: "CANDIDATE" };
-  pack.frames[0] = {
-    ...pack.frames[0]!,
-    frameId: "synthetic-meal-extension-v0",
-    entityIds: [...pack.frames[0]!.entityIds, "home-cloth"],
-    presentationOrder: [...pack.frames[0]!.presentationOrder, "home-cloth"],
-  };
+  pack.frames = [
+    {
+      ...pack.frames[0]!,
+      frameId: "synthetic-meal-extension-v0",
+      entityIds: [...pack.frames[0]!.entityIds, "home-cloth"],
+      presentationOrder: [...pack.frames[0]!.presentationOrder, "home-cloth"],
+    },
+  ];
   for (const lexeme of pack.lexemes) {
     lexeme.membership = {
       ...lexeme.membership,
-      frameBindings: lexeme.membership.frameBindings.map((binding) => ({
-        ...binding,
-        frameId: "synthetic-meal-extension-v0",
-      })),
+      frameBindings: lexeme.membership.frameBindings
+        .filter((binding) => binding.frameId === "home-breakfast-v0")
+        .map((binding) => ({
+          ...binding,
+          frameId: "synthetic-meal-extension-v0",
+        })),
     };
+    lexeme.grounding = {
+      ...lexeme.grounding,
+      frameFacts: lexeme.grounding.frameFacts
+        .filter((group) => group.frameId === "home-breakfast-v0")
+        .map((group) => ({
+          ...group,
+          frameId: "synthetic-meal-extension-v0",
+        })),
+    };
+    if (lexeme.build.connectFactByFrame) {
+      lexeme.build = {
+        ...lexeme.build,
+        connectFactByFrame: lexeme.build.connectFactByFrame
+          .filter((item) => item.frameId === "home-breakfast-v0")
+          .map((item) => ({
+            ...item,
+            frameId: "synthetic-meal-extension-v0",
+          })),
+      };
+    }
   }
   pack.lexemes.push({
     id: "synthetic-cloth",
@@ -110,7 +134,7 @@ function syntheticPack(): ContextualSceneContentPack {
       displayLabel: "布",
     },
     grounding: {
-      facts: [],
+      frameFacts: [],
     },
     contrastBindings: [
       {

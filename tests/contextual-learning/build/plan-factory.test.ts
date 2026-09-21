@@ -99,7 +99,7 @@ describe("Meal lexical BUILD plan factory", () => {
     }
   });
 
-  it("projects the home-breakfast snapshot onto a restaurant frame", () => {
+  it("builds a restaurant plan from the authored restaurant frame", () => {
     const identity = identityForFixtureSense(MEAL_SENSE.soup);
     expect(identity).not.toBeNull();
     const plan = createMealLexicalBuildPlan({
@@ -108,8 +108,11 @@ describe("Meal lexical BUILD plan factory", () => {
     });
     expect(plan.mode).toBe("BUILD");
     expect(plan.steps).toHaveLength(6);
+    expect(plan.contextFrameId).toBe(restaurantMealFrame.id);
     expect(JSON.stringify(plan)).toContain("rest-soup");
+    expect(JSON.stringify(plan)).toContain("rest-bowl");
     expect(JSON.stringify(plan)).not.toContain("home-soup");
+    expect(JSON.stringify(plan)).not.toContain("home-fact-");
   });
 
   it("fails closed for an unknown requested target", () => {

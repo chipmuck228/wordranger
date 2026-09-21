@@ -78,7 +78,7 @@ Choice responses declare `candidates` and `correctCandidateIds`. The compiler co
 
 | Case | Skeleton | What it proves |
 | --- | --- | --- |
-| Meal | `meal-setting-v0` | One skeleton, three frames. BUILD is guided present / observe / contrast then assessable RECALL. STRENGTHEN recall-weakness is guided reconnect / fade then frozen recall. STRENGTHEN IDENTIFY remains assessable and unsupported. |
+| Meal | `meal-setting-v0` | One skeleton, three frames. Scene Content authors Home Breakfast and Restaurant Meal natively. Picnic still uses compatibility projection. BUILD is guided present / observe / contrast then assessable RECALL. STRENGTHEN recall-weakness is guided reconnect / fade then frozen recall. STRENGTHEN IDENTIFY remains assessable and unsupported. |
 | School Challenge | `goal-directed-challenge-v0` | Abstract words bind as property / action / state / outcome / grounded claim. Local success is not general ability. CLAIM_CHOICE does not compile. |
 | Borrowing-Sharing | `temporary-resource-access-v0` | Same transfer event; requester perspective is `borrow`, owner perspective is `lend`. Contextual RELATION_CHOICE does not compile. |
 

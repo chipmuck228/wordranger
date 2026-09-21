@@ -35,9 +35,19 @@ export interface ContextualContrastBinding {
   caption?: string;
 }
 
-export interface ContextualLexemeGrounding {
+export interface ContextualFrameFactGroup {
+  frameId: string;
   facts: ContextualFactRef[];
+}
+
+export interface ContextualLexemeGrounding {
+  frameFacts: ContextualFrameFactGroup[];
   requiredRelationIds?: string[];
+}
+
+export interface ContextualConnectFactBinding {
+  frameId: string;
+  factId: string;
 }
 
 export interface ContextualFrameBinding {
@@ -65,6 +75,7 @@ export interface ContextualBuildContent {
   enabled: boolean;
   groundInstruction: string;
   connectInstruction: string;
+  connectFactByFrame?: ContextualConnectFactBinding[];
   connectFactId?: string;
   teachInstruction: string;
   fadeInstruction: string;

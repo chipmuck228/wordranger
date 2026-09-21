@@ -1,5 +1,5 @@
 /**
- * Meal home-breakfast Scene Content pack.
+ * Meal Scene Content pack: Home Breakfast and Restaurant Meal.
  * Candidate V0 / Experimental / Not a Standard.
  *
  * Authored four-word fixture only. Not 1600-word coverage.
@@ -20,9 +20,12 @@ import { MEAL_SCENE_CONTENT_SOURCE_REFS } from "./meal-content-provenance";
 
 export const MEAL_SCENE_CONTENT_PACK_ID = "meal-home-breakfast-v0";
 export const HOME_BREAKFAST_FRAME_ID = "home-breakfast-v0";
+export const RESTAURANT_MEAL_FRAME_ID = "restaurant-meal-v0";
 
 const HOME_CONTAINS_BOWL_SOUP = "home-fact-contains-bowl-soup";
 const HOME_SUITABLE_FOR_SPOON_SOUP = "home-fact-suitable-for-spoon-soup";
+const REST_CONTAINS_BOWL_SOUP = "rest-fact-contains-bowl-soup";
+const REST_SUITABLE_FOR_SPOON_SOUP = "rest-fact-suitable-for-spoon-soup";
 
 function bundledTarget(key: keyof typeof BUNDLED_LEXEME_BINDINGS) {
   const binding = BUNDLED_LEXEME_BINDINGS[key];
@@ -35,15 +38,55 @@ function bundledTarget(key: keyof typeof BUNDLED_LEXEME_BINDINGS) {
 }
 
 function frameBinding(
+  frameId: string,
   entityId: string,
   roleId: string,
   sceneOrder: number,
 ) {
   return {
-    frameId: HOME_BREAKFAST_FRAME_ID,
+    frameId,
     entityId,
     roleId,
     sceneOrder,
+  };
+}
+
+function containsBowlSoup(frameId: string, bowlId: string, soupId: string, factId: string) {
+  return {
+    frameId,
+    facts: [
+      {
+        factId,
+        predicate: "contains",
+        args: [
+          { kind: "ENTITY" as const, entityId: bowlId },
+          { kind: "ENTITY" as const, entityId: soupId },
+        ],
+        caption: "碗里装着汤",
+      },
+    ],
+  };
+}
+
+function suitableForSpoonSoup(
+  frameId: string,
+  spoonId: string,
+  soupId: string,
+  factId: string,
+) {
+  return {
+    frameId,
+    facts: [
+      {
+        factId,
+        predicate: "suitable_for",
+        args: [
+          { kind: "ENTITY" as const, entityId: spoonId },
+          { kind: "ENTITY" as const, entityId: soupId },
+        ],
+        caption: "勺子 → 适合舀汤",
+      },
+    ],
   };
 }
 
@@ -96,12 +139,24 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
       factIds: [HOME_CONTAINS_BOWL_SOUP, HOME_SUITABLE_FOR_SPOON_SOUP],
       presentationOrder: ["home-soup", "home-bowl", "home-spoon", "home-fork"],
     },
+    {
+      frameId: RESTAURANT_MEAL_FRAME_ID,
+      title: "餐厅",
+      settingLabel: "看看餐厅桌上的食物和餐具。",
+      introInstruction: "桌上有汤、碗、勺子和叉子。先看看这些物品。",
+      entityIds: ["rest-soup", "rest-bowl", "rest-spoon", "rest-fork"],
+      factIds: [REST_CONTAINS_BOWL_SOUP, REST_SUITABLE_FOR_SPOON_SOUP],
+      presentationOrder: ["rest-soup", "rest-bowl", "rest-spoon", "rest-fork"],
+    },
   ],
   lexemes: [
     lexeme("meal-soup", "soup", {
       displayLabel: "汤",
       membership: {
-        frameBindings: [frameBinding("home-soup", "FOOD", 0)],
+        frameBindings: [
+          frameBinding(HOME_BREAKFAST_FRAME_ID, "home-soup", "FOOD", 0),
+          frameBinding(RESTAURANT_MEAL_FRAME_ID, "rest-soup", "FOOD", 0),
+        ],
         presentationToken: "soup",
         presentationRole: "FOOD",
       },
@@ -111,16 +166,9 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
         recallInstruction: "写出当前物品的英文单词",
       },
       grounding: {
-        facts: [
-          {
-            factId: HOME_CONTAINS_BOWL_SOUP,
-            predicate: "contains",
-            args: [
-              { kind: "ENTITY", entityId: "home-bowl" },
-              { kind: "ENTITY", entityId: "home-soup" },
-            ],
-            caption: "碗里装着汤",
-          },
+        frameFacts: [
+          containsBowlSoup(HOME_BREAKFAST_FRAME_ID, "home-bowl", "home-soup", HOME_CONTAINS_BOWL_SOUP),
+          containsBowlSoup(RESTAURANT_MEAL_FRAME_ID, "rest-bowl", "rest-soup", REST_CONTAINS_BOWL_SOUP),
         ],
       },
       contrastBindings: [
@@ -135,7 +183,10 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
         enabled: true,
         groundInstruction: "桌上有汤。先看看它在场景里的位置。",
         connectInstruction: "汤是碗里的食物。",
-        connectFactId: HOME_CONTAINS_BOWL_SOUP,
+        connectFactByFrame: [
+          { frameId: HOME_BREAKFAST_FRAME_ID, factId: HOME_CONTAINS_BOWL_SOUP },
+          { frameId: RESTAURANT_MEAL_FRAME_ID, factId: REST_CONTAINS_BOWL_SOUP },
+        ],
         teachInstruction: "这是教学，不是测试。看一看这个词和它的英文词形。",
         fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
         recallInstructionKey: "Produce the English word for the highlighted food.",
@@ -151,7 +202,10 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
     lexeme("meal-bowl", "bowl", {
       displayLabel: "碗",
       membership: {
-        frameBindings: [frameBinding("home-bowl", "FOOD_CONTAINER", 1)],
+        frameBindings: [
+          frameBinding(HOME_BREAKFAST_FRAME_ID, "home-bowl", "FOOD_CONTAINER", 1),
+          frameBinding(RESTAURANT_MEAL_FRAME_ID, "rest-bowl", "FOOD_CONTAINER", 1),
+        ],
         presentationToken: "bowl",
         presentationRole: "CONTAINER",
       },
@@ -161,16 +215,9 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
         recallInstruction: "写出当前物品的英文单词",
       },
       grounding: {
-        facts: [
-          {
-            factId: HOME_CONTAINS_BOWL_SOUP,
-            predicate: "contains",
-            args: [
-              { kind: "ENTITY", entityId: "home-bowl" },
-              { kind: "ENTITY", entityId: "home-soup" },
-            ],
-            caption: "碗里装着汤",
-          },
+        frameFacts: [
+          containsBowlSoup(HOME_BREAKFAST_FRAME_ID, "home-bowl", "home-soup", HOME_CONTAINS_BOWL_SOUP),
+          containsBowlSoup(RESTAURANT_MEAL_FRAME_ID, "rest-bowl", "rest-soup", REST_CONTAINS_BOWL_SOUP),
         ],
       },
       contrastBindings: [
@@ -185,7 +232,10 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
         enabled: true,
         groundInstruction: "桌上有碗。先看看它在场景里的位置。",
         connectInstruction: "碗用来盛汤。",
-        connectFactId: HOME_CONTAINS_BOWL_SOUP,
+        connectFactByFrame: [
+          { frameId: HOME_BREAKFAST_FRAME_ID, factId: HOME_CONTAINS_BOWL_SOUP },
+          { frameId: RESTAURANT_MEAL_FRAME_ID, factId: REST_CONTAINS_BOWL_SOUP },
+        ],
         teachInstruction: "这是教学，不是测试。看一看这个词和它的英文词形。",
         fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
         recallInstructionKey:
@@ -202,7 +252,10 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
     lexeme("meal-spoon", "spoon", {
       displayLabel: "勺子",
       membership: {
-        frameBindings: [frameBinding("home-spoon", "EATING_TOOL", 2)],
+        frameBindings: [
+          frameBinding(HOME_BREAKFAST_FRAME_ID, "home-spoon", "EATING_TOOL", 2),
+          frameBinding(RESTAURANT_MEAL_FRAME_ID, "rest-spoon", "EATING_TOOL", 2),
+        ],
         presentationToken: "spoon",
         presentationRole: "TOOL",
       },
@@ -213,16 +266,19 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
       },
       grounding: {
         requiredRelationIds: ["SUITABLE_FOR"],
-        facts: [
-          {
-            factId: HOME_SUITABLE_FOR_SPOON_SOUP,
-            predicate: "suitable_for",
-            args: [
-              { kind: "ENTITY", entityId: "home-spoon" },
-              { kind: "ENTITY", entityId: "home-soup" },
-            ],
-            caption: "勺子 → 适合舀汤",
-          },
+        frameFacts: [
+          suitableForSpoonSoup(
+            HOME_BREAKFAST_FRAME_ID,
+            "home-spoon",
+            "home-soup",
+            HOME_SUITABLE_FOR_SPOON_SOUP,
+          ),
+          suitableForSpoonSoup(
+            RESTAURANT_MEAL_FRAME_ID,
+            "rest-spoon",
+            "rest-soup",
+            REST_SUITABLE_FOR_SPOON_SOUP,
+          ),
         ],
       },
       contrastBindings: [
@@ -237,7 +293,10 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
         enabled: true,
         groundInstruction: "桌上有汤、碗、勺子和叉子。先看看这些物品。",
         connectInstruction: "勺子适合用来喝汤或舀取流质食物。",
-        connectFactId: HOME_SUITABLE_FOR_SPOON_SOUP,
+        connectFactByFrame: [
+          { frameId: HOME_BREAKFAST_FRAME_ID, factId: HOME_SUITABLE_FOR_SPOON_SOUP },
+          { frameId: RESTAURANT_MEAL_FRAME_ID, factId: REST_SUITABLE_FOR_SPOON_SOUP },
+        ],
         teachInstruction: "这是教学，不是测试。看一看这个词和它的英文词形。",
         fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
         recallInstructionKey: "Produce the English word for the required tool.",
@@ -253,7 +312,10 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
     lexeme("meal-fork", "fork", {
       displayLabel: "叉子",
       membership: {
-        frameBindings: [frameBinding("home-fork", "EATING_TOOL", 3)],
+        frameBindings: [
+          frameBinding(HOME_BREAKFAST_FRAME_ID, "home-fork", "EATING_TOOL", 3),
+          frameBinding(RESTAURANT_MEAL_FRAME_ID, "rest-fork", "EATING_TOOL", 3),
+        ],
         presentationToken: "fork",
         presentationRole: "TOOL",
       },
@@ -263,7 +325,7 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
         recallInstruction: "写出当前物品的英文单词",
       },
       grounding: {
-        facts: [],
+        frameFacts: [],
       },
       contrastBindings: [
         {

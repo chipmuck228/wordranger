@@ -5,6 +5,7 @@
  */
 
 import { sameLexemeSense } from "../domain/lexeme-sense";
+import { resolvedBuildForFrame, resolvedFactsForFrame } from "./frame-facts";
 import { frameBindingFor } from "./frame-binding";
 import type {
   ContextualSceneContentPack,
@@ -67,14 +68,7 @@ function snapshotLexeme(
     sceneOrder: binding.sceneOrder,
     presentationToken: lexeme.membership.presentationToken,
     presentationRole: lexeme.membership.presentationRole,
-    groundingFacts: lexeme.grounding.facts
-      .filter((fact) => frame.factIds.includes(fact.factId))
-      .map((fact) => ({
-        factId: fact.factId,
-        predicate: fact.predicate,
-        args: fact.args.map((arg) => ({ ...arg })),
-        caption: fact.caption,
-      })),
+    groundingFacts: resolvedFactsForFrame(lexeme, frameId),
     requiredRelationIds: [...(lexeme.grounding.requiredRelationIds ?? [])],
     contrasts: lexeme.contrastBindings.flatMap((item) => {
       const other = pack.lexemes.find((candidate) =>
@@ -95,7 +89,7 @@ function snapshotLexeme(
       ];
     }),
     probe: { ...lexeme.probe, skills: [...lexeme.probe.skills] },
-    build: { ...lexeme.build },
+    build: resolvedBuildForFrame(lexeme, frameId),
     strengthen: { ...lexeme.strengthen },
   };
 }

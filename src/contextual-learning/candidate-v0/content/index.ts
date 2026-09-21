@@ -26,4 +26,9 @@ export type {
   ResolvedContextualSceneLexeme,
   SceneContentRegistryStatus,
 } from "./types";
-export { MEAL_SCENE_CONTENT_PACK, MEAL_SCENE_CONTENT_PACK_ID, HOME_BREAKFAST_FRAME_ID } from "./packs/meal/meal-scene-content";
+export {
+  MEAL_SCENE_CONTENT_PACK,
+  MEAL_SCENE_CONTENT_PACK_ID,
+  HOME_BREAKFAST_FRAME_ID,
+  RESTAURANT_MEAL_FRAME_ID,
+} from "./packs/meal/meal-scene-content";

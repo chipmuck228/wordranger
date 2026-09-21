@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
+import {
+  homeBreakfastFrame,
+  restaurantMealFrame,
+} from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_SENSE } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
 import {
   createMealActiveRecallStrengthenPlan,
@@ -40,6 +43,21 @@ describe("Meal active-recall STRENGTHEN plan factory", () => {
       expect(reconnect.id).toContain(identity!.stepToken);
     }
     expect(JSON.stringify(plan.steps.map((step) => step.id)).includes("spoon") && identity!.stepToken !== "spoon").toBe(false);
+  });
+
+  it("builds a restaurant STRENGTHEN plan from the authored restaurant frame", () => {
+    const identity = identityForFixtureSense(MEAL_SENSE.soup);
+    expect(identity).not.toBeNull();
+    const plan = createMealActiveRecallStrengthenPlan({
+      frame: restaurantMealFrame,
+      profile: identity!,
+    });
+    expect(plan.mode).toBe("STRENGTHEN");
+    expect(plan.steps).toHaveLength(3);
+    expect(plan.contextFrameId).toBe(restaurantMealFrame.id);
+    expect(JSON.stringify(plan)).toContain("rest-soup");
+    expect(JSON.stringify(plan)).not.toContain("home-soup");
+    expect(JSON.stringify(plan)).not.toContain("home-fact-");
   });
 
   it("fails closed when the requested target is missing", () => {

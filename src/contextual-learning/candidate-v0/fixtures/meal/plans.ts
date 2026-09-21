@@ -159,6 +159,20 @@ function mealAssessableStrengthenSteps(prefix: string): ExperienceStepSpec[] {
   ];
 }
 
+function mealContentForFrame(frame: ContextFrame) {
+  const authored = snapshotSceneContentFromPack(MEAL_SCENE_CONTENT_PACK, frame.id);
+  if (authored) {
+    return authored;
+  }
+  const homeCatalog = snapshotSceneContentFromPack(
+    MEAL_SCENE_CONTENT_PACK,
+    HOME_BREAKFAST_FRAME_ID,
+  );
+  return homeCatalog
+    ? projectResolvedMealContentOntoFrame(homeCatalog, frame)
+    : null;
+}
+
 function emptyMealBuildPlan(frame: ContextFrame): LearningExperiencePlan {
   return {
     id: `meal-build-${frame.id}-unresolved`,
@@ -179,13 +193,7 @@ export function createMealLexicalBuildPlan(input: {
   frame: ContextFrame;
   profile: MealLexicalStrengthenIdentity;
 }): LearningExperiencePlan {
-  const catalog = snapshotSceneContentFromPack(
-    MEAL_SCENE_CONTENT_PACK,
-    HOME_BREAKFAST_FRAME_ID,
-  );
-  const content = catalog
-    ? projectResolvedMealContentOntoFrame(catalog, input.frame)
-    : null;
+  const content = mealContentForFrame(input.frame);
   if (!content) {
     return emptyMealBuildPlan(input.frame);
   }
@@ -215,13 +223,7 @@ export function createMealActiveRecallStrengthenPlan(input: {
   frame: ContextFrame;
   profile: MealLexicalStrengthenIdentity;
 }): LearningExperiencePlan {
-  const catalog = snapshotSceneContentFromPack(
-    MEAL_SCENE_CONTENT_PACK,
-    HOME_BREAKFAST_FRAME_ID,
-  );
-  const content = catalog
-    ? projectResolvedMealContentOntoFrame(catalog, input.frame)
-    : null;
+  const content = mealContentForFrame(input.frame);
   if (!content) {
     return {
       id: `meal-strengthen-recall-${input.frame.id}-unresolved`,

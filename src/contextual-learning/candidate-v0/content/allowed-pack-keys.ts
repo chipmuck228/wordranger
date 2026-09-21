@@ -60,14 +60,16 @@ const LEXICAL_PRESENTATION_KEYS = keys(
   "phoneticSource",
   "displayLabel",
 );
-const GROUNDING_KEYS = keys("facts", "requiredRelationIds");
+const GROUNDING_KEYS = keys("frameFacts", "requiredRelationIds");
+const FRAME_FACT_GROUP_KEYS = keys("frameId", "facts");
 const FACT_KEYS = keys("factId", "predicate", "args", "caption");
+const CONNECT_FACT_BINDING_KEYS = keys("frameId", "factId");
 const CONTRAST_KEYS = keys("kind", "contrastTarget", "instruction", "caption");
 const BUILD_KEYS = keys(
   "enabled",
   "groundInstruction",
   "connectInstruction",
-  "connectFactId",
+  "connectFactByFrame",
   "teachInstruction",
   "fadeInstruction",
   "recallInstructionKey",
@@ -121,15 +123,29 @@ export function validatePackAllowedKeys(pack: unknown): SceneContentIssue[] {
       if (isRecord(lexeme.grounding)) {
         local.push(...objectKeys(lexeme.grounding, GROUNDING_KEYS, `${path}.grounding`));
         local.push(
-          ...arrayOf(lexeme.grounding.facts, `${path}.grounding.facts`, (fact, factPath) => {
-            const factIssues = objectKeys(fact, FACT_KEYS, factPath);
-            if (isRecord(fact)) {
-              factIssues.push(
-                ...arrayOf(fact.args, `${factPath}.args`, (arg, argPath) => factArgKeys(arg, argPath)),
-              );
-            }
-            return factIssues;
-          }),
+          ...arrayOf(
+            lexeme.grounding.frameFacts,
+            `${path}.grounding.frameFacts`,
+            (group, groupPath) => {
+              const groupIssues = objectKeys(group, FRAME_FACT_GROUP_KEYS, groupPath);
+              if (isRecord(group)) {
+                groupIssues.push(
+                  ...arrayOf(group.facts, `${groupPath}.facts`, (fact, factPath) => {
+                    const factIssues = objectKeys(fact, FACT_KEYS, factPath);
+                    if (isRecord(fact)) {
+                      factIssues.push(
+                        ...arrayOf(fact.args, `${factPath}.args`, (arg, argPath) =>
+                          factArgKeys(arg, argPath),
+                        ),
+                      );
+                    }
+                    return factIssues;
+                  }),
+                );
+              }
+              return groupIssues;
+            },
+          ),
         );
       }
       local.push(
@@ -144,6 +160,15 @@ export function validatePackAllowedKeys(pack: unknown): SceneContentIssue[] {
         }),
       );
       local.push(...objectKeys(lexeme.build, BUILD_KEYS, `${path}.build`));
+      if (isRecord(lexeme.build)) {
+        local.push(
+          ...arrayOf(
+            lexeme.build.connectFactByFrame,
+            `${path}.build.connectFactByFrame`,
+            (binding, bindingPath) => objectKeys(binding, CONNECT_FACT_BINDING_KEYS, bindingPath),
+          ),
+        );
+      }
       local.push(...objectKeys(lexeme.strengthen, STRENGTHEN_KEYS, `${path}.strengthen`));
       return local;
     }),

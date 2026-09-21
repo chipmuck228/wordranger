@@ -7,13 +7,13 @@ import { sameLexemeSense } from "../domain/lexeme-sense";
 import type { ContextFrame, SemanticSkeleton } from "../domain/types";
 import type { SceneVocabularyCluster } from "../memory-routing/types";
 import { SceneContentErrorCode } from "./errors";
+import { connectFactIdFor, resolvedBuildForFrame, resolvedFactsForFrame } from "./frame-facts";
 import { frameBindingFor } from "./frame-binding";
 import { cloneFrozen } from "./immutable";
 import { validateSceneContent } from "./validate-scene-content";
 import type {
   ContextualSceneContentPack,
   ResolvedContextualContrast,
-  ResolvedContextualFact,
   ResolvedContextualSceneContent,
   ResolvedContextualSceneLexeme,
   SceneLexemeLoader,
@@ -116,18 +116,9 @@ function resolveLexeme(
   if (contrasts.some((item) => !item.contrastEntityId)) {
     return null;
   }
-  const groundingFacts: ResolvedContextualFact[] = lexeme.grounding.facts
-    .filter((fact) => frameContent.factIds.includes(fact.factId))
-    .map((fact) => ({
-      factId: fact.factId,
-      predicate: fact.predicate,
-      args: fact.args.map((arg) => ({ ...arg })),
-      caption: fact.caption,
-    }));
-  if (
-    lexeme.build.connectFactId &&
-    !groundingFacts.some((fact) => fact.factId === lexeme.build.connectFactId)
-  ) {
+  const groundingFacts = resolvedFactsForFrame(lexeme, frameId);
+  const connectFactId = connectFactIdFor(lexeme, frameId);
+  if (connectFactId && !groundingFacts.some((fact) => fact.factId === connectFactId)) {
     return null;
   }
   return {
@@ -152,7 +143,7 @@ function resolveLexeme(
       ...lexeme.probe,
       skills: [...lexeme.probe.skills],
     },
-    build: { ...lexeme.build },
+    build: resolvedBuildForFrame(lexeme, frameId),
     strengthen: { ...lexeme.strengthen },
   };
 }

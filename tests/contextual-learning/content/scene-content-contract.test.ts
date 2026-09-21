@@ -27,10 +27,11 @@ import {
   createContextualLexicalBuildPlan,
   createContextualLexicalStrengthenPlan,
 } from "@/contextual-learning/candidate-v0/planning/create-contextual-lexical-plans";
-import { cloneMealPack, mealTestLexemeLoader } from "./helpers";
+import { cloneMealPack, mealTestLexemeLoader, replaceFrameFacts } from "./helpers";
 
 const authorities = {
   frame: homeBreakfastFrame,
+  frames: [restaurantMealFrame],
   skeleton: mealSkeleton,
   cluster: MEAL_SCENE_CLUSTER,
   loadLexeme: mealTestLexemeLoader,
@@ -145,45 +146,36 @@ describe("Scene Content Contract schema", () => {
     expect(issuesOf(unknownRole)).toContain(SceneContentErrorCode.CONTENT_ROLE_NOT_FOUND);
 
     const unknownFact = cloneMealPack();
-    unknownFact.lexemes[0] = {
-      ...unknownFact.lexemes[0]!,
-      grounding: {
-        ...unknownFact.lexemes[0]!.grounding,
-        facts: [
-          {
-            factId: "missing-fact",
-            predicate: "contains",
-            args: [
-              { kind: "ENTITY", entityId: "home-bowl" },
-              { kind: "ENTITY", entityId: "home-soup" },
-            ],
-          },
+    replaceFrameFacts(unknownFact.lexemes[0]!, [
+      {
+        factId: "missing-fact",
+        predicate: "contains",
+        args: [
+          { kind: "ENTITY", entityId: "home-bowl" },
+          { kind: "ENTITY", entityId: "home-soup" },
         ],
       },
-    };
+    ]);
     expect(issuesOf(unknownFact)).toContain(SceneContentErrorCode.CONTENT_FACT_NOT_BOUND_TO_FRAME);
-    expect(issuesOf(unknownFact)).toContain(SceneContentErrorCode.CONTENT_FACT_NOT_FOUND);
+    expect(issuesOf(unknownFact)).toContain(SceneContentErrorCode.CONTENT_CONNECT_FACT_NOT_IN_FRAME);
   });
 
   it("rejects an orphan grounding fact that no frame accepts", () => {
     const orphan = cloneMealPack();
-    orphan.lexemes[0] = {
-      ...orphan.lexemes[0]!,
-      grounding: {
-        ...orphan.lexemes[0]!.grounding,
-        facts: [
-          ...orphan.lexemes[0]!.grounding.facts,
-          {
-            factId: "orphan-fact",
-            predicate: "contains",
-            args: [
-              { kind: "ENTITY", entityId: "home-bowl" },
-              { kind: "ENTITY", entityId: "home-soup" },
-            ],
-          },
+    const homeGroup = orphan.lexemes[0]!.grounding.frameFacts.find(
+      (item) => item.frameId === homeBreakfastFrame.id,
+    )!;
+    replaceFrameFacts(orphan.lexemes[0]!, [
+      ...homeGroup.facts,
+      {
+        factId: "orphan-fact",
+        predicate: "contains",
+        args: [
+          { kind: "ENTITY", entityId: "home-bowl" },
+          { kind: "ENTITY", entityId: "home-soup" },
         ],
       },
-    };
+    ]);
     const result = validateSceneContent({ pack: orphan, ...authorities });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -191,14 +183,14 @@ describe("Scene Content Contract schema", () => {
         expect.arrayContaining([
           {
             code: SceneContentErrorCode.CONTENT_FACT_NOT_BOUND_TO_FRAME,
-            path: "lexemes[0].grounding.facts[1]",
+            path: "lexemes[0].grounding.frameFacts[0].facts[1]",
           },
         ]),
       );
     }
   });
 
-  it("rejects a connectFactId that is not on the lexeme's frame", () => {
+  it("rejects a connect fact that is not on the lexeme's frame", () => {
     const pack = cloneMealPack();
     pack.frames[0] = {
       ...pack.frames[0]!,
@@ -216,6 +208,38 @@ describe("Scene Content Contract schema", () => {
         ]),
       );
     }
+  });
+
+  it("rejects a restaurant connect fact that is not in that frame's grounding", () => {
+    const pack = cloneMealPack();
+    pack.lexemes[0]!.build = {
+      ...pack.lexemes[0]!.build,
+      connectFactByFrame: [
+        { frameId: homeBreakfastFrame.id, factId: "home-fact-contains-bowl-soup" },
+        { frameId: restaurantMealFrame.id, factId: "home-fact-contains-bowl-soup" },
+      ],
+    };
+    expect(issuesOf(pack)).toContain(SceneContentErrorCode.CONTENT_CONNECT_FACT_NOT_IN_FRAME);
+  });
+
+  it("rejects reversed restaurant contains(bowl, soup)", () => {
+    const pack = cloneMealPack();
+    replaceFrameFacts(
+      pack.lexemes[0]!,
+      [
+        {
+          factId: "rest-fact-contains-bowl-soup",
+          predicate: "contains",
+          args: [
+            { kind: "ENTITY", entityId: "rest-soup" },
+            { kind: "ENTITY", entityId: "rest-bowl" },
+          ],
+          caption: "碗里装着汤",
+        },
+      ],
+      restaurantMealFrame.id,
+    );
+    expect(issuesOf(pack)).toContain(SceneContentErrorCode.CONTENT_FACT_DIRECTION_MISMATCH);
   });
 
   it("rejects unknown fields with a precise path", () => {
@@ -243,54 +267,45 @@ describe("Scene Content Contract schema", () => {
 
   it("rejects wrong predicate and reversed contains(bowl, soup)", () => {
     const wrongPredicate = cloneMealPack();
-    wrongPredicate.lexemes[0] = {
-      ...wrongPredicate.lexemes[0]!,
-      grounding: {
-        ...wrongPredicate.lexemes[0]!.grounding,
-        facts: [
-          {
-            ...wrongPredicate.lexemes[0]!.grounding.facts[0]!,
-            predicate: "suitable_for",
-          },
-        ],
-      },
-    };
+    const homeSoupFacts = wrongPredicate.lexemes[0]!.grounding.frameFacts.find(
+      (item) => item.frameId === homeBreakfastFrame.id,
+    )!.facts;
+    replaceFrameFacts(wrongPredicate.lexemes[0]!, [
+      { ...homeSoupFacts[0]!, predicate: "suitable_for" },
+    ]);
     expect(issuesOf(wrongPredicate)).toContain(
       SceneContentErrorCode.CONTENT_FACT_ARGUMENT_MISMATCH,
     );
 
     const reversed = cloneMealPack();
-    reversed.lexemes[0] = {
-      ...reversed.lexemes[0]!,
-      grounding: {
-        ...reversed.lexemes[0]!.grounding,
-        facts: [
-          {
-            ...reversed.lexemes[0]!.grounding.facts[0]!,
-            args: [
-              { kind: "ENTITY", entityId: "home-soup" },
-              { kind: "ENTITY", entityId: "home-bowl" },
-            ],
-          },
+    const reversedHome = reversed.lexemes[0]!.grounding.frameFacts.find(
+      (item) => item.frameId === homeBreakfastFrame.id,
+    )!.facts;
+    replaceFrameFacts(reversed.lexemes[0]!, [
+      {
+        ...reversedHome[0]!,
+        args: [
+          { kind: "ENTITY", entityId: "home-soup" },
+          { kind: "ENTITY", entityId: "home-bowl" },
         ],
       },
-    };
+    ]);
     expect(issuesOf(reversed)).toContain(SceneContentErrorCode.CONTENT_FACT_DIRECTION_MISMATCH);
 
     const reversedSuitable = cloneMealPack();
     const spoon = reversedSuitable.lexemes.find((item) => item.id === "meal-spoon")!;
-    spoon.grounding = {
-      ...spoon.grounding,
-      facts: [
-        {
-          ...spoon.grounding.facts[0]!,
-          args: [
-            { kind: "ENTITY", entityId: "home-soup" },
-            { kind: "ENTITY", entityId: "home-spoon" },
-          ],
-        },
-      ],
-    };
+    const spoonHome = spoon.grounding.frameFacts.find(
+      (item) => item.frameId === homeBreakfastFrame.id,
+    )!.facts;
+    replaceFrameFacts(spoon, [
+      {
+        ...spoonHome[0]!,
+        args: [
+          { kind: "ENTITY", entityId: "home-soup" },
+          { kind: "ENTITY", entityId: "home-spoon" },
+        ],
+      },
+    ]);
     expect(issuesOf(reversedSuitable)).toContain(
       SceneContentErrorCode.CONTENT_FACT_DIRECTION_MISMATCH,
     );
@@ -487,16 +502,12 @@ describe("Scene Content multi-frame and safety", () => {
 
   it("validates every pack frame, not only the current runtime frame", () => {
     const pack = cloneMealPack();
-    pack.frames.push({
-      frameId: restaurantMealFrame.id,
-      title: "餐厅",
-      settingLabel: "坏的第二帧",
+    pack.frames[1] = {
+      ...pack.frames[1]!,
       entityIds: ["rest-missing"],
       factIds: ["rest-missing-fact"],
       presentationOrder: ["rest-missing"],
-    });
-    expect(issuesOf(pack)).toContain(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND);
-
+    };
     const withRuntime = validateSceneContent({
       pack,
       frame: homeBreakfastFrame,
@@ -517,68 +528,9 @@ describe("Scene Content multi-frame and safety", () => {
   });
 
   it("resolves only the current frame and never uses frameBindings[0] as a proxy", () => {
-    const pack = cloneMealPack();
-    pack.frames.push({
-      frameId: restaurantMealFrame.id,
-      title: "餐厅",
-      settingLabel: "餐厅桌上的食物和餐具。",
-      entityIds: ["rest-soup", "rest-bowl", "rest-spoon", "rest-fork"],
-      factIds: ["rest-fact-contains-bowl-soup", "rest-fact-suitable-for-spoon-soup"],
-      presentationOrder: ["rest-soup", "rest-bowl", "rest-spoon", "rest-fork"],
-    });
-    const soup = pack.lexemes[0]!;
-    soup.membership.frameBindings.push({
-      frameId: restaurantMealFrame.id,
-      entityId: "rest-soup",
-      roleId: "FOOD",
-      sceneOrder: 0,
-    });
-    pack.lexemes[1]!.membership.frameBindings.push({
-      frameId: restaurantMealFrame.id,
-      entityId: "rest-bowl",
-      roleId: "FOOD_CONTAINER",
-      sceneOrder: 1,
-    });
-    soup.grounding = {
-      ...soup.grounding,
-      facts: [
-        ...soup.grounding.facts,
-        {
-          factId: "rest-fact-contains-bowl-soup",
-          predicate: "contains",
-          args: [
-            { kind: "ENTITY", entityId: "rest-bowl" },
-            { kind: "ENTITY", entityId: "rest-soup" },
-          ],
-        },
-      ],
-    };
-    pack.lexemes[1]!.grounding = {
-      ...pack.lexemes[1]!.grounding,
-      facts: [
-        ...pack.lexemes[1]!.grounding.facts,
-        {
-          factId: "rest-fact-contains-bowl-soup",
-          predicate: "contains",
-          args: [
-            { kind: "ENTITY", entityId: "rest-bowl" },
-            { kind: "ENTITY", entityId: "rest-soup" },
-          ],
-        },
-      ],
-    };
-    soup.build = { ...soup.build, connectFactId: undefined };
-    pack.lexemes[1]!.build = {
-      ...pack.lexemes[1]!.build,
-      connectFactId: undefined,
-    };
     const resolvedHome = resolveSceneContent({
-      pack,
-      frame: homeBreakfastFrame,
-      frames: [restaurantMealFrame],
-      skeleton: mealSkeleton,
-      cluster: MEAL_SCENE_CLUSTER,
-      loadLexeme: mealTestLexemeLoader,
+      pack: MEAL_SCENE_CONTENT_PACK,
+      ...authorities,
     });
     expect(resolvedHome.ok).toBe(true);
     if (!resolvedHome.ok) {
@@ -587,9 +539,13 @@ describe("Scene Content multi-frame and safety", () => {
     const homeSoup = findResolvedLexeme(resolvedHome.content, MEAL_SENSE.soup);
     expect(homeSoup?.frameId).toBe(homeBreakfastFrame.id);
     expect(homeSoup?.entityId).toBe("home-soup");
+    expect(homeSoup?.build.connectFactId).toBe("home-fact-contains-bowl-soup");
+    expect(homeSoup?.groundingFacts.map((item) => item.factId)).toEqual([
+      "home-fact-contains-bowl-soup",
+    ]);
 
     const resolvedRestaurant = resolveSceneContent({
-      pack,
+      pack: MEAL_SCENE_CONTENT_PACK,
       frame: restaurantMealFrame,
       frames: [homeBreakfastFrame],
       skeleton: mealSkeleton,
@@ -603,10 +559,26 @@ describe("Scene Content multi-frame and safety", () => {
     const restSoup = findResolvedLexeme(resolvedRestaurant.content, MEAL_SENSE.soup);
     expect(restSoup?.frameId).toBe(restaurantMealFrame.id);
     expect(restSoup?.entityId).toBe("rest-soup");
+    expect(restSoup?.build.connectFactId).toBe("rest-fact-contains-bowl-soup");
+    expect(restSoup?.groundingFacts).toEqual([
+      {
+        factId: "rest-fact-contains-bowl-soup",
+        predicate: "contains",
+        args: [
+          { kind: "ENTITY", entityId: "rest-bowl" },
+          { kind: "ENTITY", entityId: "rest-soup" },
+        ],
+        caption: "碗里装着汤",
+      },
+    ]);
     expect(resolvedRestaurant.content.lexemes.map((item) => item.entityId)).toEqual([
       "rest-soup",
       "rest-bowl",
+      "rest-spoon",
+      "rest-fork",
     ]);
+    expect(JSON.stringify(resolvedRestaurant.content.lexemes)).not.toContain("home-soup");
+    expect(JSON.stringify(resolvedRestaurant.content.lexemes)).not.toContain("home-fact-");
   });
 
   it("returns an immutable registry pack copy", () => {

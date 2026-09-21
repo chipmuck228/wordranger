@@ -105,12 +105,23 @@ The validator also requires that the bound runtime entity's
 `lexemeSenseBindings` contain `fixtureSense`. A matching entity ID
 without that sense is `CONTENT_ENTITY_SENSE_BINDING_MISMATCH`.
 
-Every authored grounding fact must be accepted by at least one pack
-frame and fully validated there (predicate, ordered arguments, runtime
-`initialFacts`). A fact that no frame lists is
-`CONTENT_FACT_NOT_BOUND_TO_FRAME`. `build.connectFactId` must exist in
-`lexeme.grounding.facts` and must belong to every frame the lexeme is
-bound to; otherwise `CONTENT_CONNECT_FACT_NOT_IN_FRAME`.
+Grounding facts are frame-scoped:
+
+```ts
+grounding.frameFacts: { frameId, facts: ContextualFactRef[] }[]
+build.connectFactByFrame: { frameId, factId }[]
+```
+
+Each fact belongs to an explicit pack frame. The validator checks that
+frame's runtime `initialFacts` for the same `factId`, predicate, and
+ordered arguments. A fact that the declared frame does not list is
+`CONTENT_FACT_NOT_BOUND_TO_FRAME`. A connect fact must belong to the
+lexeme's grounding for that same frame; otherwise
+`CONTENT_CONNECT_FACT_NOT_IN_FRAME`.
+
+The resolver and snapshot emit only the current frame's facts and set
+resolved `build.connectFactId` to that frame's connect fact. Home and
+Restaurant may use different fact IDs for the same predicate.
 
 TypeScript types are not enough. Authored JSON must pass the runtime
 validator.
@@ -125,12 +136,12 @@ and contrast / fact entity IDs. They do not look entities up again by
 `fixtureSense`. If a resolved ID is not on the current frame, the
 factory returns an empty plan.
 
-Same-skeleton remapping (home-breakfast snapshot → restaurant / picnic)
-belongs in the Meal wrapper, not the generic factory. That projection
-may remap entities by `fixtureSense`, but it must rematch destination
-facts by predicate and ordered arguments and take the destination
-`factId`. Substituting entity IDs while keeping a home `factId` is not
-a valid resolved snapshot.
+Home Breakfast and Restaurant Meal are authored frames in the Meal
+pack. The Meal wrapper snapshots / resolves the current frame directly.
+`projectResolvedMealContentOntoFrame` remains only as Picnic
+compatibility. That projection rematches destination facts by predicate
+and ordered arguments and takes the destination `factId`. Zero or
+multiple equivalent matches fail closed.
 
 Meal-specific values such as `EATER_CAN_EAT_FOOD` and `planIdNamespace:
 "meal"` live in the Meal pack or Meal wrappers. Presentation roles are

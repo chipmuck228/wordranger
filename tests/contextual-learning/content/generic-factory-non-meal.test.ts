@@ -107,7 +107,7 @@ const pack: ContextualSceneContentPack = {
         phoneticSource: "BUNDLED_VOCABULARY",
         displayLabel: "笔",
       },
-      grounding: { facts: [] },
+      grounding: { frameFacts: [] },
       contrastBindings: [
         {
           kind: "FUNCTION_CONTRAST",
@@ -149,7 +149,7 @@ const pack: ContextualSceneContentPack = {
         phoneticSource: "BUNDLED_VOCABULARY",
         displayLabel: "纸",
       },
-      grounding: { facts: [] },
+      grounding: { frameFacts: [] },
       contrastBindings: [
         {
           kind: "FUNCTION_CONTRAST",

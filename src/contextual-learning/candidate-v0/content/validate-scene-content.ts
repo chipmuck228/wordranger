@@ -15,6 +15,7 @@ import {
 } from "./errors";
 import { validatePackAllowedKeys } from "./allowed-pack-keys";
 import { sameAuthoredAndFrameFactArgs } from "./fact-args";
+import { connectBindings, frameFactsFor } from "./frame-facts";
 import { frameBindingFor } from "./frame-binding";
 import {
   SCENE_CONTENT_SCHEMA_VERSION,
@@ -135,7 +136,6 @@ export function validateSceneContent(input: {
       );
     }
     const lexemeFrameIds = new Set<string>();
-    const factAccepted = lexeme.grounding.facts.map(() => false);
     for (const [bindingIndex, binding] of lexeme.membership.frameBindings.entries()) {
       const bindingPath = `${path}.frameBindings[${bindingIndex}]`;
       if (!packFrameIds.has(binding.frameId)) {
@@ -209,29 +209,45 @@ export function validateSceneContent(input: {
           issue(SceneContentErrorCode.CONTENT_ENTITY_NOT_IN_FRAME, `${bindingPath}.entityId`),
         );
       }
-      for (const [factIndex, factRef] of lexeme.grounding.facts.entries()) {
-        if (!packFrame?.factIds.includes(factRef.factId)) {
+    }
+    const seenFactGroups = new Set<string>();
+    for (const [groupIndex, group] of lexeme.grounding.frameFacts.entries()) {
+      const groupPath = `${path}.grounding.frameFacts[${groupIndex}]`;
+      if (!packFrameIds.has(group.frameId)) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND, `${groupPath}.frameId`));
+        continue;
+      }
+      if (seenFactGroups.has(group.frameId)) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_ID_DUPLICATE, `${groupPath}.frameId`));
+        continue;
+      }
+      seenFactGroups.add(group.frameId);
+      const binding = lexeme.membership.frameBindings.find((item) => item.frameId === group.frameId);
+      if (!binding) {
+        issues.push(
+          issue(SceneContentErrorCode.CONTENT_FRAME_BINDING_MISSING, `${groupPath}.frameId`),
+        );
+        continue;
+      }
+      const packFrame = pack.frames.find((item) => item.frameId === group.frameId);
+      const runtime = runtimeFrames.find((item) => item.id === group.frameId);
+      if (!packFrame || !runtime) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND, `${groupPath}.frameId`));
+        continue;
+      }
+      const factIdsInGroup = new Set<string>();
+      for (const [factIndex, factRef] of group.facts.entries()) {
+        const factPath = `${groupPath}.facts[${factIndex}]`;
+        if (factIdsInGroup.has(factRef.factId)) {
+          issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_ID_DUPLICATE, `${factPath}.factId`));
           continue;
         }
-        factAccepted[factIndex] = true;
-        issues.push(
-          ...validateFactRef(
-            factRef,
-            runtime,
-            binding.entityId,
-            `${path}.grounding.facts[${factIndex}]`,
-          ),
-        );
-      }
-    }
-    for (const [factIndex] of lexeme.grounding.facts.entries()) {
-      if (!factAccepted[factIndex]) {
-        issues.push(
-          issue(
-            SceneContentErrorCode.CONTENT_FACT_NOT_BOUND_TO_FRAME,
-            `${path}.grounding.facts[${factIndex}]`,
-          ),
-        );
+        factIdsInGroup.add(factRef.factId);
+        if (!packFrame.factIds.includes(factRef.factId)) {
+          issues.push(issue(SceneContentErrorCode.CONTENT_FACT_NOT_BOUND_TO_FRAME, factPath));
+          continue;
+        }
+        issues.push(...validateFactRef(factRef, runtime, binding.entityId, factPath));
       }
     }
 
@@ -302,31 +318,35 @@ export function validateSceneContent(input: {
         );
       }
     }
-    if (lexeme.build.connectFactId) {
-      const referenced = lexeme.grounding.facts.find(
-        (item) => item.factId === lexeme.build.connectFactId,
-      );
-      if (!referenced) {
+    const seenConnectFrames = new Set<string>();
+    for (const [connectIndex, connect] of connectBindings(lexeme).entries()) {
+      const connectPath = `${path}.build.connectFactByFrame[${connectIndex}]`;
+      if (seenConnectFrames.has(connect.frameId)) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_ID_DUPLICATE, `${connectPath}.frameId`));
+        continue;
+      }
+      seenConnectFrames.add(connect.frameId);
+      if (!packFrameIds.has(connect.frameId)) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND, `${connectPath}.frameId`));
+        continue;
+      }
+      if (!lexeme.membership.frameBindings.some((item) => item.frameId === connect.frameId)) {
         issues.push(
-          issue(SceneContentErrorCode.CONTENT_FACT_NOT_FOUND, `${path}.build.connectFactId`),
+          issue(SceneContentErrorCode.CONTENT_FRAME_BINDING_MISSING, `${connectPath}.frameId`),
         );
-      } else {
-        for (const [bindingIndex, binding] of lexeme.membership.frameBindings.entries()) {
-          const packFrame = pack.frames.find((item) => item.frameId === binding.frameId);
-          const runtime = runtimeFrames.find((item) => item.id === binding.frameId);
-          const onPackFrame = Boolean(packFrame?.factIds.includes(lexeme.build.connectFactId));
-          const onRuntime = Boolean(
-            runtime?.initialFacts.some((fact) => fact.id === lexeme.build.connectFactId),
-          );
-          if (!onPackFrame || !onRuntime) {
-            issues.push(
-              issue(
-                SceneContentErrorCode.CONTENT_CONNECT_FACT_NOT_IN_FRAME,
-                `${path}.frameBindings[${bindingIndex}].connectFactId`,
-              ),
-            );
-          }
-        }
+        continue;
+      }
+      const groundingFacts = frameFactsFor(lexeme, connect.frameId);
+      if (!groundingFacts.some((item) => item.factId === connect.factId)) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_CONNECT_FACT_NOT_IN_FRAME, connectPath));
+        continue;
+      }
+      const packFrame = pack.frames.find((item) => item.frameId === connect.frameId);
+      const runtime = runtimeFrames.find((item) => item.id === connect.frameId);
+      const onPackFrame = Boolean(packFrame?.factIds.includes(connect.factId));
+      const onRuntime = Boolean(runtime?.initialFacts.some((fact) => fact.id === connect.factId));
+      if (!onPackFrame || !onRuntime) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_CONNECT_FACT_NOT_IN_FRAME, connectPath));
       }
     }
     for (const [contrastIndex, contrast] of lexeme.contrastBindings.entries()) {
