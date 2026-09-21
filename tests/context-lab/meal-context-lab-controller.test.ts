@@ -61,7 +61,7 @@ describe("Meal Context Lab controller", () => {
     });
     assertGuided(second);
     expect(second.progress).toEqual({ current: 2, total: 6 });
-    expect(second.context.relationCaption).toBe("勺子 → 适合舀汤");
+    expect(second.context.relationCaption).toBe("碗里装着汤");
     expect(second.handle.revision).toBe(1);
   });
 

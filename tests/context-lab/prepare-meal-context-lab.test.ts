@@ -51,15 +51,15 @@ describe("Meal Context Lab current-step presentation", () => {
     const { controller } = createMealLabHarness();
     const first = await controller.start();
     assertGuided(first);
-    expect(first.context.highlightedEntityIds).toEqual(["home-spoon"]);
+    expect(first.context.highlightedEntityIds).toEqual(["home-soup"]);
     const second = await controller.acknowledge({
       runId: first.handle.runId,
       revision: first.handle.revision,
       activityId: first.activity.id,
     });
     assertGuided(second);
-    expect(second.context.highlightedEntityIds).toEqual(["home-spoon", "home-soup"]);
-    expect(second.context.relationCaption).toBe("勺子 → 适合舀汤");
+    expect(second.context.highlightedEntityIds).toEqual(["home-soup", "home-bowl"]);
+    expect(second.context.relationCaption).toBe("碗里装着汤");
     const third = await controller.acknowledge({
       runId: second.handle.runId,
       revision: second.handle.revision,
@@ -67,7 +67,7 @@ describe("Meal Context Lab current-step presentation", () => {
     });
     assertGuided(third);
     expect(third.buildPhase).toBe("TEACH");
-    expect(third.context.supportReveal?.lexicalForm).toBe("spoon");
+    expect(third.context.supportReveal?.lexicalForm).toBe("soup");
   });
 
   it("frozen preview contains a real PublicLearningTask and no TaskAnswerKey", async () => {

@@ -59,7 +59,6 @@ describe("validateActiveExperienceQueue", () => {
           buildQueue: aligned,
         }),
         experienceRun: runFor(PLAN_ID),
-        operation: "ACKNOWLEDGE",
       }).ok,
     ).toBe(true);
     expect(
@@ -70,7 +69,6 @@ describe("validateActiveExperienceQueue", () => {
           buildQueue: { ...aligned, currentPlanId: "other-plan" },
         }),
         experienceRun: runFor(PLAN_ID),
-        operation: "SUBMIT",
       }),
     ).toEqual({ ok: false, reason: "BUILD_QUEUE_PLAN_MISMATCH" });
   });
@@ -91,7 +89,6 @@ describe("validateActiveExperienceQueue", () => {
           buildQueue: started,
         }),
         experienceRun: runFor(PLAN_ID),
-        operation: "CONTINUE",
       }).ok,
     ).toBe(true);
     expect(
@@ -102,7 +99,6 @@ describe("validateActiveExperienceQueue", () => {
           buildQueue: { ...started, currentPlanId: PLAN_ID },
         }),
         experienceRun: runFor(PLAN_ID),
-        operation: "CONTINUE",
       }),
     ).toEqual({ ok: false, reason: "BUILD_QUEUE_PHASE_INVARIANT" });
 
@@ -120,7 +116,6 @@ describe("validateActiveExperienceQueue", () => {
           buildQueue: finished,
         }),
         experienceRun: runFor(PLAN_ID),
-        operation: "PRESENT",
       }).ok,
     ).toBe(true);
     expect(
@@ -131,7 +126,6 @@ describe("validateActiveExperienceQueue", () => {
           buildQueue: started,
         }),
         experienceRun: runFor(PLAN_ID),
-        operation: "COMPLETE_AFTER_EVIDENCE",
       }),
     ).toEqual({ ok: false, reason: "BUILD_QUEUE_PHASE_INVARIANT" });
   });
@@ -149,7 +143,6 @@ describe("validateActiveExperienceQueue", () => {
           strengthenQueue: strengthen,
         }),
         experienceRun: runFor(PLAN_ID),
-        operation: "CONTINUE",
       }),
     ).toEqual({ ok: false, reason: "ACTIVE_PLAN_ID_NOT_ALLOWED" });
     expect(
@@ -159,7 +152,6 @@ describe("validateActiveExperienceQueue", () => {
           strengthenQueue: { ...strengthen, currentPlanId: null },
         }),
         experienceRun: runFor(PLAN_ID),
-        operation: "CONTINUE",
       }).ok,
     ).toBe(true);
   });

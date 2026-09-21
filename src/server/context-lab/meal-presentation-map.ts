@@ -1,6 +1,6 @@
 /**
- * Server-authored Meal home-breakfast presentation mapping.
- * Explicit IDs only. Do not derive labels from ID fragments.
+ * Candidate compatibility adapter.
+ * Meal home-breakfast presentation projects from the Scene Content pack.
  */
 
 import type { GuidedActivityKind } from "@/contextual-learning/candidate-v0/domain/types";
@@ -8,33 +8,37 @@ import type {
   ContextEntityRole,
   PublicContextEntity,
 } from "@/components/context-lab/types";
+import { MEAL_SCENE_CONTENT_PACK } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-content";
+import { snapshotSceneContentFromPack } from "@/contextual-learning/candidate-v0/content/snapshot-from-pack";
+import { HOME_BREAKFAST_FRAME_ID } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-content";
 
-export const HOME_BREAKFAST_FRAME_ID = "home-breakfast-v0";
+export { HOME_BREAKFAST_FRAME_ID };
 
-export const HOME_BREAKFAST_SCENE_ENTITY_IDS = [
-  "home-soup",
-  "home-bowl",
-  "home-spoon",
-  "home-fork",
-] as const;
+const snapshot = snapshotSceneContentFromPack(
+  MEAL_SCENE_CONTENT_PACK,
+  HOME_BREAKFAST_FRAME_ID,
+);
+
+export const HOME_BREAKFAST_SCENE_ENTITY_IDS = (snapshot?.frame.presentationOrder ??
+  []) as readonly string[];
 
 const HOME_BREAKFAST_ENTITIES: Record<
   string,
   { label: string; role: ContextEntityRole }
-> = {
-  "home-soup": { label: "汤", role: "FOOD" },
-  "home-bowl": { label: "碗", role: "CONTAINER" },
-  "home-spoon": { label: "勺子", role: "TOOL" },
-  "home-fork": { label: "叉子", role: "TOOL" },
-};
+> = Object.fromEntries(
+  (snapshot?.lexemes ?? []).map((lexeme) => [
+    lexeme.entityId,
+    { label: lexeme.displayLabel, role: lexeme.publicVisualRole },
+  ]),
+);
 
 const HOME_BREAKFAST_COPY = {
-  title: "早餐时间",
-  settingLabel: "看看桌上的食物和餐具。",
+  title: snapshot?.frame.title ?? "",
+  settingLabel: snapshot?.frame.settingLabel ?? "",
 };
 
 const GUIDED_INSTRUCTIONS: Record<GuidedActivityKind, string> = {
-  PRESENT_CONTEXT: "桌上有汤、碗、勺子和叉子。先看看这些物品。",
+  PRESENT_CONTEXT: snapshot?.frame.introInstruction ?? "",
   OBSERVE_RELATION: "先看当前物品和它在场景里的关系。",
   CONNECT_ENTITY_AND_MEANING: "把当前物品和它的意思联系起来。",
   PRESENT_LEXICAL_FORM: "这是教学，不是测试。看一看这个词和它的英文词形。",
@@ -48,17 +52,29 @@ const STRENGTHEN_VERIFY_INSTRUCTION =
 
 const FROZEN_PREVIEW_INSTRUCTION = "根据刚才看到的早餐情景，试着写出对应的英文单词。";
 
-const RELATION_CAPTIONS: Record<string, string> = {
-  "suitable_for|home-spoon|home-soup": "勺子 → 适合舀汤",
-  "contains|home-bowl|home-soup": "碗里装着汤",
-};
+function relationCaptionKey(predicate: string, entityIds: readonly string[]): string {
+  return `${predicate}|${entityIds.join("|")}`;
+}
 
-const CONTRAST_CAPTIONS: Record<string, string> = {
-  "home-soup": "汤：碗里的食物",
-  "home-bowl": "碗：盛汤的容器",
-  "home-spoon": "勺子：舀取汤或柔软食物",
-  "home-fork": "叉子：叉取食物块",
-};
+const RELATION_CAPTIONS: Record<string, string> = Object.fromEntries(
+  (snapshot?.lexemes ?? []).flatMap((lexeme) =>
+    lexeme.groundingFacts
+      .filter((fact) => fact.caption)
+      .map((fact) => [
+        relationCaptionKey(
+          fact.predicate,
+          fact.args.flatMap((arg) => (arg.kind === "ENTITY" ? [arg.entityId] : [])),
+        ),
+        fact.caption as string,
+      ]),
+  ),
+);
+
+const CONTRAST_CAPTIONS: Record<string, string> = Object.fromEntries(
+  (snapshot?.lexemes ?? [])
+    .filter((lexeme) => lexeme.contrasts[0]?.caption)
+    .map((lexeme) => [lexeme.entityId, lexeme.contrasts[0]!.caption as string]),
+);
 
 export function homeBreakfastFrameCopy(): {
   title: string;
@@ -112,7 +128,7 @@ export function relationCaptionFor(
   predicate: string,
   entityIds: readonly string[],
 ): string | undefined {
-  return RELATION_CAPTIONS[`${predicate}|${entityIds.join("|")}`];
+  return RELATION_CAPTIONS[relationCaptionKey(predicate, entityIds)];
 }
 
 export function contrastCaptionFor(entityId: string): string | undefined {

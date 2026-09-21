@@ -26,7 +26,7 @@ import {
   type ResolvedTargetSnapshot,
   type RuntimeCapability,
 } from "@/contextual-learning/candidate-v0/domain/types";
-import { MEAL_SENSE } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
+import { listMealStrengthenIdentities } from "@/contextual-learning/candidate-v0/strengthen/meal-lexical-profiles";
 import {
   createExperienceRun,
   createPublicGuidedActivity,
@@ -89,10 +89,7 @@ import {
 } from "./present-context-lab-screen";
 import { generateMealProbeTask } from "./generate-meal-probe-task";
 import { mealColdProbeTargets } from "./meal-probe-targets";
-import {
-  validateActiveExperienceQueue,
-  type ExperienceQueueOperation,
-} from "./validate-active-experience-queue";
+import { validateActiveExperienceQueue } from "./validate-active-experience-queue";
 import {
   currentBuildQueueItem,
   markBuildQueueItemCompleted,
@@ -118,10 +115,6 @@ import {
   type MealProbeOrchestration,
 } from "./meal-probe-orchestration";
 import type { StudentAction } from "@/domain/tasks/student-action";
-import {
-  BUNDLED_LEXEME_BINDINGS,
-  bundledBindingLexemeId,
-} from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
 import { deriveFrozenHintCountFromSupportExposure } from "@/contextual-learning/candidate-v0/strengthen/derive-frozen-hint-count";
 import {
   currentStrengthenQueueItem,
@@ -233,7 +226,7 @@ export class MealContextLabController {
     if (record.revision !== input.revision) {
       return staleRunScreen();
     }
-    const misaligned = rejectInvalidExperienceQueue(record, "ACKNOWLEDGE");
+    const misaligned = rejectInvalidExperienceQueue(record);
     if (misaligned) {
       return misaligned;
     }
@@ -346,7 +339,7 @@ export class MealContextLabController {
       return notFoundRunScreen();
     }
     if (record.experienceRun.status !== "COMPLETED") {
-      const misaligned = rejectInvalidExperienceQueue(record, "SUBMIT", {
+      const misaligned = rejectInvalidExperienceQueue(record, {
         code: CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED,
         message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
       });
@@ -506,7 +499,7 @@ export class MealContextLabController {
     if (rejectedContinue) {
       return rejectedContinue;
     }
-    const misaligned = rejectInvalidExperienceQueue(record, "CONTINUE");
+    const misaligned = rejectInvalidExperienceQueue(record);
     if (misaligned) {
       return misaligned;
     }
@@ -585,10 +578,7 @@ export class MealContextLabController {
     feedback: ReturnType<typeof contextLabFeedbackFromEvaluation>;
     retryOnCasConflict?: boolean;
   }): Promise<ContextLabCurrentScreen> {
-    const misaligned = rejectInvalidExperienceQueue(
-      input.record,
-      "COMPLETE_AFTER_EVIDENCE",
-    );
+    const misaligned = rejectInvalidExperienceQueue(input.record);
     if (misaligned) {
       return misaligned;
     }
@@ -823,7 +813,7 @@ export class MealContextLabController {
   private async presentStoredRun(
     record: ContextLabRunRecord,
   ): Promise<ContextLabCurrentScreen> {
-    const aligned = rejectInvalidExperienceQueue(record, "PRESENT");
+    const aligned = rejectInvalidExperienceQueue(record);
     if (aligned) {
       return aligned;
     }
@@ -1055,13 +1045,13 @@ export class MealContextLabController {
     const target = probe.targets[next.targetIndex];
     const siblingLemmas = probe.targets
       .filter((item) => item.target.lexemeId !== target.target.lexemeId)
-      .map((item) => lemmaForTarget(item.target.lexemeId));
+      .map((item) => displayFormForTarget(item.target));
     const generated = await generateMealProbeTask({
       runId: record.id,
       target,
       skill: next.skill,
       siblingLemmas,
-      targetLemma: lemmaForTarget(target.target.lexemeId),
+      targetLemma: displayFormForTarget(target.target),
       now: this.now(),
     });
     if (!generated.ok) {
@@ -1578,13 +1568,23 @@ export function mealBuildPlanningInput(
   const runtime = Array.isArray(profileOrCapabilities)
     ? profileOrCapabilities
     : capabilities;
-  const sense = profile?.fixtureSense ?? MEAL_SENSE.spoon;
+  const fallback = defaultMealPlanningIdentity();
+  const sense = profile?.fixtureSense ?? fallback?.fixtureSense;
+  if (!sense) {
+    return {
+      learningNeedRef: "need-opaque-ref",
+      mode: "BUILD",
+      targets: [],
+      allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
+      runtimeCapabilities: runtime,
+    };
+  }
   return {
     learningNeedRef: "need-opaque-ref",
     mode: "BUILD",
     targets: [
       {
-        id: `target-${profile?.stepToken ?? "spoon"}-form`,
+        id: `target-${profile?.stepToken ?? fallback?.stepToken}-form`,
         sense,
         focus: "MEANING_TO_FORM",
       },
@@ -1604,13 +1604,23 @@ export function mealStrengthenPlanningInput(
   const runtime = Array.isArray(profileOrCapabilities)
     ? profileOrCapabilities
     : capabilities;
-  const sense = profile?.fixtureSense ?? MEAL_SENSE.spoon;
+  const fallback = defaultMealPlanningIdentity();
+  const sense = profile?.fixtureSense ?? fallback?.fixtureSense;
+  if (!sense) {
+    return {
+      learningNeedRef: "need-opaque-ref",
+      mode: "STRENGTHEN",
+      targets: [],
+      allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
+      runtimeCapabilities: runtime,
+    };
+  }
   return {
     learningNeedRef: "need-opaque-ref",
     mode: "STRENGTHEN",
     targets: [
       {
-        id: `target-${profile?.stepToken ?? "spoon"}-form`,
+        id: `target-${profile?.stepToken ?? fallback?.stepToken}-form`,
         sense,
         focus: "MEANING_TO_FORM",
       },
@@ -1818,13 +1828,10 @@ function completeExperienceAfterEvidence(input: {
   probe: MealProbeOrchestration | null;
   experienceRun: ExperienceRun;
 }): MealProbeOrchestration | { screen: ContextLabCurrentScreen } | null {
-  const misaligned = rejectInvalidExperienceQueue(
-    {
-      probe: input.probe,
-      experienceRun: input.experienceRun,
-    },
-    "COMPLETE_AFTER_EVIDENCE",
-  );
+  const misaligned = rejectInvalidExperienceQueue({
+    probe: input.probe,
+    experienceRun: input.experienceRun,
+  });
   if (misaligned) {
     return { screen: misaligned };
   }
@@ -1984,7 +1991,6 @@ function experienceRecordedCopy(
 
 function rejectInvalidExperienceQueue(
   record: Pick<ContextLabRunRecord, "probe" | "experienceRun">,
-  operation: ExperienceQueueOperation,
   options?: {
     code?: (typeof CONTEXT_LAB_ERROR_CODES)[keyof typeof CONTEXT_LAB_ERROR_CODES];
     message?: string;
@@ -1993,7 +1999,6 @@ function rejectInvalidExperienceQueue(
   const result = validateActiveExperienceQueue({
     probe: record.probe,
     experienceRun: record.experienceRun,
-    operation,
   });
   if (result.ok) {
     return null;
@@ -2030,13 +2035,13 @@ function rejectMalformedContinue(input: {
   return null;
 }
 
-function lemmaForTarget(lexemeId: string): string {
-  for (const binding of Object.values(BUNDLED_LEXEME_BINDINGS)) {
-    if (bundledBindingLexemeId(binding) === lexemeId) {
-      return binding.lemma;
-    }
-  }
-  return "";
+function displayFormForTarget(target: { lexemeId: string; senseId: string }): string {
+  return mealProfileForTarget(target)?.displayForm ?? "";
+}
+
+function defaultMealPlanningIdentity() {
+  const listed = listMealStrengthenIdentities();
+  return listed.ok ? listed.identities[0] ?? null : null;
 }
 
 function persistErrorMessage(error: unknown): string {

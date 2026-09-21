@@ -36,7 +36,7 @@ describe("Context Lab frozen task submission", () => {
       runId: correctPreview.handle.runId,
       revision: correctPreview.handle.revision,
       taskId: correctPreview.task.id,
-      action: { kind: "TEXT_INPUT", value: "spoon" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
       responseTimeMs: 1200,
     });
     assertRecorded(correct);
@@ -52,7 +52,7 @@ describe("Context Lab frozen task submission", () => {
     expect(evidence[0]?.gameId).toBe(RANGER_TRIAL_GAME_ID);
     expect(evidence[0]?.userId).toBe(V1_PLACEHOLDER_USER_ID);
     expect(evidence[0]?.outcome).toBe(EvidenceOutcome.INDEPENDENT_CORRECT);
-    expect(evidence[0]?.lexemeId).toBe(contextLabBoundLexemeId("lex-spoon"));
+    expect(evidence[0]?.lexemeId).toBe(contextLabBoundLexemeId("lex-soup"));
     const model = await correctHarness.learning.getStudentLexemeModel(
       V1_PLACEHOLDER_USER_ID,
       evidence[0]!.lexemeId,
@@ -66,7 +66,7 @@ describe("Context Lab frozen task submission", () => {
     });
     expect(stored?.experienceRun.status).toBe("COMPLETED");
     expect(JSON.stringify(stored?.experienceRun)).not.toContain("typedAnswer");
-    expect(JSON.stringify(stored?.experienceRun)).not.toContain('"value":"spoon"');
+    expect(JSON.stringify(stored?.experienceRun)).not.toContain('"value":"soup"');
     expect(JSON.stringify(stored?.experienceRun)).not.toContain("exactAcceptedTexts");
 
     const incorrectHarness = createMealLabHarness();
@@ -101,7 +101,7 @@ describe("Context Lab frozen task submission", () => {
       runId: first.handle.runId,
       revision: first.handle.revision,
       taskId: "00000000-0000-5000-8000-000000000099",
-      action: { kind: "TEXT_INPUT", value: "spoon" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
     });
     expect(guidedSubmit.kind).toBe("ERROR");
 
@@ -110,7 +110,7 @@ describe("Context Lab frozen task submission", () => {
       runId: preview.handle.runId,
       revision: preview.handle.revision,
       taskId: "00000000-0000-5000-8000-000000000099",
-      action: { kind: "TEXT_INPUT", value: "spoon" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
     });
     expect(wrongTask.kind).toBe("ERROR");
 
@@ -118,7 +118,7 @@ describe("Context Lab frozen task submission", () => {
       runId: "00000000-0000-4000-8000-999999999999",
       revision: preview.handle.revision,
       taskId: preview.task.id,
-      action: { kind: "TEXT_INPUT", value: "spoon" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
     });
     expect(wrongRun.kind).toBe("ERROR");
 
@@ -126,7 +126,7 @@ describe("Context Lab frozen task submission", () => {
       runId: preview.handle.runId,
       revision: preview.handle.revision - 1,
       taskId: preview.task.id,
-      action: { kind: "TEXT_INPUT", value: "spoon" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
     });
     expect(stale.kind).toBe("ERROR");
 
@@ -134,7 +134,7 @@ describe("Context Lab frozen task submission", () => {
       runId: preview.handle.runId,
       revision: preview.handle.revision,
       taskId: preview.task.id,
-      action: { kind: "CHOICE", value: "spoon" } as never,
+      action: { kind: "CHOICE", value: "soup" } as never,
     });
     expect(unsupported.kind).toBe("ERROR");
 
@@ -142,7 +142,7 @@ describe("Context Lab frozen task submission", () => {
       runId: preview.handle.runId,
       revision: preview.handle.revision,
       taskId: preview.task.id,
-      action: { kind: "TEXT_INPUT", value: "spoon" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
       outcome: "INDEPENDENT_CORRECT",
     } as never);
     expect(withOutcome.kind).toBe("ERROR");
@@ -156,7 +156,7 @@ describe("Context Lab frozen task submission", () => {
       runId: preview.handle.runId,
       revision: preview.handle.revision,
       taskId: preview.task.id,
-      action: { kind: "TEXT_INPUT", value: "spoon" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
     });
     assertRecorded(first);
     const replay = await harness.controller.submitFrozenTask({
@@ -181,13 +181,13 @@ describe("Context Lab frozen task submission", () => {
         runId: concurrentPreview.handle.runId,
         revision: concurrentPreview.handle.revision,
         taskId: concurrentPreview.task.id,
-        action: { kind: "TEXT_INPUT", value: "spoon" },
+        action: { kind: "TEXT_INPUT", value: "soup" },
       }),
       concurrent.controller.submitFrozenTask({
         runId: concurrentPreview.handle.runId,
         revision: concurrentPreview.handle.revision,
         taskId: concurrentPreview.task.id,
-        action: { kind: "TEXT_INPUT", value: "spoon" },
+        action: { kind: "TEXT_INPUT", value: "soup" },
       }),
     ]);
     expect([left.kind, right.kind].every((kind) => kind === "FROZEN_TASK_RECORDED")).toBe(
@@ -227,7 +227,7 @@ describe("Context Lab frozen task submission", () => {
       runId: preview.handle.runId,
       revision: preview.handle.revision,
       taskId: preview.task.id,
-      action: { kind: "TEXT_INPUT", value: "spoon" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
     });
     expect(isolated.learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID)).toHaveLength(1);
     if (first.kind === "ERROR") {
@@ -245,7 +245,7 @@ describe("Context Lab frozen task submission", () => {
     expect(isolated.learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID)).toHaveLength(1);
     const model = await isolated.learning.getStudentLexemeModel(
       V1_PLACEHOLDER_USER_ID,
-      contextLabBoundLexemeId("lex-spoon") ?? "lex-spoon",
+      contextLabBoundLexemeId("lex-soup") ?? "lex-soup",
     );
     expect(model?.evidenceCount).toBe(1);
     const completed = await isolated.repository.get({
@@ -262,7 +262,7 @@ describe("Context Lab frozen task submission", () => {
       runId: preview.handle.runId,
       revision: preview.handle.revision,
       taskId: preview.task.id,
-      action: { kind: "TEXT_INPUT", value: "spoon" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
     });
     assertRecorded(recorded);
     const keys = collectKeys(recorded);
@@ -273,7 +273,7 @@ describe("Context Lab frozen task submission", () => {
       runId: recorded.handle.runId,
       revision: recorded.handle.revision,
       taskId: preview.task.id,
-      action: { kind: "TEXT_INPUT", value: "spoon" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
     });
     assertRecorded(again);
     expect(harness.learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID)).toHaveLength(1);

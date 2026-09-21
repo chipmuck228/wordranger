@@ -56,7 +56,7 @@ describe("Context Lab transition races", () => {
       vi.advanceTimersByTime(160);
     });
     expect(screen.getByText("2 / 6")).toBeTruthy();
-    expect(screen.getByText("勺子 → 适合舀汤")).toBeTruthy();
+    expect(screen.getByText("碗里装着汤")).toBeTruthy();
     if (initialScreen.kind === "GUIDED") {
       expect(initialScreen.progress.current).toBe(1);
     }
@@ -132,8 +132,8 @@ describe("Context Lab reduced-motion and restart", () => {
       <ContextLabClient {...harness.ops} initialScreen={current} />,
     );
     const input = screen.getByLabelText("英文答案") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "spoon" } });
-    expect(input.value).toBe("spoon");
+    fireEvent.change(input, { target: { value: "soup" } });
+    expect(input.value).toBe("soup");
     fireEvent.click(screen.getByRole("button", { name: "提交" }));
     expect(await screen.findByText("这次练习已记录。")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "重新体验" }));

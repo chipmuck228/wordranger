@@ -91,12 +91,21 @@ function mealEntities(prefix: string, labels: {
 
 function mealFacts(prefix: string): ContextFrame["initialFacts"] {
   return [
-    fact("contains", [entityArg(`${prefix}-bowl`), entityArg(`${prefix}-soup`)]),
-    fact("contains", [entityArg(`${prefix}-cup`), entityArg(`${prefix}-drink`)]),
-    fact("suitable_for", [
-      entityArg(`${prefix}-spoon`),
-      entityArg(`${prefix}-soup`),
-    ]),
+    fact(
+      "contains",
+      [entityArg(`${prefix}-bowl`), entityArg(`${prefix}-soup`)],
+      `${prefix}-fact-contains-bowl-soup`,
+    ),
+    fact(
+      "contains",
+      [entityArg(`${prefix}-cup`), entityArg(`${prefix}-drink`)],
+      `${prefix}-fact-contains-cup-drink`,
+    ),
+    fact(
+      "suitable_for",
+      [entityArg(`${prefix}-spoon`), entityArg(`${prefix}-soup`)],
+      `${prefix}-fact-suitable-for-spoon-soup`,
+    ),
   ];
 }
 

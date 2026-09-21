@@ -1,11 +1,13 @@
 /**
- * Catalog-driven Meal lexical BUILD identities and scene bindings.
- * Candidate V0 / Experimental / Not a Standard.
- *
- * Identity comes from the reviewed scene catalog + Probe target order.
- * Grounding / contrast bindings are authored, not inferred from labels.
+ * Candidate compatibility adapter.
+ * Meal BUILD profiles project from the Scene Content pack.
+ * This file is not a second authored truth.
  */
 
+import { MEAL_SCENE_CONTENT_PACK } from "../content/packs/meal/meal-scene-content";
+import { snapshotSceneContentFromPack } from "../content/snapshot-from-pack";
+import { HOME_BREAKFAST_FRAME_ID } from "../content/packs/meal/meal-scene-content";
+import { projectBuildProfile } from "../content/project-from-resolved";
 import {
   MEAL_PROBE_STRENGTHEN_ENTITY_BINDINGS,
   listMealStrengthenIdentities,
@@ -18,57 +20,42 @@ import {
 import type { LexemeSenseRef } from "../domain/types";
 import type { MealLexicalBuildProfile, MealBuildSceneBinding } from "./types";
 
+function mealSnapshot() {
+  return snapshotSceneContentFromPack(
+    MEAL_SCENE_CONTENT_PACK,
+    HOME_BREAKFAST_FRAME_ID,
+  );
+}
+
+function projectedBindings(): Record<string, MealBuildSceneBinding> {
+  const snapshot = mealSnapshot();
+  const bindings: Record<string, MealBuildSceneBinding> = {};
+  if (!snapshot) {
+    return bindings;
+  }
+  for (const lexeme of snapshot.lexemes) {
+    const projected = projectBuildProfile(lexeme, snapshot.sceneClusterId);
+    bindings[lexeme.presentationToken] = {
+      stepToken: lexeme.presentationToken,
+      relatedEntityId: projected.relatedEntityId,
+      relationPredicate: projected.relationPredicate,
+      contrastEntityId: projected.contrastEntityId,
+      groundingInstruction: projected.groundingInstruction,
+      connectInstruction: projected.connectInstruction,
+      teachInstruction: projected.teachInstruction,
+      contrastInstruction: projected.contrastInstruction,
+      fadeInstruction: projected.fadeInstruction,
+      recallInstructionKey: projected.recallInstructionKey,
+    };
+  }
+  return bindings;
+}
+
+/** @deprecated Candidate compatibility projection. Prefer Scene Content pack. */
 export const MEAL_BUILD_SCENE_BINDINGS: Record<
   MealStrengthenStepToken,
   MealBuildSceneBinding
-> = {
-  soup: {
-    stepToken: "soup",
-    relatedEntityId: "home-bowl",
-    relationPredicate: "contains",
-    contrastEntityId: "home-bowl",
-    groundingInstruction: "桌上有汤。先看看它在场景里的位置。",
-    connectInstruction: "汤是碗里的食物。",
-    teachInstruction: "这是教学，不是测试。看一看这个词和它的英文词形。",
-    contrastInstruction: "汤是食物，碗是盛食物的容器。它们不是同一个东西。",
-    fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
-    recallInstructionKey: "Produce the English word for the highlighted food.",
-  },
-  bowl: {
-    stepToken: "bowl",
-    relatedEntityId: "home-soup",
-    relationPredicate: "contains",
-    contrastEntityId: "home-soup",
-    groundingInstruction: "桌上有碗。先看看它在场景里的位置。",
-    connectInstruction: "碗用来盛汤。",
-    teachInstruction: "这是教学，不是测试。看一看这个词和它的英文词形。",
-    contrastInstruction: "碗是盛食物的容器，汤是碗里的食物。它们不是同一个东西。",
-    fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
-    recallInstructionKey: "Produce the English word for the highlighted container.",
-  },
-  spoon: {
-    stepToken: "spoon",
-    relatedEntityId: "home-soup",
-    relationPredicate: "suitable_for",
-    contrastEntityId: "home-fork",
-    groundingInstruction: "桌上有汤、碗、勺子和叉子。先看看这些物品。",
-    connectInstruction: "勺子适合用来喝汤或舀取流质食物。",
-    teachInstruction: "这是教学，不是测试。看一看这个词和它的英文词形。",
-    contrastInstruction: "比较一下勺子和叉子：它们的用途有什么不同？",
-    fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
-    recallInstructionKey: "Produce the English word for the required tool.",
-  },
-  fork: {
-    stepToken: "fork",
-    contrastEntityId: "home-spoon",
-    groundingInstruction: "桌上有叉子。先看看它在场景里的位置。",
-    connectInstruction: "叉子是用来叉取食物的餐具。",
-    teachInstruction: "这是教学，不是测试。看一看这个词和它的英文词形。",
-    contrastInstruction: "比较一下叉子和勺子：它们的用途有什么不同？",
-    fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
-    recallInstructionKey: "Produce the English word for the highlighted tool.",
-  },
-};
+> = projectedBindings();
 
 export function mealLexicalQueueCatalog():
   | { ok: true; catalog: { target: LexemeSenseRef; entityId: string }[] }
@@ -97,25 +84,39 @@ export function resolveMealLexicalBuildProfiles(input: {
   if (!resolved.ok) {
     return resolved;
   }
+  const snapshot = mealSnapshot();
+  if (!snapshot) {
+    return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
+  }
   const profiles: MealLexicalBuildProfile[] = [];
   for (const profile of resolved.profiles) {
-    const token = profile.stepToken as MealStrengthenStepToken;
-    const binding = MEAL_BUILD_SCENE_BINDINGS[token];
-    if (!binding) {
+    const lexeme = snapshot.lexemes.find(
+      (item) => item.presentationToken === profile.stepToken,
+    );
+    if (!lexeme) {
       return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
     }
-    if (!input.allowedEntityIds.includes(binding.contrastEntityId)) {
+    const projected = projectBuildProfile(lexeme, snapshot.sceneClusterId);
+    if (!input.allowedEntityIds.includes(projected.contrastEntityId)) {
       return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
     }
     if (
-      binding.relatedEntityId &&
-      !input.allowedEntityIds.includes(binding.relatedEntityId)
+      projected.relatedEntityId &&
+      !input.allowedEntityIds.includes(projected.relatedEntityId)
     ) {
       return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
     }
     profiles.push({
       ...profile,
-      ...binding,
+      relatedEntityId: projected.relatedEntityId,
+      relationPredicate: projected.relationPredicate,
+      contrastEntityId: projected.contrastEntityId,
+      groundingInstruction: projected.groundingInstruction,
+      connectInstruction: projected.connectInstruction,
+      teachInstruction: projected.teachInstruction,
+      contrastInstruction: projected.contrastInstruction,
+      fadeInstruction: projected.fadeInstruction,
+      recallInstructionKey: projected.recallInstructionKey,
     });
   }
   return { ok: true, profiles };

@@ -203,7 +203,7 @@ describe("Context Lab client presentation", () => {
     await user.click(screen.getByRole("button", { name: "重新体验" }));
     expect(await screen.findByText("1 / 6")).toBeTruthy();
     expect(restart).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("桌上有汤、碗、勺子和叉子。先看看这些物品。")).toBeTruthy();
+    expect(screen.getByText("桌上有汤。先看看它在场景里的位置。")).toBeTruthy();
   });
 
   it("frozen preview submits renderer intent only and does not grade locally", async () => {
@@ -248,8 +248,8 @@ describe("Context Lab client presentation", () => {
       document.querySelector("form")?.innerHTML,
     ).toContain("英文答案");
     const input = screen.getByLabelText("英文答案");
-    await user.type(input, "spoon");
-    expect((input as HTMLInputElement).value).toBe("spoon");
+    await user.type(input, "soup");
+    expect((input as HTMLInputElement).value).toBe("soup");
     expect(acknowledge).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "提交" }));
     expect(submitFrozenTask).toHaveBeenCalledTimes(1);
@@ -258,7 +258,7 @@ describe("Context Lab client presentation", () => {
         runId: preview.kind === "FROZEN_TASK_PREVIEW" ? preview.handle.runId : "",
         revision: preview.kind === "FROZEN_TASK_PREVIEW" ? preview.handle.revision : -1,
         taskId: preview.kind === "FROZEN_TASK_PREVIEW" ? preview.task.id : "",
-        action: { kind: "TEXT_INPUT", value: "spoon" },
+        action: { kind: "TEXT_INPUT", value: "soup" },
       }),
     );
     expect(submitFrozenTask.mock.calls[0]?.[0]).not.toHaveProperty("userId");
@@ -289,7 +289,7 @@ describe("Context Lab client presentation", () => {
       />,
     );
     const input = screen.getByLabelText("英文答案") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "spoon" } });
+    fireEvent.change(input, { target: { value: "soup" } });
     fireEvent.click(screen.getByRole("button", { name: "提交" }));
     fireEvent.click(screen.getByRole("button", { name: "提交" }));
     expect(submitFrozenTask).toHaveBeenCalledTimes(1);
@@ -298,7 +298,7 @@ describe("Context Lab client presentation", () => {
     ).toBe(true);
     release?.(new Error("network down"));
     expect(await screen.findByRole("alert")).toBeTruthy();
-    expect((screen.getByLabelText("英文答案") as HTMLInputElement).value).toBe("spoon");
+    expect((screen.getByLabelText("英文答案") as HTMLInputElement).value).toBe("soup");
   });
 
   it("restart after a recorded task creates a new run", async () => {
@@ -306,7 +306,7 @@ describe("Context Lab client presentation", () => {
     const preview = await acknowledgeUntilPreview(harness);
     const user = userEvent.setup();
     render(<ContextLabClient {...harness.ops} initialScreen={preview} />);
-    await user.type(screen.getByLabelText("英文答案"), "spoon");
+    await user.type(screen.getByLabelText("英文答案"), "soup");
     await user.click(screen.getByRole("button", { name: "提交" }));
     expect(await screen.findByText("这次练习已记录。")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "重新体验" }));
@@ -317,13 +317,13 @@ describe("Context Lab client presentation", () => {
     const user = userEvent.setup();
     await renderStarted();
     await user.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("勺子 → 适合舀汤")).toBeTruthy();
+    expect(await screen.findByText("碗里装着汤")).toBeTruthy();
     const highlighted = screen
       .getAllByRole("article")
       .filter((node) => node.getAttribute("data-highlighted") === "true");
     expect(highlighted.map((node) => node.getAttribute("data-entity-id"))).toEqual([
       "home-soup",
-      "home-spoon",
+      "home-bowl",
     ]);
   });
 

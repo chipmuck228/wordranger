@@ -87,6 +87,12 @@ export {
   createMealStrengthenPlan,
 } from "./fixtures/meal/plans";
 export { createSafeLexicalRecallPlan } from "./fixtures/execution/safe-lexical-recall";
+export {
+  SceneContentErrorCode,
+  getApprovedExperimentSceneContent,
+  resolveSceneContent,
+  validateSceneContent,
+} from "./content";
 
 export { schoolChallengeSkeleton } from "./fixtures/school-challenge/skeleton";
 export { SCHOOL_FRAMES } from "./fixtures/school-challenge/contexts";

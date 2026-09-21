@@ -16,13 +16,6 @@ import {
 import type { ExperienceRun } from "@/contextual-learning/candidate-v0/execution/types";
 import type { MealProbeOrchestration } from "./meal-probe-orchestration";
 
-export type ExperienceQueueOperation =
-  | "ACKNOWLEDGE"
-  | "SUBMIT"
-  | "CONTINUE"
-  | "COMPLETE_AFTER_EVIDENCE"
-  | "PRESENT";
-
 export type ExperienceQueueValidation =
   | { ok: true }
   | { ok: false; reason: string };
@@ -39,9 +32,7 @@ type InspectedQueue =
 export function validateActiveExperienceQueue(input: {
   probe: MealProbeOrchestration | null;
   experienceRun: Pick<ExperienceRun, "planSnapshot">;
-  operation?: ExperienceQueueOperation;
 }): ExperienceQueueValidation {
-  void input.operation;
   if (!input.probe) {
     return { ok: true };
   }

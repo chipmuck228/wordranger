@@ -417,7 +417,7 @@ describe("Meal cold Probe orchestration", () => {
       runId: screen.handle.runId,
       revision: screen.handle.revision,
       taskId: screen.task.id,
-      action: { kind: "TEXT_INPUT", value: "spoon" },
+      action: { kind: "TEXT_INPUT", value: "soup" },
     });
     assertKind(recorded, "FROZEN_TASK_RECORDED");
     expect(recorded.feedback.status).toBe("CORRECT");

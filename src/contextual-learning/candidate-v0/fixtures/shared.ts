@@ -31,8 +31,11 @@ export function sense(lexemeId: string, senseId: string): LexemeSenseRef {
 export function fact(
   predicate: string,
   args: SemanticFact["arguments"],
+  id?: string,
 ): SemanticFact {
-  return { predicate, arguments: args, truth: true };
+  return id
+    ? { id, predicate, arguments: args, truth: true }
+    : { predicate, arguments: args, truth: true };
 }
 
 export function pred(

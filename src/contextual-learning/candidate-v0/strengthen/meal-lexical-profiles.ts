@@ -1,12 +1,19 @@
 /**
- * Catalog-driven Meal lexical STRENGTHEN identities and profiles.
- * Candidate V0 / Experimental / Not a Standard.
- *
- * Identity comes from the reviewed scene catalog + Probe target order.
- * Surface form / gloss / IPA come from bundled vocabulary only.
+ * Candidate compatibility adapter.
+ * Meal STRENGTHEN identities project from the Scene Content pack.
+ * This file is not a second authored truth.
  */
 
-import { MEAL_SENSE } from "../fixtures/meal/knowledge";
+import {
+  HOME_BREAKFAST_FRAME_ID,
+  MEAL_SCENE_CONTENT_PACK,
+} from "../content/packs/meal/meal-scene-content";
+import { snapshotSceneContentFromPack } from "../content/snapshot-from-pack";
+import {
+  findResolvedLexeme,
+  projectStrengthenIdentity,
+  projectStrengthenProfile,
+} from "../content/project-from-resolved";
 import { MEAL_SCENE_CLUSTER } from "../memory-routing/scene-catalog";
 import {
   BUNDLED_LEXEME_BINDINGS,
@@ -16,35 +23,7 @@ import { sameLexemeSense } from "../domain/lexeme-sense";
 import type { LexemeSenseRef } from "../domain/types";
 import type { MealLexicalStrengthenProfile } from "./types";
 
-export const MEAL_PROBE_STRENGTHEN_ENTITY_BINDINGS = [
-  {
-    entityId: "home-soup",
-    fixtureKey: "soup",
-    fixtureSense: MEAL_SENSE.soup,
-    stepToken: "soup",
-  },
-  {
-    entityId: "home-bowl",
-    fixtureKey: "bowl",
-    fixtureSense: MEAL_SENSE.bowl,
-    stepToken: "bowl",
-  },
-  {
-    entityId: "home-spoon",
-    fixtureKey: "spoon",
-    fixtureSense: MEAL_SENSE.spoon,
-    stepToken: "spoon",
-  },
-  {
-    entityId: "home-fork",
-    fixtureKey: "fork",
-    fixtureSense: MEAL_SENSE.fork,
-    stepToken: "fork",
-  },
-] as const;
-
-export type MealStrengthenStepToken =
-  (typeof MEAL_PROBE_STRENGTHEN_ENTITY_BINDINGS)[number]["stepToken"];
+export type MealStrengthenStepToken = string;
 
 export interface MealLexicalStrengthenIdentity {
   target: LexemeSenseRef;
@@ -65,32 +44,50 @@ export type MealLexemeLoader = (canonicalKey: string) => {
   ipa: readonly string[];
 } | null;
 
+function mealSnapshot() {
+  return snapshotSceneContentFromPack(
+    MEAL_SCENE_CONTENT_PACK,
+    HOME_BREAKFAST_FRAME_ID,
+  );
+}
+
+/** @deprecated Candidate compatibility projection. Prefer Scene Content pack. */
+export const MEAL_PROBE_STRENGTHEN_ENTITY_BINDINGS = MEAL_SCENE_CONTENT_PACK.lexemes
+  .slice()
+  .sort((left, right) => left.membership.sceneOrder - right.membership.sceneOrder)
+  .map((lexeme) => ({
+    entityId: lexeme.membership.entityId,
+    fixtureKey: lexeme.membership.presentationToken,
+    fixtureSense: lexeme.fixtureSense,
+    stepToken: lexeme.membership.presentationToken,
+  }));
+
 export function listMealStrengthenIdentities():
   | { ok: true; identities: MealLexicalStrengthenIdentity[] }
   | { ok: false; reason: "MEAL_TARGET_PROFILE_UNRESOLVED" } {
+  const snapshot = mealSnapshot();
+  if (!snapshot) {
+    return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
+  }
   const identities: MealLexicalStrengthenIdentity[] = [];
-  for (const binding of MEAL_PROBE_STRENGTHEN_ENTITY_BINDINGS) {
-    const bundled = BUNDLED_LEXEME_BINDINGS[binding.fixtureKey];
+  for (const lexeme of snapshot.lexemes) {
+    const bundled = Object.values(BUNDLED_LEXEME_BINDINGS).find(
+      (binding) => binding.canonicalKey === lexeme.canonicalKey,
+    );
     const member = MEAL_SCENE_CLUSTER.members.find(
-      (item) => item.candidateFixtureLexemeId === bundled.fixtureLexemeId,
+      (item) => item.lexemeCanonicalKey === lexeme.canonicalKey,
     );
     if (
+      !bundled ||
       !member ||
-      member.lexemeCanonicalKey !== bundled.canonicalKey ||
-      member.target.senseId !== binding.fixtureSense.senseId ||
+      member.target.senseId !== lexeme.target.senseId ||
       member.target.lexemeId !== bundledBindingLexemeId(bundled)
     ) {
       return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
     }
     identities.push({
-      target: { ...member.target },
-      fixtureLexemeId: bundled.fixtureLexemeId,
-      fixtureSense: binding.fixtureSense,
-      sceneClusterId: MEAL_SCENE_CLUSTER.id,
-      entityId: binding.entityId,
-      roleId: member.roleId,
-      canonicalKey: bundled.canonicalKey,
-      stepToken: binding.stepToken,
+      ...projectStrengthenIdentity(lexeme),
+      sceneClusterId: snapshot.sceneClusterId,
     });
   }
   return { ok: true, identities };
@@ -107,13 +104,20 @@ export function resolveMealLexicalStrengthenProfiles(input: {
   if (!identities.ok) {
     return identities;
   }
+  const snapshot = mealSnapshot();
+  if (!snapshot) {
+    return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
+  }
   const profiles: MealLexicalStrengthenProfile[] = [];
   for (const identity of identities.identities) {
     if (!input.allowedEntityIds.includes(identity.entityId)) {
       return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
     }
     const lexeme = input.loadLexeme(identity.canonicalKey);
-    const displayLabel = input.displayLabelForEntity(identity.entityId);
+    const displayLabel =
+      input.displayLabelForEntity(identity.entityId) ??
+      findResolvedLexeme(snapshot, identity.target)?.displayLabel ??
+      "";
     const displayForm = lexeme?.display.trim() || lexeme?.lemma.trim() || "";
     const meaningGloss = lexeme?.meaningsZh[0]?.trim() || "";
     const phonetic = lexeme?.ipa[0]?.trim() || undefined;
@@ -126,13 +130,24 @@ export function resolveMealLexicalStrengthenProfiles(input: {
     ) {
       return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
     }
-    profiles.push({
-      ...identity,
-      displayForm,
-      meaningGloss,
-      displayLabel,
-      phonetic,
-    });
+    const resolved = findResolvedLexeme(snapshot, identity.target);
+    profiles.push(
+      resolved
+        ? {
+            ...projectStrengthenProfile(resolved, snapshot.sceneClusterId),
+            displayForm,
+            meaningGloss,
+            displayLabel,
+            phonetic,
+          }
+        : {
+            ...identity,
+            displayForm,
+            meaningGloss,
+            displayLabel,
+            phonetic,
+          },
+    );
   }
   return { ok: true, profiles };
 }

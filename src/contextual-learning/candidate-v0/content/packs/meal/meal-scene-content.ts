@@ -1,0 +1,306 @@
+/**
+ * Meal home-breakfast Scene Content pack.
+ * Candidate V0 / Experimental / Not a Standard.
+ *
+ * Authored four-word fixture only. Not 1600-word coverage.
+ */
+
+import { MEAL_SENSE } from "../../../fixtures/meal/knowledge";
+import { MEAL_SKELETON_ID } from "../../../fixtures/meal/skeleton";
+import { MEAL_SCENE_CLUSTER } from "../../../memory-routing/scene-catalog";
+import {
+  BUNDLED_LEXEME_BINDINGS,
+  bundledBindingLexemeId,
+} from "../../../memory-routing/bundled-lexeme-bindings";
+import type {
+  ContextualSceneContentPack,
+  ContextualSceneLexemeContent,
+} from "../../types";
+import { MEAL_SCENE_CONTENT_SOURCE_REFS } from "./meal-content-provenance";
+
+export const MEAL_SCENE_CONTENT_PACK_ID = "meal-home-breakfast-v0";
+export const HOME_BREAKFAST_FRAME_ID = "home-breakfast-v0";
+
+const HOME_CONTAINS_BOWL_SOUP = "home-fact-contains-bowl-soup";
+const HOME_SUITABLE_FOR_SPOON_SOUP = "home-fact-suitable-for-spoon-soup";
+
+function bundledTarget(key: keyof typeof BUNDLED_LEXEME_BINDINGS) {
+  const binding = BUNDLED_LEXEME_BINDINGS[key];
+  return {
+    lexemeId: bundledBindingLexemeId(binding),
+    senseId: MEAL_SENSE[key as keyof typeof MEAL_SENSE].senseId,
+    canonicalKey: binding.canonicalKey,
+    fixtureSense: MEAL_SENSE[key as keyof typeof MEAL_SENSE],
+  };
+}
+
+function lexeme(
+  id: string,
+  key: "soup" | "bowl" | "spoon" | "fork",
+  input: Omit<
+    ContextualSceneLexemeContent,
+    "id" | "target" | "fixtureSense" | "canonicalKey" | "lexicalPresentation"
+  > & { displayLabel: string },
+): ContextualSceneLexemeContent {
+  const identity = bundledTarget(key);
+  return {
+    id,
+    target: { lexemeId: identity.lexemeId, senseId: identity.senseId },
+    fixtureSense: identity.fixtureSense,
+    canonicalKey: identity.canonicalKey,
+    lexicalPresentation: {
+      displayFormSource: "BUNDLED_VOCABULARY",
+      meaningGlossSource: "BUNDLED_VOCABULARY",
+      phoneticSource: "BUNDLED_VOCABULARY",
+      displayLabel: input.displayLabel,
+    },
+    membership: input.membership,
+    probe: input.probe,
+    grounding: input.grounding,
+    contrastBindings: input.contrastBindings,
+    build: input.build,
+    strengthen: input.strengthen,
+  };
+}
+
+const soupId = bundledTarget("soup");
+const bowlId = bundledTarget("bowl");
+const spoonId = bundledTarget("spoon");
+const forkId = bundledTarget("fork");
+
+export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
+  id: MEAL_SCENE_CONTENT_PACK_ID,
+  schemaVersion: "candidate-v0",
+  sceneClusterId: MEAL_SCENE_CLUSTER.id,
+  skeletonId: MEAL_SKELETON_ID,
+  frames: [
+    {
+      frameId: HOME_BREAKFAST_FRAME_ID,
+      title: "早餐时间",
+      settingLabel: "看看桌上的食物和餐具。",
+      introInstruction: "桌上有汤、碗、勺子和叉子。先看看这些物品。",
+      entityIds: ["home-soup", "home-bowl", "home-spoon", "home-fork"],
+      factIds: [HOME_CONTAINS_BOWL_SOUP, HOME_SUITABLE_FOR_SPOON_SOUP],
+      presentationOrder: ["home-soup", "home-bowl", "home-spoon", "home-fork"],
+    },
+  ],
+  lexemes: [
+    lexeme("meal-soup", "soup", {
+      displayLabel: "汤",
+      membership: {
+        frameIds: [HOME_BREAKFAST_FRAME_ID],
+        entityId: "home-soup",
+        roleId: "FOOD",
+        sceneOrder: 0,
+        presentationToken: "soup",
+        publicVisualRole: "FOOD",
+      },
+      probe: {
+        enabled: true,
+        skills: ["ACTIVE_RECALL", "MEANING_RECOGNITION"],
+        recallInstruction: "写出当前物品的英文单词",
+      },
+      grounding: {
+        entityId: "home-soup",
+        roleId: "FOOD",
+        facts: [
+          {
+            factId: HOME_CONTAINS_BOWL_SOUP,
+            predicate: "contains",
+            args: [
+              { kind: "ENTITY", entityId: "home-bowl" },
+              { kind: "ENTITY", entityId: "home-soup" },
+            ],
+            caption: "碗里装着汤",
+          },
+        ],
+      },
+      contrastBindings: [
+        {
+          kind: "ROLE_CONTRAST",
+          contrastTarget: { lexemeId: bowlId.lexemeId, senseId: bowlId.senseId },
+          instruction: "汤是食物，碗是盛食物的容器。它们不是同一个东西。",
+          caption: "汤：碗里的食物",
+        },
+      ],
+      build: {
+        enabled: true,
+        groundInstruction: "桌上有汤。先看看它在场景里的位置。",
+        connectInstruction: "汤是碗里的食物。",
+        connectFactId: HOME_CONTAINS_BOWL_SOUP,
+        teachInstruction: "这是教学，不是测试。看一看这个词和它的英文词形。",
+        fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
+        recallInstructionKey: "Produce the English word for the highlighted food.",
+      },
+      strengthen: {
+        enabled: true,
+        reconnectInstruction: "这是强化，不是测试。重新看一看汤和它的英文词形。",
+        fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
+        verifyInstruction:
+          "根据汤的意思，写出英文单词。当前页面没有完整答案或拼写提示。",
+      },
+    }),
+    lexeme("meal-bowl", "bowl", {
+      displayLabel: "碗",
+      membership: {
+        frameIds: [HOME_BREAKFAST_FRAME_ID],
+        entityId: "home-bowl",
+        roleId: "FOOD_CONTAINER",
+        sceneOrder: 1,
+        presentationToken: "bowl",
+        publicVisualRole: "CONTAINER",
+      },
+      probe: {
+        enabled: true,
+        skills: ["ACTIVE_RECALL", "MEANING_RECOGNITION"],
+        recallInstruction: "写出当前物品的英文单词",
+      },
+      grounding: {
+        entityId: "home-bowl",
+        roleId: "FOOD_CONTAINER",
+        facts: [
+          {
+            factId: HOME_CONTAINS_BOWL_SOUP,
+            predicate: "contains",
+            args: [
+              { kind: "ENTITY", entityId: "home-bowl" },
+              { kind: "ENTITY", entityId: "home-soup" },
+            ],
+            caption: "碗里装着汤",
+          },
+        ],
+      },
+      contrastBindings: [
+        {
+          kind: "ROLE_CONTRAST",
+          contrastTarget: { lexemeId: soupId.lexemeId, senseId: soupId.senseId },
+          instruction: "碗是盛食物的容器，汤是碗里的食物。它们不是同一个东西。",
+          caption: "碗：盛汤的容器",
+        },
+      ],
+      build: {
+        enabled: true,
+        groundInstruction: "桌上有碗。先看看它在场景里的位置。",
+        connectInstruction: "碗用来盛汤。",
+        connectFactId: HOME_CONTAINS_BOWL_SOUP,
+        teachInstruction: "这是教学，不是测试。看一看这个词和它的英文词形。",
+        fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
+        recallInstructionKey:
+          "Produce the English word for the highlighted container.",
+      },
+      strengthen: {
+        enabled: true,
+        reconnectInstruction: "这是强化，不是测试。重新看一看碗和它的英文词形。",
+        fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
+        verifyInstruction:
+          "根据碗的意思，写出英文单词。当前页面没有完整答案或拼写提示。",
+      },
+    }),
+    lexeme("meal-spoon", "spoon", {
+      displayLabel: "勺子",
+      membership: {
+        frameIds: [HOME_BREAKFAST_FRAME_ID],
+        entityId: "home-spoon",
+        roleId: "EATING_TOOL",
+        sceneOrder: 2,
+        presentationToken: "spoon",
+        publicVisualRole: "TOOL",
+      },
+      probe: {
+        enabled: true,
+        skills: ["ACTIVE_RECALL", "MEANING_RECOGNITION"],
+        recallInstruction: "写出当前物品的英文单词",
+      },
+      grounding: {
+        entityId: "home-spoon",
+        roleId: "EATING_TOOL",
+        requiredRelationIds: ["SUITABLE_FOR"],
+        facts: [
+          {
+            factId: HOME_SUITABLE_FOR_SPOON_SOUP,
+            predicate: "suitable_for",
+            args: [
+              { kind: "ENTITY", entityId: "home-spoon" },
+              { kind: "ENTITY", entityId: "home-soup" },
+            ],
+            caption: "勺子 → 适合舀汤",
+          },
+        ],
+      },
+      contrastBindings: [
+        {
+          kind: "FUNCTION_CONTRAST",
+          contrastTarget: { lexemeId: forkId.lexemeId, senseId: forkId.senseId },
+          instruction: "比较一下勺子和叉子：它们的用途有什么不同？",
+          caption: "勺子：舀取汤或柔软食物",
+        },
+      ],
+      build: {
+        enabled: true,
+        groundInstruction: "桌上有汤、碗、勺子和叉子。先看看这些物品。",
+        connectInstruction: "勺子适合用来喝汤或舀取流质食物。",
+        connectFactId: HOME_SUITABLE_FOR_SPOON_SOUP,
+        teachInstruction: "这是教学，不是测试。看一看这个词和它的英文词形。",
+        fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
+        recallInstructionKey: "Produce the English word for the required tool.",
+      },
+      strengthen: {
+        enabled: true,
+        reconnectInstruction: "这是强化，不是测试。重新看一看勺子和它的英文词形。",
+        fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
+        verifyInstruction:
+          "根据勺子的意思，写出英文单词。当前页面没有完整答案或拼写提示。",
+      },
+    }),
+    lexeme("meal-fork", "fork", {
+      displayLabel: "叉子",
+      membership: {
+        frameIds: [HOME_BREAKFAST_FRAME_ID],
+        entityId: "home-fork",
+        roleId: "EATING_TOOL",
+        sceneOrder: 3,
+        presentationToken: "fork",
+        publicVisualRole: "TOOL",
+      },
+      probe: {
+        enabled: true,
+        skills: ["ACTIVE_RECALL", "MEANING_RECOGNITION"],
+        recallInstruction: "写出当前物品的英文单词",
+      },
+      grounding: {
+        entityId: "home-fork",
+        roleId: "EATING_TOOL",
+        facts: [],
+      },
+      contrastBindings: [
+        {
+          kind: "FUNCTION_CONTRAST",
+          contrastTarget: { lexemeId: spoonId.lexemeId, senseId: spoonId.senseId },
+          instruction: "比较一下叉子和勺子：它们的用途有什么不同？",
+          caption: "叉子：叉取食物块",
+        },
+      ],
+      build: {
+        enabled: true,
+        groundInstruction: "桌上有叉子。先看看它在场景里的位置。",
+        connectInstruction: "叉子是用来叉取食物的餐具。",
+        teachInstruction: "这是教学，不是测试。看一看这个词和它的英文词形。",
+        fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
+        recallInstructionKey:
+          "Produce the English word for the highlighted tool.",
+      },
+      strengthen: {
+        enabled: true,
+        reconnectInstruction: "这是强化，不是测试。重新看一看叉子和它的英文词形。",
+        fadeInstruction: "完整英文已经收起。下面是提示，不是答案。",
+        verifyInstruction:
+          "根据叉子的意思，写出英文单词。当前页面没有完整答案或拼写提示。",
+      },
+    }),
+  ],
+  provenance: {
+    status: "APPROVED_FOR_EXPERIMENT",
+    sourceRefs: [...MEAL_SCENE_CONTENT_SOURCE_REFS],
+    authoredAt: "2026-09-21",
+  },
+};

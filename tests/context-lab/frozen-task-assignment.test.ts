@@ -24,7 +24,7 @@ describe("Context Lab frozen task assignment", () => {
     );
     expect(assigned?.assignment.userId).toBe(V1_PLACEHOLDER_USER_ID);
     expect(assigned?.assignment.sessionId).toBe(screen.handle.runId);
-    expect(screen.task.lexemeId).toBe(contextLabBoundLexemeId("lex-spoon"));
+    expect(screen.task.lexemeId).toBe(contextLabBoundLexemeId("lex-soup"));
     expect(assigned?.task.publicTask.lexemeId).toBe(screen.task.lexemeId);
   });
 
@@ -54,7 +54,7 @@ describe("Context Lab frozen task assignment", () => {
     }
     expect(JSON.stringify(screen)).not.toContain("exactAcceptedTexts");
     const assigned = await harness.learningTasks.getTaskForEvaluation(screen.task.id);
-    expect(assigned?.task.answerKey.exactAcceptedTexts).toEqual(["spoon"]);
+    expect(assigned?.task.answerKey.exactAcceptedTexts).toEqual(["soup"]);
     const stored = await harness.repository.get({
       runId: screen.handle.runId,
       userId: V1_PLACEHOLDER_USER_ID,

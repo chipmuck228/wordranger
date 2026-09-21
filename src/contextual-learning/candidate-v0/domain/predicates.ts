@@ -12,6 +12,7 @@ export type SemanticValue =
   | { kind: "LITERAL"; value: string | number | boolean };
 
 export interface SemanticFact {
+  id?: string;
   predicate: string;
   arguments: SemanticValue[];
   truth: true;
