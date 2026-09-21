@@ -8,18 +8,23 @@ import {
   resolveMealLexicalBuildProfiles,
 } from "@/contextual-learning/candidate-v0/build/meal-lexical-build-profiles";
 
-const HOME_BREAKFAST_SCENE_ENTITY_IDS = [
+const FIVE_WORD_ENTITY_IDS = [
   "home-soup",
   "home-bowl",
   "home-spoon",
   "home-fork",
+  "home-cup",
 ] as const;
+
+const FRAME_ENTITY_IDS = [...FIVE_WORD_ENTITY_IDS, "home-drink"] as const;
 
 const LABELS: Record<string, string> = {
   "home-soup": "汤",
   "home-bowl": "碗",
   "home-spoon": "勺子",
   "home-fork": "叉子",
+  "home-cup": "杯子",
+  "home-drink": "饮料",
 };
 
 const VOCAB: Record<
@@ -54,14 +59,21 @@ const VOCAB: Record<
     meaningsZh: ["叉，餐叉"],
     ipa: ["/fɔːk/"],
   },
+  "lex-0346-1": {
+    id: bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.cup),
+    display: "cup",
+    lemma: "cup",
+    meaningsZh: ["茶杯"],
+    ipa: ["/kʌp/"],
+  },
 };
 
 describe("Meal lexical BUILD profiles", () => {
-  it("resolves four catalog targets with authored contrast bindings", () => {
+  it("resolves five catalog targets with authored contrast bindings", () => {
     const resolved = resolveMealLexicalBuildProfiles({
       loadLexeme: (key) => VOCAB[key] ?? null,
       displayLabelForEntity: (entityId) => LABELS[entityId] ?? null,
-      allowedEntityIds: HOME_BREAKFAST_SCENE_ENTITY_IDS,
+      allowedEntityIds: FRAME_ENTITY_IDS,
     });
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) {
@@ -72,6 +84,7 @@ describe("Meal lexical BUILD profiles", () => {
       "bowl",
       "spoon",
       "fork",
+      "cup",
     ]);
     for (const profile of resolved.profiles) {
       const binding = MEAL_BUILD_SCENE_BINDINGS[profile.stepToken];
@@ -91,7 +104,7 @@ describe("Meal lexical BUILD profiles", () => {
           ? { ...VOCAB[key]!, id: "other-uuid" }
           : VOCAB[key] ?? null,
       displayLabelForEntity: (entityId) => LABELS[entityId] ?? null,
-      allowedEntityIds: HOME_BREAKFAST_SCENE_ENTITY_IDS,
+      allowedEntityIds: FRAME_ENTITY_IDS,
     });
     expect(drifted.ok).toBe(false);
 
@@ -101,7 +114,7 @@ describe("Meal lexical BUILD profiles", () => {
           ? { ...VOCAB[key]!, meaningsZh: [] }
           : VOCAB[key] ?? null,
       displayLabelForEntity: (entityId) => LABELS[entityId] ?? null,
-      allowedEntityIds: HOME_BREAKFAST_SCENE_ENTITY_IDS,
+      allowedEntityIds: FRAME_ENTITY_IDS,
     });
     expect(missingGloss.ok).toBe(false);
   });

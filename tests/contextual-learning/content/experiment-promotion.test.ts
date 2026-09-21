@@ -11,6 +11,7 @@ import {
   MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID,
   currentPackTargetFingerprint,
   getApprovedExperimentSceneContent,
+  promotionAttestationMatchesPack,
   listSceneContentRegistry,
   registryEntryFor,
   registryStatusFor,
@@ -146,6 +147,87 @@ describe("fingerprint-bound cup experiment promotion", () => {
     ).toBe(false);
   });
 
+  it("fails when any committed artifact is missing, empty, or contradictory", () => {
+    const entry = expansionEntry();
+    const artifacts = committedArtifacts();
+    const missingRecord = validateExperimentPromotion({
+      entry,
+      expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+      artifacts: { ...artifacts, reviewRecord: null },
+    });
+    const missingManifest = validateExperimentPromotion({
+      entry,
+      expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+      artifacts: { ...artifacts, manifest: null },
+    });
+    const missingHuman = validateExperimentPromotion({
+      entry,
+      expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+      artifacts: { ...artifacts, humanMarkdown: null },
+    });
+    const missingPacket = validateExperimentPromotion({
+      entry,
+      expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+      artifacts: { ...artifacts, packetMarkdown: undefined },
+    });
+    const emptyHuman = validateExperimentPromotion({
+      entry,
+      expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+      artifacts: { ...artifacts, humanMarkdown: "   " },
+    });
+    const contradictory = validateExperimentPromotion({
+      entry,
+      expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+      artifacts: {
+        ...artifacts,
+        manifest: { ...artifacts.manifest, registryStatus: "CANDIDATE" },
+      },
+    });
+    expect(missingRecord).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        { code: "PROMOTION_ARTIFACT_MISSING", path: "reviewRecord" },
+      ]),
+    });
+    expect(missingManifest).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        { code: "PROMOTION_ARTIFACT_MISSING", path: "manifest" },
+      ]),
+    });
+    expect(missingHuman).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        { code: "PROMOTION_ARTIFACT_MISSING", path: "HUMAN_REVIEW.md" },
+      ]),
+    });
+    expect(missingPacket).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        { code: "PROMOTION_ARTIFACT_MISSING", path: "REVIEW_PACKET.md" },
+      ]),
+    });
+    expect(emptyHuman).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        { code: "PROMOTION_ARTIFACT_MISSING", path: "HUMAN_REVIEW.md" },
+      ]),
+    });
+    expect(contradictory).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        { code: "PROMOTION_ARTIFACT_CONFLICT", path: "manifest" },
+      ]),
+    });
+    expect(
+      validateExperimentPromotion({
+        entry,
+        expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+        artifacts,
+      }),
+    ).toEqual({ ok: true });
+  });
+
   it("fails closed without an attestation and keeps the registry immutable", () => {
     const compiled = compileSceneContentRegistryForTests([
       {
@@ -195,6 +277,105 @@ describe("fingerprint-bound cup experiment promotion", () => {
     expect(MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION.approvedReviewRevision).toBe(
       MEAL_EXPANSION_BATCH_01_CUP_APPROVED_REVISION,
     );
+  });
+});
+
+function compileExpansion(
+  pack = MEAL_SCENE_EXPANSION_BATCH_01_PACK,
+  promotion = MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+) {
+  return compileSceneContentRegistryForTests([
+    {
+      packId: MEAL_SCENE_CONTENT_PACK.id,
+      status: "APPROVED_FOR_EXPERIMENT",
+      pack: MEAL_SCENE_CONTENT_PACK,
+    },
+    {
+      packId: MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID,
+      status: "APPROVED_FOR_EXPERIMENT",
+      pack,
+      promotion,
+    },
+  ]);
+}
+
+describe("registry compile fingerprint binding", () => {
+  it("accepts the unchanged pack with the exact attestation", () => {
+    const compiled = compileExpansion();
+    expect(compiled).toHaveLength(2);
+    expect(
+      compiled.find((entry) => entry.packId === MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID)
+        ?.status,
+    ).toBe("APPROVED_FOR_EXPERIMENT");
+    const approved = getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID);
+    expect(approved.ok).toBe(true);
+    if (approved.ok) {
+      expect(
+        currentPackTargetFingerprint(
+          approved.pack,
+          MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET,
+        ),
+      ).toBe(MEAL_EXPANSION_BATCH_01_CUP_APPROVED_FINGERPRINT);
+    }
+  });
+
+  it("fail-closes compile when pack content, target, sourceRefs, or fingerprint drift", () => {
+    const changedCopy = structuredClone(MEAL_SCENE_EXPANSION_BATCH_01_PACK);
+    const cup = changedCopy.lexemes.find((lexeme) => lexeme.id === "meal-cup")!;
+    cup.build.teachInstruction = `${cup.build.teachInstruction} x`;
+    expect(compileExpansion(changedCopy)).toEqual([]);
+
+    const changedTarget = structuredClone(MEAL_SCENE_EXPANSION_BATCH_01_PACK);
+    const moved = changedTarget.lexemes.find((lexeme) => lexeme.id === "meal-cup")!;
+    moved.target = { ...moved.target, senseId: "other-sense" };
+    expect(compileExpansion(changedTarget)).toEqual([]);
+
+    const missingTarget = structuredClone(MEAL_SCENE_EXPANSION_BATCH_01_PACK);
+    missingTarget.lexemes = missingTarget.lexemes.filter((lexeme) => lexeme.id !== "meal-cup");
+    expect(compileExpansion(missingTarget)).toEqual([]);
+
+    const duplicateTarget = structuredClone(MEAL_SCENE_EXPANSION_BATCH_01_PACK);
+    const duplicatedCup = structuredClone(
+      duplicateTarget.lexemes.find((lexeme) => lexeme.id === "meal-cup")!,
+    );
+    duplicatedCup.id = "meal-cup-duplicate";
+    duplicateTarget.lexemes.push(duplicatedCup);
+    expect(compileExpansion(duplicateTarget)).toEqual([]);
+
+    const changedRefs = structuredClone(MEAL_SCENE_EXPANSION_BATCH_01_PACK);
+    changedRefs.provenance = {
+      ...changedRefs.provenance,
+      sourceRefs: [...changedRefs.provenance.sourceRefs, "docs/extra.md"],
+    };
+    expect(compileExpansion(changedRefs)).toEqual([]);
+
+    expect(
+      compileExpansion(MEAL_SCENE_EXPANSION_BATCH_01_PACK, {
+        ...MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+        approvedContentFingerprint: "0".repeat(64),
+      }),
+    ).toEqual([]);
+
+    expect(
+      promotionAttestationMatchesPack({
+        ...expansionEntry(),
+        pack: changedCopy,
+      }),
+    ).toBe(false);
+    const live = getApprovedExperimentSceneContent(MEAL_SCENE_EXPANSION_BATCH_01_PACK_ID);
+    expect(live.ok).toBe(true);
+    if (live.ok) {
+      expect(
+        currentPackTargetFingerprint(
+          live.pack,
+          MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET,
+        ),
+      ).toBe(MEAL_EXPANSION_BATCH_01_CUP_APPROVED_FINGERPRINT);
+      expect(live.pack.lexemes.find((lexeme) => lexeme.id === "meal-cup")?.build.teachInstruction).toBe(
+        MEAL_SCENE_EXPANSION_BATCH_01_PACK.lexemes.find((lexeme) => lexeme.id === "meal-cup")
+          ?.build.teachInstruction,
+      );
+    }
   });
 });
 

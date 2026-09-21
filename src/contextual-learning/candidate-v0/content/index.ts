@@ -17,6 +17,7 @@ export {
 export {
   attestationIsStructurallyBound,
   currentPackTargetFingerprint,
+  promotionAttestationMatchesPack,
   validateExperimentPromotion,
 } from "./validate-experiment-promotion";
 export type {

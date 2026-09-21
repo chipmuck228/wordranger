@@ -118,7 +118,7 @@ export function resolveMealLexicalStrengthenProfiles(input: {
   const profiles: MealLexicalStrengthenProfile[] = [];
   for (const identity of identities.identities) {
     if (!input.allowedEntityIds.includes(identity.entityId)) {
-      continue;
+      return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
     }
     const lexeme = input.loadLexeme(identity.canonicalKey);
     const displayLabel =

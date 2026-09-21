@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  resolveMealLexicalBuildProfiles,
+} from "@/contextual-learning/candidate-v0/build/meal-lexical-build-profiles";
+import {
   BUNDLED_LEXEME_BINDINGS,
   bundledBindingLexemeId,
 } from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
@@ -10,18 +13,25 @@ import {
   listMealStrengthenIdentities,
   resolveMealLexicalStrengthenProfiles,
 } from "@/contextual-learning/candidate-v0/strengthen/meal-lexical-profiles";
-const HOME_BREAKFAST_SCENE_ENTITY_IDS = [
+
+const FOUR_WORD_ENTITY_IDS = [
   "home-soup",
   "home-bowl",
   "home-spoon",
   "home-fork",
 ] as const;
 
+const FIVE_WORD_ENTITY_IDS = [...FOUR_WORD_ENTITY_IDS, "home-cup"] as const;
+
+const FRAME_ENTITY_IDS = [...FIVE_WORD_ENTITY_IDS, "home-drink"] as const;
+
 const LABELS: Record<string, string> = {
   "home-soup": "汤",
   "home-bowl": "碗",
   "home-spoon": "勺子",
   "home-fork": "叉子",
+  "home-cup": "杯子",
+  "home-drink": "饮料",
 };
 
 const VOCAB: Record<string, { id: string; display: string; lemma: string; meaningsZh: string[]; ipa: string[] }> = {
@@ -53,6 +63,13 @@ const VOCAB: Record<string, { id: string; display: string; lemma: string; meanin
     meaningsZh: ["叉，餐叉"],
     ipa: ["/fɔːk/"],
   },
+  "lex-0346-1": {
+    id: bundledBindingLexemeId(BUNDLED_LEXEME_BINDINGS.cup),
+    display: "cup",
+    lemma: "cup",
+    meaningsZh: ["茶杯"],
+    ipa: ["/kʌp/"],
+  },
 };
 
 describe("Meal lexical STRENGTHEN profiles", () => {
@@ -63,9 +80,9 @@ describe("Meal lexical STRENGTHEN profiles", () => {
       throw new Error(listed.reason);
     }
     expect(listed.identities.map((item) => item.entityId)).toEqual([
-      ...HOME_BREAKFAST_SCENE_ENTITY_IDS,
-      "home-cup",
+      ...FIVE_WORD_ENTITY_IDS,
     ]);
+    expect(listed.identities.map((item) => item.entityId)).not.toContain("home-drink");
     for (const identity of listed.identities) {
       const member = MEAL_SCENE_CLUSTER.members.find(
         (item) => item.candidateFixtureLexemeId === identity.fixtureLexemeId,
@@ -80,25 +97,86 @@ describe("Meal lexical STRENGTHEN profiles", () => {
     expect(identityForFixtureSense({ lexemeId: "lex-soup", senseId: "guess" })).toBeNull();
   });
 
-  it("uses real vocabulary display/meaning and omits missing IPA", () => {
-    const resolved = resolveMealLexicalStrengthenProfiles({
+  it("fails closed when any expected lexical identity is outside allowedEntityIds", () => {
+    const missingCup = resolveMealLexicalStrengthenProfiles({
       loadLexeme: (key) => VOCAB[key] ?? null,
       displayLabelForEntity: (entityId) => LABELS[entityId] ?? null,
-      allowedEntityIds: HOME_BREAKFAST_SCENE_ENTITY_IDS,
+      allowedEntityIds: FOUR_WORD_ENTITY_IDS,
     });
-    expect(resolved.ok).toBe(true);
-    if (!resolved.ok) {
-      throw new Error(resolved.reason);
+    expect(missingCup).toEqual({
+      ok: false,
+      reason: "MEAL_TARGET_PROFILE_UNRESOLVED",
+    });
+  });
+
+  it("does not treat frame-only home-drink as a Probe, BUILD, or STRENGTHEN target", () => {
+    const listed = listMealStrengthenIdentities();
+    expect(listed.ok).toBe(true);
+    if (!listed.ok) {
+      throw new Error(listed.reason);
     }
-    expect(resolved.profiles.map((item) => item.displayForm)).toEqual([
+    expect(listed.identities.some((item) => item.entityId === "home-drink")).toBe(false);
+    const strengthen = resolveMealLexicalStrengthenProfiles({
+      loadLexeme: (key) => VOCAB[key] ?? null,
+      displayLabelForEntity: (entityId) => LABELS[entityId] ?? null,
+      allowedEntityIds: FRAME_ENTITY_IDS,
+    });
+    expect(strengthen.ok).toBe(true);
+    if (!strengthen.ok) {
+      throw new Error(strengthen.reason);
+    }
+    expect(strengthen.profiles.map((item) => item.entityId)).toEqual([...FIVE_WORD_ENTITY_IDS]);
+    const build = resolveMealLexicalBuildProfiles({
+      loadLexeme: (key) => VOCAB[key] ?? null,
+      displayLabelForEntity: (entityId) => LABELS[entityId] ?? null,
+      allowedEntityIds: FRAME_ENTITY_IDS,
+    });
+    expect(build.ok).toBe(true);
+    if (!build.ok) {
+      throw new Error(build.reason);
+    }
+    expect(build.profiles.map((item) => item.entityId)).toEqual([...FIVE_WORD_ENTITY_IDS]);
+    expect(build.profiles.some((item) => item.entityId === "home-drink")).toBe(false);
+  });
+
+  it("resolves the five-word set and still admits cup into BUILD and STRENGTHEN", () => {
+    const strengthen = resolveMealLexicalStrengthenProfiles({
+      loadLexeme: (key) => VOCAB[key] ?? null,
+      displayLabelForEntity: (entityId) => LABELS[entityId] ?? null,
+      allowedEntityIds: FIVE_WORD_ENTITY_IDS,
+    });
+    expect(strengthen.ok).toBe(true);
+    if (!strengthen.ok) {
+      throw new Error(strengthen.reason);
+    }
+    expect(strengthen.profiles.map((item) => item.displayForm)).toEqual([
       "soup",
       "bowl",
       "spoon",
       "fork",
+      "cup",
     ]);
-    expect(resolved.profiles[1]?.phonetic).toBeUndefined();
-    expect(resolved.profiles[0]?.phonetic).toBe("/suːp/");
-    expect(resolved.profiles[2]?.meaningGloss).toBe("匙，调羹");
+    expect(strengthen.profiles[1]?.phonetic).toBeUndefined();
+    expect(strengthen.profiles[0]?.phonetic).toBe("/suːp/");
+    expect(strengthen.profiles[2]?.meaningGloss).toBe("匙，调羹");
+    expect(strengthen.profiles[4]?.entityId).toBe("home-cup");
+    const build = resolveMealLexicalBuildProfiles({
+      loadLexeme: (key) => VOCAB[key] ?? null,
+      displayLabelForEntity: (entityId) => LABELS[entityId] ?? null,
+      allowedEntityIds: FRAME_ENTITY_IDS,
+    });
+    expect(build.ok).toBe(true);
+    if (!build.ok) {
+      throw new Error(build.reason);
+    }
+    expect(build.profiles.map((item) => item.stepToken)).toEqual([
+      "soup",
+      "bowl",
+      "spoon",
+      "fork",
+      "cup",
+    ]);
+    expect(build.profiles.some((item) => item.entityId === "home-cup")).toBe(true);
   });
 
   it("fails closed on missing meaning or identity mismatch", () => {
@@ -106,7 +184,7 @@ describe("Meal lexical STRENGTHEN profiles", () => {
       loadLexeme: (key) =>
         key === "lex-1300-1" ? { ...VOCAB[key]!, meaningsZh: [] } : VOCAB[key] ?? null,
       displayLabelForEntity: (entityId) => LABELS[entityId] ?? null,
-      allowedEntityIds: HOME_BREAKFAST_SCENE_ENTITY_IDS,
+      allowedEntityIds: FIVE_WORD_ENTITY_IDS,
     });
     expect(missingMeaning).toEqual({
       ok: false,
@@ -118,7 +196,7 @@ describe("Meal lexical STRENGTHEN profiles", () => {
           ? { ...VOCAB[key]!, id: "00000000-0000-4000-8000-000000000099" }
           : VOCAB[key] ?? null,
       displayLabelForEntity: (entityId) => LABELS[entityId] ?? null,
-      allowedEntityIds: HOME_BREAKFAST_SCENE_ENTITY_IDS,
+      allowedEntityIds: FIVE_WORD_ENTITY_IDS,
     });
     expect(mismatch.ok).toBe(false);
   });

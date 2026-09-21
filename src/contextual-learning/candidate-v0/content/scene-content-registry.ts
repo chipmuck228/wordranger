@@ -8,7 +8,7 @@ import { cloneFrozen, deepFreeze } from "./immutable";
 import { MEAL_SCENE_CONTENT_PACK } from "./packs/meal/meal-scene-content";
 import { MEAL_SCENE_EXPANSION_BATCH_01_PACK } from "./packs/meal/meal-scene-expansion-batch-01";
 import { MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION } from "./packs/meal/meal-scene-expansion-batch-01-promotion";
-import { attestationIsStructurallyBound } from "./validate-experiment-promotion";
+import { promotionAttestationMatchesPack } from "./validate-experiment-promotion";
 import type {
   ContextualSceneContentPack,
   ContextualSceneContentRegistryEntry,
@@ -24,12 +24,14 @@ function compileRegistry(
     if (!entry.packId || entry.packId !== entry.pack.id || ids.has(entry.packId)) {
       continue;
     }
-    if (
-      entry.status === "APPROVED_FOR_EXPERIMENT" &&
-      entry.packId === MEAL_SCENE_EXPANSION_BATCH_01_PACK.id &&
-      !attestationIsStructurallyBound(entry)
-    ) {
-      continue;
+    if (entry.status === "APPROVED_FOR_EXPERIMENT") {
+      if (entry.promotion) {
+        if (!promotionAttestationMatchesPack(entry)) {
+          continue;
+        }
+      } else if (entry.packId === MEAL_SCENE_EXPANSION_BATCH_01_PACK.id) {
+        continue;
+      }
     }
     ids.add(entry.packId);
     compiled.push(deepFreeze(structuredClone(entry)));
@@ -69,6 +71,9 @@ export function getApprovedExperimentSceneContent(
   }
   const entry = matches[0]!;
   if (entry.status !== "APPROVED_FOR_EXPERIMENT" || entry.packId !== entry.pack.id) {
+    return { ok: false, reason: SceneContentErrorCode.CONTENT_REGISTRY_UNAPPROVED };
+  }
+  if (entry.promotion && !promotionAttestationMatchesPack(entry)) {
     return { ok: false, reason: SceneContentErrorCode.CONTENT_REGISTRY_UNAPPROVED };
   }
   return { ok: true, pack: cloneFrozen(entry.pack) };
