@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { cloneFrozen } from "@/contextual-learning/candidate-v0/content/immutable";
 import {
-  currentPackTargetFingerprint,
   experimentalMealContextLabPack,
   listSceneContentRegistry,
   MEAL_SCENE_CONTENT_PACK,
@@ -15,6 +14,7 @@ import {
   registryEntryFor,
   selectBundledMeaningGloss,
   validateExperimentPromotion,
+  MEAL_LEGACY_EXPERIMENT_BASELINE,
 } from "@/contextual-learning/candidate-v0/content";
 import type { CommittedPromotionArtifacts } from "@/contextual-learning/candidate-v0/content";
 import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
@@ -31,12 +31,14 @@ import {
   fingerprintReleaseSnapshot,
   MEAL_MIGRATION_RELEASE_ID,
   MEAL_RELEASE_SCENE_ID,
+  validateHumanReviewedTargetAuthority,
+  validateLegacyTargetAuthority,
   type ContextualContentReleaseManifest,
   type ReleaseSnapshot,
   type ReleaseTargetEntry,
   type ReleaseValidationIssue,
+  CONTEXTUAL_CONTENT_RELEASE_KIND,
 } from "@/contextual-learning/candidate-v0/release";
-import { CONTEXTUAL_CONTENT_RELEASE_KIND } from "@/contextual-learning/candidate-v0/release";
 import { safeReviewArtifactDirectory } from "@/server/contextual-content-review/review-artifact-path";
 import { CONTENT_REVIEW_TARGETS } from "@/server/contextual-content-review/review-target-registry";
 import type { ContentReviewRepository } from "@/server/contextual-content-review/content-review-repository";
@@ -128,38 +130,43 @@ function buildLegacyEntry(
   const baseline = MEAL_SCENE_CONTENT_PACK.lexemes.find(
     (item) => item.canonicalKey === lemma || item.id === `meal-${lemma}`,
   );
-  const snapshot = pack.lexemes.find((item) => item.id === `meal-${lemma}`);
-  if (!baseline || !snapshot) {
-    issues.push(issue("RELEASE_SENSE_UNRESOLVED", reviewKey, `Legacy ${lemma} is missing from snapshot or baseline.`));
+  if (!baseline) {
+    issues.push(issue("RELEASE_SENSE_UNRESOLVED", reviewKey, `Legacy ${lemma} is missing from the grandfathered baseline.`));
     return null;
   }
-  if (!sameLexemeSense(baseline.target, snapshot.target)) {
-    issues.push(issue("RELEASE_SENSE_UNRESOLVED", reviewKey, `Legacy ${lemma} sense drifted from the four-word baseline.`));
+  const chain = validateLegacyTargetAuthority({
+    reviewKey,
+    lemma,
+    baselinePack: MEAL_SCENE_CONTENT_PACK,
+    baselinePackId: MEAL_LEGACY_EXPERIMENT_BASELINE.packId,
+    baselinePackFingerprint: MEAL_LEGACY_EXPERIMENT_BASELINE.contentFingerprint,
+    currentPack: pack,
+    target: baseline.target,
+    humanReviewKeys: CONTENT_REVIEW_TARGETS.map((item) => item.reviewKey),
+  });
+  issues.push(...chain.issues);
+  if (!chain.ok || !chain.approvedFingerprint) {
     return null;
   }
-  if (CONTENT_REVIEW_TARGETS.some((item) => item.reviewKey === reviewKey)) {
-    issues.push(issue("RELEASE_LEGACY_FORGED", reviewKey, "Legacy attestation must not reuse a human review key."));
-    return null;
-  }
-  const fingerprint = currentPackTargetFingerprint(pack, snapshot.target);
-  if (!fingerprint) {
-    issues.push(issue("RELEASE_FINGERPRINT_DRIFT", reviewKey, `Cannot fingerprint ${lemma} in the snapshot pack.`));
+  const snapshot = pack.lexemes.find((item) => sameLexemeSense(item.target, baseline.target));
+  if (!snapshot) {
     return null;
   }
   const meaning = selectedMeaningFor(pack, snapshot.target, loadLexeme);
   if (!meaning) {
     issues.push(issue("RELEASE_MEANING_INVALID", reviewKey, `Selected meaning for ${lemma} is not from bundled vocabulary.`));
+    return null;
   }
   return {
     reviewKey,
     packId: pack.id,
     target: snapshot.target,
     displayLabel: snapshot.lexicalPresentation.displayLabel,
-    contentFingerprint: fingerprint,
+    contentFingerprint: chain.approvedFingerprint,
     reviewRevision: 0,
     humanDecision: "LEGACY_BASELINE",
     selectedMeaning: meaning,
-    sourceRefs: [...pack.provenance.sourceRefs],
+    sourceRefs: [...MEAL_SCENE_CONTENT_PACK.provenance.sourceRefs],
     approvalBasis: "LEGACY_EXPERIMENT_BASELINE",
   };
 }
@@ -178,46 +185,41 @@ async function buildHumanEntry(input: {
     input.issues.push(issue("RELEASE_REVIEW_MISSING", input.reviewKey, "Review target is not registered."));
     return null;
   }
+  if (!sameLexemeSense(spec.target, input.target)) {
+    input.issues.push(issue("RELEASE_REVIEW_INVALID", input.reviewKey, "Registered review target does not match."));
+    return null;
+  }
   const record = await input.reviewRepository.get(input.reviewKey);
-  if (!record) {
-    input.issues.push(issue("RELEASE_REVIEW_MISSING", input.reviewKey, "Current human review record is missing."));
-    return null;
-  }
-  if (record.decision !== "APPROVED") {
-    input.issues.push(issue("RELEASE_REVIEW_INVALID", input.reviewKey, "Human review is not APPROVED."));
-    return null;
-  }
-  const reviewFingerprint = currentPackTargetFingerprint(input.reviewPack, input.target);
-  if (!reviewFingerprint || reviewFingerprint !== record.contentFingerprint) {
-    input.issues.push(
-      issue("RELEASE_REVIEW_STALE", input.reviewKey, "Human review fingerprint does not match the reviewed pack."),
-    );
-    return null;
-  }
-  if (!sameLexemeSense(record.target, input.target) || !sameLexemeSense(spec.target, input.target)) {
-    input.issues.push(issue("RELEASE_REVIEW_INVALID", input.reviewKey, "Review target sense does not match."));
+  const chain = validateHumanReviewedTargetAuthority({
+    reviewKey: input.reviewKey,
+    expectedTarget: input.target,
+    reviewPack: input.reviewPack,
+    currentPack: input.pack,
+    reviewRecord: record,
+  });
+  input.issues.push(...chain.issues);
+  if (!chain.ok || !chain.approvedFingerprint || !record) {
     return null;
   }
   const snapshotLexeme = input.pack.lexemes.find((item) => sameLexemeSense(item.target, input.target));
-  const snapshotFingerprint = currentPackTargetFingerprint(input.pack, input.target);
-  if (!snapshotLexeme || !snapshotFingerprint) {
-    input.issues.push(issue("RELEASE_SENSE_UNRESOLVED", input.reviewKey, "Reviewed sense is missing from the snapshot pack."));
+  if (!snapshotLexeme) {
     return null;
   }
   const meaning = selectedMeaningFor(input.pack, input.target, input.loadLexeme);
   if (!meaning) {
     input.issues.push(issue("RELEASE_MEANING_INVALID", input.reviewKey, "Selected meaning is not from bundled vocabulary."));
+    return null;
   }
   return {
     reviewKey: input.reviewKey,
     packId: input.pack.id,
     target: input.target,
     displayLabel: snapshotLexeme.lexicalPresentation.displayLabel,
-    contentFingerprint: snapshotFingerprint,
+    contentFingerprint: chain.approvedFingerprint,
     reviewRevision: record.revision,
     humanDecision: "APPROVED",
     selectedMeaning: meaning,
-    sourceRefs: [...input.pack.provenance.sourceRefs],
+    sourceRefs: [...input.reviewPack.provenance.sourceRefs],
     approvalBasis: "HUMAN_REVIEW_PROMOTION",
   };
 }

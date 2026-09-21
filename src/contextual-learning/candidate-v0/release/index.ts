@@ -30,3 +30,14 @@ export { parseReleaseManifest } from "./parse-manifest";
 export { validateDraftRelease } from "./validate-draft-release";
 export { validateReleaseTransition } from "./validate-release-transition";
 export { serializeReleaseValue, sortedJson } from "./canonical-json";
+export {
+  fingerprintTargetAgainstApprovalSource,
+  resolveApprovedTargetFingerprint,
+  validateHumanReviewedTargetAuthority,
+  validateLegacyTargetAuthority,
+} from "./approval-chain";
+export type { ApprovedReviewBinding } from "./approval-chain";
+export {
+  requiredCapabilityIdsForReleaseTargets,
+  validateMealReleaseCapabilities,
+} from "./validate-release-capabilities";

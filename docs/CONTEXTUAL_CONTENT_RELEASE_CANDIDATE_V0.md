@@ -100,6 +100,28 @@ The current Context Lab remains code-defined six-word batch 02. It is not select
 
 The release fingerprint is deterministic. Changing target order, pack content, frames, skeleton, review bindings, or base release must change it.
 
+### Approval-chain invariant
+
+Every release target must bind through exactly one chain. Presence in the current pack is not approval.
+
+**A. `LEGACY_EXPERIMENT_BASELINE`**
+
+- Target content fingerprint against the grandfathered four-word baseline pack equals the current snapshot target fingerprint computed against that same baseline pack id and source refs.
+- The baseline pack id and pack fingerprint are the immutable `MEAL_LEGACY_EXPERIMENT_BASELINE`.
+- `ReleaseTargetEntry.contentFingerprint` is that grandfathered target fingerprint, not a newly generated current-pack fingerprint.
+
+**B. `HUMAN_REVIEW_PROMOTION`**
+
+```text
+reviewedPackTargetFingerprint
+=== committedReviewRecord.contentFingerprint
+=== currentReleaseSnapshotTargetFingerprint
+```
+
+The current snapshot lexeme is fingerprinted with the reviewed pack's id and source refs so pack-wrapper identity cannot hide authored-content drift. Same `LexemeSenseRef` is not content equality.
+
+If the historical review is still valid but the current snapshot target changed, authority fails with `RELEASE_REVIEW_STALE` / `RELEASE_FINGERPRINT_DRIFT`. The current snapshot fingerprint is never rewritten as the approved fingerprint.
+
 ## 5. Atomicity / CAS
 
 - `revision` is the optimistic concurrency token.

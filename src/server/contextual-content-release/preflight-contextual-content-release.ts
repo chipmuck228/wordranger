@@ -1,22 +1,20 @@
 import "server-only";
 
-import {
-  currentPackTargetFingerprint,
-  validateSceneContent,
-} from "@/contextual-learning/candidate-v0/content";
+import { validateSceneContent } from "@/contextual-learning/candidate-v0/content";
 import { sameLexemeSense } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
 import { MEAL_SCENE_CLUSTER } from "@/contextual-learning/candidate-v0/memory-routing/scene-catalog";
-import { listFrozenRuntimeCapabilities } from "@/contextual-learning/candidate-v0/capabilities/capability-registry";
 import { validateContextFrame } from "@/contextual-learning/candidate-v0/validation/validate-context-frame";
 import { validateSemanticSkeleton } from "@/contextual-learning/candidate-v0/validation/validate-semantic-skeleton";
 import {
   fingerprintsForManifest,
   parseReleaseManifest,
   validateDraftRelease,
+  validateMealReleaseCapabilities,
   validateReleaseTransition,
   type ContextualContentReleaseManifest,
   type ReleaseValidationIssue,
 } from "@/contextual-learning/candidate-v0/release";
+import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
 import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import type { ContentReviewRepository } from "@/server/contextual-content-review/content-review-repository";
 import { fileContentReviewRepository } from "@/server/contextual-content-review/file-content-review-repository";
@@ -45,6 +43,7 @@ export async function preflightContextualContentRelease(input: {
   now?: string;
   repository?: ContextualContentReleaseRepository;
   reviewRepository?: ContentReviewRepository;
+  pack?: ContextualSceneContentPack;
 }): Promise<ReleasePreflightResult> {
   if (!isContextualContentReleaseWriteEnabled(input.env)) {
     return {
@@ -89,6 +88,7 @@ export async function preflightContextualContentRelease(input: {
   issues.push(...draftCheck.issues);
   const authority = await buildMealMigrationAuthority({
     reviewRepository: input.reviewRepository ?? fileContentReviewRepository,
+    pack: input.pack,
   });
   issues.push(...authority.issues);
   if (existing.packSnapshot.id !== authority.livePack.id) {
@@ -131,10 +131,6 @@ export async function preflightContextualContentRelease(input: {
     if (!sameLexemeSense(live.target, entry.target)) {
       issues.push(issue("RELEASE_SENSE_UNRESOLVED", `targetEntries.${index}.target`, "Exact sense no longer matches."));
     }
-    const current = currentPackTargetFingerprint(authority.snapshot.pack, entry.target);
-    if (current !== entry.contentFingerprint) {
-      issues.push(issue("RELEASE_FINGERPRINT_DRIFT", `targetEntries.${index}`, "Snapshot target fingerprint is not current."));
-    }
   }
   const skeletonCheck = validateSemanticSkeleton(existing.contextSnapshot.skeleton);
   if (!skeletonCheck.ok) {
@@ -160,9 +156,10 @@ export async function preflightContextualContentRelease(input: {
       issues.push(issue("RELEASE_PACK_INVALID", frame.id, "Pack validator failed."));
     }
   }
-  if (listFrozenRuntimeCapabilities().length === 0) {
-    issues.push(issue("RELEASE_CAPABILITY_GAP", "capabilities", "Frozen runtime capabilities are insufficient."));
-  }
+  const capabilityCheck = validateMealReleaseCapabilities({
+    targets: existing.targetEntries.map((entry) => entry.target),
+  });
+  issues.push(...capabilityCheck.issues);
   if (JSON.stringify(existing).includes("/train") && existing.packSnapshot.planning.sourceLearningNeedRef === "/train") {
     issues.push(issue("RELEASE_TRAIN_WIRED", "train", "/train must stay unwired."));
   }

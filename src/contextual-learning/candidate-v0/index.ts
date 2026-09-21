@@ -34,8 +34,12 @@ export {
   CONTEXTUAL_CONTENT_RELEASE_KIND,
   MEAL_MIGRATION_RELEASE_ID,
   fingerprintReleaseSnapshot,
+  fingerprintTargetAgainstApprovalSource,
   parseReleaseManifest,
   validateDraftRelease,
+  validateHumanReviewedTargetAuthority,
+  validateLegacyTargetAuthority,
+  validateMealReleaseCapabilities,
   validateReleaseTransition,
 } from "./release";
 export type {
