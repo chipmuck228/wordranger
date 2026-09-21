@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
+import {
+  homeBreakfastFrame,
+  restaurantMealFrame,
+} from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
 import { MEAL_SCENE_CLUSTER } from "@/contextual-learning/candidate-v0/memory-routing/scene-catalog";
 import { MEAL_SENSE } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
@@ -58,7 +61,15 @@ describe("Scene Content Contract schema", () => {
     const duplicateOrder = cloneMealPack();
     duplicateOrder.lexemes[1] = {
       ...duplicateOrder.lexemes[1]!,
-      membership: { ...duplicateOrder.lexemes[1]!.membership, sceneOrder: 0 },
+      membership: {
+        ...duplicateOrder.lexemes[1]!.membership,
+        frameBindings: [
+          {
+            ...duplicateOrder.lexemes[1]!.membership.frameBindings[0]!,
+            sceneOrder: 0,
+          },
+        ],
+      },
     };
     expect(issuesOf(duplicateOrder)).toContain(
       SceneContentErrorCode.CONTENT_SCENE_ORDER_DUPLICATE,
@@ -86,16 +97,30 @@ describe("Scene Content Contract schema", () => {
     const unknownEntity = cloneMealPack();
     unknownEntity.lexemes[0] = {
       ...unknownEntity.lexemes[0]!,
-      membership: { ...unknownEntity.lexemes[0]!.membership, entityId: "home-missing" },
-      grounding: { ...unknownEntity.lexemes[0]!.grounding, entityId: "home-missing" },
+      membership: {
+        ...unknownEntity.lexemes[0]!.membership,
+        frameBindings: [
+          {
+            ...unknownEntity.lexemes[0]!.membership.frameBindings[0]!,
+            entityId: "home-missing",
+          },
+        ],
+      },
     };
     expect(issuesOf(unknownEntity)).toContain(SceneContentErrorCode.CONTENT_ENTITY_NOT_IN_FRAME);
 
     const unknownRole = cloneMealPack();
     unknownRole.lexemes[0] = {
       ...unknownRole.lexemes[0]!,
-      membership: { ...unknownRole.lexemes[0]!.membership, roleId: "NOT_A_ROLE" },
-      grounding: { ...unknownRole.lexemes[0]!.grounding, roleId: "NOT_A_ROLE" },
+      membership: {
+        ...unknownRole.lexemes[0]!.membership,
+        frameBindings: [
+          {
+            ...unknownRole.lexemes[0]!.membership.frameBindings[0]!,
+            roleId: "NOT_A_ROLE",
+          },
+        ],
+      },
     };
     expect(issuesOf(unknownRole)).toContain(SceneContentErrorCode.CONTENT_ROLE_NOT_FOUND);
 
@@ -348,5 +373,122 @@ describe("Meal four-word migration", () => {
       "spoon",
       "fork",
     ]);
+  });
+});
+
+describe("Scene Content multi-frame and safety", () => {
+  it("rejects nested Evidence/mastery fields", () => {
+    const pack = cloneMealPack();
+    (pack.lexemes[0]!.build as unknown as Record<string, unknown>).masteryScore = 9;
+    expect(issuesOf(pack)).toContain(SceneContentErrorCode.CONTENT_OUTCOME_FORBIDDEN);
+
+    const framed = cloneMealPack();
+    (framed.frames[0] as unknown as Record<string, unknown>).evidenceOutcome =
+      "INDEPENDENT_CORRECT";
+    expect(issuesOf(framed)).toContain(SceneContentErrorCode.CONTENT_OUTCOME_FORBIDDEN);
+  });
+
+  it("validates every pack frame, not only the current runtime frame", () => {
+    const pack = cloneMealPack();
+    pack.frames.push({
+      frameId: restaurantMealFrame.id,
+      title: "餐厅",
+      settingLabel: "坏的第二帧",
+      entityIds: ["rest-missing"],
+      factIds: ["rest-missing-fact"],
+      presentationOrder: ["rest-missing"],
+    });
+    expect(issuesOf(pack)).toContain(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND);
+
+    const withRuntime = validateSceneContent({
+      pack,
+      frame: homeBreakfastFrame,
+      frames: [restaurantMealFrame],
+      skeleton: mealSkeleton,
+      cluster: MEAL_SCENE_CLUSTER,
+      loadLexeme: mealTestLexemeLoader,
+    });
+    expect(withRuntime.ok).toBe(false);
+    if (!withRuntime.ok) {
+      expect(withRuntime.issues.map((item) => item.code)).toEqual(
+        expect.arrayContaining([
+          SceneContentErrorCode.CONTENT_ENTITY_NOT_IN_FRAME,
+          SceneContentErrorCode.CONTENT_FACT_NOT_FOUND,
+        ]),
+      );
+    }
+  });
+
+  it("resolves only the current frame and never uses frameBindings[0] as a proxy", () => {
+    const pack = cloneMealPack();
+    pack.frames.push({
+      frameId: restaurantMealFrame.id,
+      title: "餐厅",
+      settingLabel: "餐厅桌上的食物和餐具。",
+      entityIds: ["rest-soup", "rest-bowl", "rest-spoon", "rest-fork"],
+      factIds: ["rest-fact-contains-bowl-soup", "rest-fact-suitable-for-spoon-soup"],
+      presentationOrder: ["rest-soup", "rest-bowl", "rest-spoon", "rest-fork"],
+    });
+    const soup = pack.lexemes[0]!;
+    soup.membership.frameBindings.push({
+      frameId: restaurantMealFrame.id,
+      entityId: "rest-soup",
+      roleId: "FOOD",
+      sceneOrder: 0,
+    });
+    pack.lexemes[1]!.membership.frameBindings.push({
+      frameId: restaurantMealFrame.id,
+      entityId: "rest-bowl",
+      roleId: "FOOD_CONTAINER",
+      sceneOrder: 1,
+    });
+    const resolvedHome = resolveSceneContent({
+      pack,
+      frame: homeBreakfastFrame,
+      frames: [restaurantMealFrame],
+      skeleton: mealSkeleton,
+      cluster: MEAL_SCENE_CLUSTER,
+      loadLexeme: mealTestLexemeLoader,
+    });
+    expect(resolvedHome.ok).toBe(true);
+    if (!resolvedHome.ok) {
+      return;
+    }
+    const homeSoup = findResolvedLexeme(resolvedHome.content, MEAL_SENSE.soup);
+    expect(homeSoup?.frameId).toBe(homeBreakfastFrame.id);
+    expect(homeSoup?.entityId).toBe("home-soup");
+
+    const resolvedRestaurant = resolveSceneContent({
+      pack,
+      frame: restaurantMealFrame,
+      frames: [homeBreakfastFrame],
+      skeleton: mealSkeleton,
+      cluster: MEAL_SCENE_CLUSTER,
+      loadLexeme: mealTestLexemeLoader,
+    });
+    expect(resolvedRestaurant.ok).toBe(true);
+    if (!resolvedRestaurant.ok) {
+      return;
+    }
+    const restSoup = findResolvedLexeme(resolvedRestaurant.content, MEAL_SENSE.soup);
+    expect(restSoup?.frameId).toBe(restaurantMealFrame.id);
+    expect(restSoup?.entityId).toBe("rest-soup");
+    expect(resolvedRestaurant.content.lexemes.map((item) => item.entityId)).toEqual([
+      "rest-soup",
+      "rest-bowl",
+    ]);
+  });
+
+  it("returns an immutable registry pack copy", () => {
+    const first = getApprovedExperimentSceneContent(MEAL_SCENE_CONTENT_PACK.id);
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
+      return;
+    }
+    expect(() => {
+      first.pack.lexemes.pop();
+    }).toThrow();
+    const second = getApprovedExperimentSceneContent(MEAL_SCENE_CONTENT_PACK.id);
+    expect(second.ok && second.pack.lexemes).toHaveLength(4);
   });
 });

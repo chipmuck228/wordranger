@@ -54,13 +54,22 @@ function mealSnapshot() {
 /** @deprecated Candidate compatibility projection. Prefer Scene Content pack. */
 export const MEAL_PROBE_STRENGTHEN_ENTITY_BINDINGS = MEAL_SCENE_CONTENT_PACK.lexemes
   .slice()
-  .sort((left, right) => left.membership.sceneOrder - right.membership.sceneOrder)
-  .map((lexeme) => ({
-    entityId: lexeme.membership.entityId,
-    fixtureKey: lexeme.membership.presentationToken,
-    fixtureSense: lexeme.fixtureSense,
-    stepToken: lexeme.membership.presentationToken,
-  }));
+  .map((lexeme) => {
+    const binding = lexeme.membership.frameBindings.find(
+      (item) => item.frameId === HOME_BREAKFAST_FRAME_ID,
+    );
+    return binding
+      ? {
+          entityId: binding.entityId,
+          fixtureKey: lexeme.membership.presentationToken,
+          fixtureSense: lexeme.fixtureSense,
+          stepToken: lexeme.membership.presentationToken,
+          sceneOrder: binding.sceneOrder,
+        }
+      : null;
+  })
+  .filter((item): item is NonNullable<typeof item> => item !== null)
+  .sort((left, right) => left.sceneOrder - right.sceneOrder);
 
 export function listMealStrengthenIdentities():
   | { ok: true; identities: MealLexicalStrengthenIdentity[] }

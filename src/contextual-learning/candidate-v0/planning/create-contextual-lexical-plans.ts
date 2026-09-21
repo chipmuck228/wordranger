@@ -1,6 +1,6 @@
 /**
  * Generic BUILD/STRENGTHEN plan factories consume resolved Scene Content.
- * They do not recognize soup/bowl/spoon/fork.
+ * They do not import Meal fixtures or recognize soup/bowl/spoon/fork.
  */
 
 import { findResolvedLexeme } from "../content/project-from-resolved";
@@ -9,6 +9,7 @@ import type {
   ResolvedContextualSceneLexeme,
 } from "../content/types";
 import { sameLexemeSense } from "../domain/lexeme-sense";
+import { curatedFixtureProvenance } from "../domain/provenance";
 import type {
   ContextFrame,
   ExperienceTarget,
@@ -17,7 +18,6 @@ import type {
   LexemeSenseRef,
 } from "../domain/types";
 import {
-  FIXTURE_PROVENANCE,
   MINIMAL_SUPPORT,
   assessable,
   completeAll,
@@ -25,7 +25,6 @@ import {
   nextOrEnd,
   pred,
 } from "../fixtures/shared";
-import { MEAL_SKELETON_ID } from "../fixtures/meal/skeleton";
 
 export interface ContextualLexicalPlanInput {
   frame: ContextFrame;
@@ -85,73 +84,92 @@ function connectPredicate(lexeme: ResolvedContextualSceneLexeme): string | undef
   return fact?.predicate;
 }
 
+function planProvenance(content: ResolvedContextualSceneContent) {
+  return curatedFixtureProvenance(`scene-content:${content.packId}`);
+}
+
 function emptyPlan(
   frame: ContextFrame,
+  content: ResolvedContextualSceneContent,
   mode: "BUILD" | "STRENGTHEN",
 ): LearningExperiencePlan {
+  const namespace = content.planIdNamespace || "contextual";
   return {
-    id: `contextual-${mode.toLowerCase()}-${frame.id}-unresolved`,
+    id: `${namespace}-${mode.toLowerCase()}-${frame.id}-unresolved`,
     schemaVersion: "candidate-v0",
     mode,
-    sourceLearningNeedRef: "need-opaque-ref",
+    sourceLearningNeedRef: content.sourceLearningNeedRef || "need-opaque-ref",
     targets: [],
-    skeletonId: MEAL_SKELETON_ID,
+    skeletonId: frame.skeletonId,
     contextFrameId: frame.id,
-    activeGoalId: "EATER_CAN_EAT_FOOD",
+    activeGoalId: content.activeGoalId,
     steps: [],
     completionPolicy: completeAll([]),
-    provenance: FIXTURE_PROVENANCE,
+    provenance: planProvenance(content),
   };
+}
+
+function canPlan(
+  input: ContextualLexicalPlanInput,
+  lexeme: ResolvedContextualSceneLexeme | null,
+  enabled: boolean,
+): boolean {
+  return Boolean(
+    lexeme &&
+      enabled &&
+      input.frame.skeletonId === input.content.skeletonId,
+  );
 }
 
 export function createContextualLexicalBuildPlan(
   input: ContextualLexicalPlanInput,
 ): LearningExperiencePlan {
   if (input.runtimeCapabilities && !input.runtimeCapabilities.canCompileFrozenTask) {
-    return emptyPlan(input.frame, "BUILD");
+    return emptyPlan(input.frame, input.content, "BUILD");
   }
   const lexeme = findResolvedLexeme(input.content, input.target);
-  if (!lexeme || !lexeme.build.enabled || input.frame.skeletonId !== MEAL_SKELETON_ID) {
-    return emptyPlan(input.frame, "BUILD");
+  if (!canPlan(input, lexeme, Boolean(lexeme?.build.enabled))) {
+    return emptyPlan(input.frame, input.content, "BUILD");
   }
-  const token = lexeme.presentationToken;
-  const entityId = entityIdOnFrame(input.frame, lexeme.fixtureSense);
-  const contrastCatalogId = lexeme.contrasts[0]?.contrastEntityId;
+  const token = lexeme!.presentationToken;
+  const entityId = entityIdOnFrame(input.frame, lexeme!.fixtureSense);
+  const contrastCatalogId = lexeme!.contrasts[0]?.contrastEntityId;
   const contrastEntityId = contrastCatalogId
     ? remapCatalogEntity(contrastCatalogId, input.content, input.frame)
     : null;
-  const relatedCatalogId = lexeme.groundingFacts
-    .find((fact) => fact.factId === lexeme.build.connectFactId)
+  const relatedCatalogId = lexeme!.groundingFacts
+    .find((fact) => fact.factId === lexeme!.build.connectFactId)
     ?.args.find(
       (arg): arg is { kind: "ENTITY"; entityId: string } =>
-        arg.kind === "ENTITY" && arg.entityId !== lexeme.entityId,
+        arg.kind === "ENTITY" && arg.entityId !== lexeme!.entityId,
     )?.entityId;
   const relatedEntityId = relatedCatalogId
     ? remapCatalogEntity(relatedCatalogId, input.content, input.frame)
     : null;
   if (!entityId || !contrastEntityId || (relatedCatalogId && !relatedEntityId)) {
-    return emptyPlan(input.frame, "BUILD");
+    return emptyPlan(input.frame, input.content, "BUILD");
   }
   const interpretationTargetId = `target-${token}`;
   const formTargetId = `target-${token}-form`;
-  const relationPredicate = connectPredicate(lexeme);
+  const relationPredicate = connectPredicate(lexeme!);
   const interpretationTarget: ExperienceTarget = {
     id: interpretationTargetId,
-    sense: lexeme.fixtureSense,
+    sense: lexeme!.fixtureSense,
     focus: "CONTEXT_INTERPRETATION",
-    requiredRoleIds: [lexeme.roleId],
-    requiredRelationIds: requiredRelationIds(lexeme),
+    requiredRoleIds: [lexeme!.roleId],
+    requiredRelationIds: requiredRelationIds(lexeme!),
   };
   const formTarget: ExperienceTarget = {
     id: formTargetId,
-    sense: lexeme.fixtureSense,
+    sense: lexeme!.fixtureSense,
     focus: "MEANING_TO_FORM",
   };
   const bundledTarget = {
-    lexemeId: lexeme.target.lexemeId,
-    senseId: lexeme.target.senseId,
+    lexemeId: lexeme!.target.lexemeId,
+    senseId: lexeme!.target.senseId,
   };
   const prefix = input.stepIdPrefix;
+  const rationales = input.content.guidedRationales;
   const ground: GuidedExperienceStepSpec = {
     id: `${prefix}-build-${token}-ground`,
     purpose: "GROUND",
@@ -161,11 +179,10 @@ export function createContextualLexicalBuildPlan(
       kind: "GUIDED",
       guidedActivityKind: "PRESENT_CONTEXT",
       completionMode: "ACKNOWLEDGE_ONLY",
-      rationale:
-        "Show the Meal scene and the current entity before any judgment. Acknowledgement is not Evidence.",
+      rationale: rationales.ground,
     },
     presentation: {
-      instruction: lexeme.build.groundInstruction,
+      instruction: lexeme!.build.groundInstruction,
       presentedEntityIds: presentedSceneEntityIds(input.content, input.frame),
     },
     transition: nextOrEnd(false),
@@ -181,11 +198,10 @@ export function createContextualLexicalBuildPlan(
         ? "OBSERVE_RELATION"
         : "CONNECT_ENTITY_AND_MEANING",
       completionMode: "ACKNOWLEDGE_ONLY",
-      rationale:
-        "Connect the entity, scene role, and Chinese meaning. Acknowledgement is not independent recall.",
+      rationale: rationales.connect,
     },
     presentation: {
-      instruction: lexeme.build.connectInstruction,
+      instruction: lexeme!.build.connectInstruction,
       presentedEntityIds: relatedEntityId ? [entityId, relatedEntityId] : [entityId],
       presentedFactPredicates: relationPredicate ? [relationPredicate] : undefined,
     },
@@ -200,10 +216,10 @@ export function createContextualLexicalBuildPlan(
       kind: "GUIDED",
       guidedActivityKind: "PRESENT_LEXICAL_FORM",
       completionMode: "ACKNOWLEDGE_ONLY",
-      rationale: "Present the English form as teaching support, not as a test.",
+      rationale: rationales.teach,
     },
     presentation: {
-      instruction: lexeme.build.teachInstruction,
+      instruction: lexeme!.build.teachInstruction,
       presentedEntityIds: [entityId],
     },
     supportExposure: {
@@ -221,10 +237,10 @@ export function createContextualLexicalBuildPlan(
       kind: "GUIDED",
       guidedActivityKind: "SHOW_CONTRAST",
       completionMode: "ACKNOWLEDGE_ONLY",
-      rationale: "Show an authored contrast binding. Acknowledgement is not Evidence.",
+      rationale: rationales.contrast,
     },
     presentation: {
-      instruction: lexeme.contrasts[0]?.instruction ?? "",
+      instruction: lexeme!.contrasts[0]?.instruction ?? "",
       presentedEntityIds: [entityId, contrastEntityId],
     },
     transition: nextOrEnd(false),
@@ -238,11 +254,10 @@ export function createContextualLexicalBuildPlan(
       kind: "GUIDED",
       guidedActivityKind: "FADE_FORM",
       completionMode: "ACKNOWLEDGE_ONLY",
-      rationale:
-        "Withdraw the full form and leave a spelling cue. Acknowledgement is support exposure, not Evidence.",
+      rationale: rationales.fade,
     },
     presentation: {
-      instruction: lexeme.build.fadeInstruction,
+      instruction: lexeme!.build.fadeInstruction,
       presentedEntityIds: [entityId],
     },
     supportExposure: {
@@ -257,13 +272,13 @@ export function createContextualLexicalBuildPlan(
     targetIds: [formTargetId],
     semanticAction: "TYPE",
     promptIntent: {
-      instructionKey: lexeme.build.recallInstructionKey,
+      instructionKey: lexeme!.build.recallInstructionKey,
       semanticQuestion: pred("name_required_object", [entityArg(entityId)]),
       mustNotRevealTargetForm: true,
     },
     expectedResponse: {
       kind: "LEXICAL_FORM",
-      sense: lexeme.fixtureSense,
+      sense: lexeme!.fixtureSense,
     },
     supportPolicy: MINIMAL_SUPPORT,
     requiredCapabilities: [`frozen-text-input:TYPE`],
@@ -271,17 +286,17 @@ export function createContextualLexicalBuildPlan(
   });
   const steps = [ground, connect, teach, contrast, fade, recall];
   return {
-    id: `meal-build-${input.frame.id}-${token}`,
+    id: `${input.content.planIdNamespace}-build-${input.frame.id}-${token}`,
     schemaVersion: "candidate-v0",
     mode: "BUILD",
-    sourceLearningNeedRef: "need-opaque-ref",
+    sourceLearningNeedRef: input.content.sourceLearningNeedRef,
     targets: [interpretationTarget, formTarget],
-    skeletonId: MEAL_SKELETON_ID,
+    skeletonId: input.frame.skeletonId,
     contextFrameId: input.frame.id,
-    activeGoalId: "EATER_CAN_EAT_FOOD",
+    activeGoalId: input.content.activeGoalId,
     steps,
     completionPolicy: completeAll(steps),
-    provenance: FIXTURE_PROVENANCE,
+    provenance: planProvenance(input.content),
   };
 }
 
@@ -289,32 +304,29 @@ export function createContextualLexicalStrengthenPlan(
   input: ContextualLexicalPlanInput,
 ): LearningExperiencePlan {
   if (input.runtimeCapabilities && !input.runtimeCapabilities.canCompileFrozenTask) {
-    return emptyPlan(input.frame, "STRENGTHEN");
+    return emptyPlan(input.frame, input.content, "STRENGTHEN");
   }
   const lexeme = findResolvedLexeme(input.content, input.target);
-  if (
-    !lexeme ||
-    !lexeme.strengthen.enabled ||
-    input.frame.skeletonId !== MEAL_SKELETON_ID
-  ) {
-    return emptyPlan(input.frame, "STRENGTHEN");
+  if (!canPlan(input, lexeme, Boolean(lexeme?.strengthen.enabled))) {
+    return emptyPlan(input.frame, input.content, "STRENGTHEN");
   }
-  const token = lexeme.presentationToken;
-  const entityId = entityIdOnFrame(input.frame, lexeme.fixtureSense);
+  const token = lexeme!.presentationToken;
+  const entityId = entityIdOnFrame(input.frame, lexeme!.fixtureSense);
   if (!entityId) {
-    return emptyPlan(input.frame, "STRENGTHEN");
+    return emptyPlan(input.frame, input.content, "STRENGTHEN");
   }
   const prefix = input.stepIdPrefix;
   const targetId = `target-${token}-form`;
   const formTarget: ExperienceTarget = {
     id: targetId,
-    sense: lexeme.fixtureSense,
+    sense: lexeme!.fixtureSense,
     focus: "MEANING_TO_FORM",
   };
   const bundledTarget = {
-    lexemeId: lexeme.target.lexemeId,
-    senseId: lexeme.target.senseId,
+    lexemeId: lexeme!.target.lexemeId,
+    senseId: lexeme!.target.senseId,
   };
+  const rationales = input.content.guidedRationales;
   const reconnect: GuidedExperienceStepSpec = {
     id: `${prefix}-strengthen-${token}-reconnect`,
     purpose: "CONNECT",
@@ -324,11 +336,10 @@ export function createContextualLexicalStrengthenPlan(
       kind: "GUIDED",
       guidedActivityKind: "RECONNECT_FORM",
       completionMode: "ACKNOWLEDGE_ONLY",
-      rationale:
-        "Re-show the scene object with the English form. Acknowledgement is support exposure, not Evidence.",
+      rationale: rationales.reconnect,
     },
     presentation: {
-      instruction: lexeme.strengthen.reconnectInstruction,
+      instruction: lexeme!.strengthen.reconnectInstruction,
       presentedEntityIds: [entityId],
     },
     supportExposure: {
@@ -346,11 +357,10 @@ export function createContextualLexicalStrengthenPlan(
       kind: "GUIDED",
       guidedActivityKind: "FADE_FORM",
       completionMode: "ACKNOWLEDGE_ONLY",
-      rationale:
-        "Withdraw the full form and leave a spelling cue. Acknowledgement is support exposure, not Evidence.",
+      rationale: rationales.fade,
     },
     presentation: {
-      instruction: lexeme.strengthen.fadeInstruction,
+      instruction: lexeme!.strengthen.fadeInstruction,
       presentedEntityIds: [entityId],
     },
     supportExposure: {
@@ -369,23 +379,23 @@ export function createContextualLexicalStrengthenPlan(
       semanticQuestion: pred("name_required_object", [entityArg(entityId)]),
       mustNotRevealTargetForm: true,
     },
-    expectedResponse: { kind: "LEXICAL_FORM", sense: lexeme.fixtureSense },
+    expectedResponse: { kind: "LEXICAL_FORM", sense: lexeme!.fixtureSense },
     supportPolicy: MINIMAL_SUPPORT,
     requiredCapabilities: [`frozen-text-input:TYPE`],
     transition: nextOrEnd(true),
   });
   const steps = [reconnect, fade, verify];
   return {
-    id: `meal-strengthen-recall-${input.frame.id}-${token}`,
+    id: `${input.content.planIdNamespace}-strengthen-recall-${input.frame.id}-${token}`,
     schemaVersion: "candidate-v0",
     mode: "STRENGTHEN",
-    sourceLearningNeedRef: "need-opaque-ref",
+    sourceLearningNeedRef: input.content.sourceLearningNeedRef,
     targets: [formTarget],
-    skeletonId: MEAL_SKELETON_ID,
+    skeletonId: input.frame.skeletonId,
     contextFrameId: input.frame.id,
-    activeGoalId: "EATER_CAN_EAT_FOOD",
+    activeGoalId: input.content.activeGoalId,
     steps,
     completionPolicy: completeAll(steps),
-    provenance: FIXTURE_PROVENANCE,
+    provenance: planProvenance(input.content),
   };
 }

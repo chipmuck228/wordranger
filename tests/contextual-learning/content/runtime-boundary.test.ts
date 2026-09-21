@@ -12,6 +12,13 @@ const RUNTIME_FILES = [
 ];
 
 const FORBIDDEN = [/"soup"/, /"bowl"/, /"spoon"/, /"fork"/];
+const MEAL_FACTORY_FORBIDDEN = [
+  /MEAL_SKELETON_ID/,
+  /EATER_CAN_EAT_FOOD/,
+  /meal-setting-v0/,
+  /Show the Meal scene/,
+  /fixtures\/meal/,
+];
 
 const CANDIDATE_IMPORT_FILES = [
   "src/contextual-learning/candidate-v0/content/validate-scene-content.ts",
@@ -27,6 +34,16 @@ describe("runtime engines do not hardcode Meal words", () => {
       for (const pattern of FORBIDDEN) {
         expect(source, `${file} must not contain ${pattern}`).not.toMatch(pattern);
       }
+    }
+  });
+
+  it("keeps the generic plan factory free of Meal fixtures", () => {
+    const source = readFileSync(
+      "src/contextual-learning/candidate-v0/planning/create-contextual-lexical-plans.ts",
+      "utf8",
+    );
+    for (const pattern of MEAL_FACTORY_FORBIDDEN) {
+      expect(source, `generic factory must not contain ${pattern}`).not.toMatch(pattern);
     }
   });
 

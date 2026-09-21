@@ -84,11 +84,41 @@ with `CONTENT_FACT_DIRECTION_MISMATCH`.
 ## 9. Validator vs resolver
 
 The validator checks authored data. It does not touch UI, learner
-state, or Evidence.
+state, or Evidence. It recursively rejects Evidence/mastery fields
+anywhere in the pack, not only on the top-level object.
 
-The resolver binds a valid pack to runtime authorities and returns an
-immutable snapshot. It fails closed. It does not fall back to spoon,
-infer from labels, or drop bad members silently.
+It validates **every** pack frame. A second frame with a bad entity or
+fact fails even when the current runtime frame is valid. Frame IDs must
+be unique. Lexeme membership uses per-frame bindings:
+
+```ts
+membership.frameBindings: { frameId, entityId, roleId, sceneOrder }[]
+```
+
+The resolver binds one runtime frame at a time. It returns only lexemes
+that have a binding for that frame. `frameId` is the frame being
+resolved, never `frameBindings[0]`.
+
+TypeScript types are not enough. Authored JSON must pass the runtime
+validator.
+
+## 9a. Generic plan factory
+
+`createContextualLexicalBuildPlan` / `createContextualLexicalStrengthenPlan`
+read `skeletonId`, `activeGoalId`, plan ID namespace, and guided
+rationales from resolved content and the current frame. They do not
+import Meal fixtures.
+
+Meal-specific values such as `EATER_CAN_EAT_FOOD` and `planIdNamespace:
+"meal"` live in the Meal pack or Meal wrappers. Presentation roles are
+plain strings. Meal UI maps `"FOOD" | "CONTAINER" | "TOOL"` in the Meal
+renderer adapter.
+
+## 9b. Registry immutability
+
+Registry entries are deep-frozen at load. `packId` must equal `pack.id`.
+Duplicate IDs fail closed. Getters return structured clones, so callers
+cannot mutate approval state or authored wording for later requests.
 
 ## 10. Registry approval
 

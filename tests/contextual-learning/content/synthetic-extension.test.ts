@@ -75,7 +75,10 @@ function syntheticPack(): ContextualSceneContentPack {
   for (const lexeme of pack.lexemes) {
     lexeme.membership = {
       ...lexeme.membership,
-      frameIds: ["synthetic-meal-extension-v0"],
+      frameBindings: lexeme.membership.frameBindings.map((binding) => ({
+        ...binding,
+        frameId: "synthetic-meal-extension-v0",
+      })),
     };
   }
   pack.lexemes.push({
@@ -84,12 +87,16 @@ function syntheticPack(): ContextualSceneContentPack {
     fixtureSense: SYNTHETIC_TARGET,
     canonicalKey: "test-cloth-key",
     membership: {
-      frameIds: ["synthetic-meal-extension-v0"],
-      entityId: "home-cloth",
-      roleId: "EATING_TOOL",
-      sceneOrder: 4,
+      frameBindings: [
+        {
+          frameId: "synthetic-meal-extension-v0",
+          entityId: "home-cloth",
+          roleId: "EATING_TOOL",
+          sceneOrder: 4,
+        },
+      ],
       presentationToken: "cloth",
-      publicVisualRole: "TOOL",
+      presentationRole: "TOOL",
     },
     probe: {
       enabled: true,
@@ -103,8 +110,6 @@ function syntheticPack(): ContextualSceneContentPack {
       displayLabel: "布",
     },
     grounding: {
-      entityId: "home-cloth",
-      roleId: "EATING_TOOL",
       facts: [],
     },
     contrastBindings: [

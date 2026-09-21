@@ -13,6 +13,7 @@ import {
   type SceneContentIssue,
   type SceneContentValidation,
 } from "./errors";
+import { frameBindingFor } from "./frame-binding";
 import {
   SCENE_CONTENT_SCHEMA_VERSION,
   type ContextualFactArgument,
@@ -28,22 +29,26 @@ const CONTRAST_KINDS = new Set([
   "MEANING_CONTRAST",
 ]);
 
-const FORBIDDEN_PACK_KEYS = [
+const FORBIDDEN_KEYS = new Set([
   "evidenceOutcome",
   "mastery",
   "masteryScore",
   "learnerScore",
-];
+  "answerKey",
+  "correctCandidateIds",
+]);
 
 export function validateSceneContent(input: {
   pack: ContextualSceneContentPack;
   frame: ContextFrame;
+  frames?: readonly ContextFrame[];
   skeleton: SemanticSkeleton;
   cluster: SceneVocabularyCluster;
   loadLexeme: SceneLexemeLoader;
 }): SceneContentValidation {
   const issues: SceneContentIssue[] = [];
-  const { pack, frame, skeleton, cluster, loadLexeme } = input;
+  const { pack, skeleton, cluster, loadLexeme } = input;
+  const runtimeFrames = uniqueFrames([input.frame, ...(input.frames ?? [])]);
   if (!pack.id.trim()) {
     issues.push(issue(SceneContentErrorCode.CONTENT_PACK_ID_INVALID, "id"));
   }
@@ -57,7 +62,7 @@ export function validateSceneContent(input: {
       issue(SceneContentErrorCode.CONTENT_CLUSTER_NOT_FOUND, "sceneClusterId"),
     );
   }
-  if (pack.skeletonId !== skeleton.id || frame.skeletonId !== skeleton.id) {
+  if (pack.skeletonId !== skeleton.id) {
     issues.push(
       issue(SceneContentErrorCode.CONTENT_SKELETON_NOT_FOUND, "skeletonId"),
     );
@@ -75,99 +80,141 @@ export function validateSceneContent(input: {
       issue(SceneContentErrorCode.CONTENT_PROVENANCE_INVALID, "provenance.sourceRefs"),
     );
   }
-  if (FORBIDDEN_PACK_KEYS.some((key) => key in pack)) {
-    issues.push(issue(SceneContentErrorCode.CONTENT_OUTCOME_FORBIDDEN, "pack"));
+  if (!pack.planning?.planIdNamespace?.trim() || !pack.planning.activeGoalId?.trim()) {
+    issues.push(issue(SceneContentErrorCode.CONTENT_PROVENANCE_INVALID, "planning"));
   }
+  issues.push(...findForbiddenKeys(pack, "pack"));
 
-  const frameContent = pack.frames.find((item) => item.frameId === frame.id);
-  if (!frameContent || pack.frames.length === 0) {
+  if (pack.frames.length === 0) {
     issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND, "frames"));
     return fail(issues);
   }
-  for (const entityId of [
-    ...frameContent.entityIds,
-    ...frameContent.presentationOrder,
-  ]) {
-    if (!frame.entityBindings.some((entity) => entity.entityId === entityId)) {
-      issues.push(
-        issue(SceneContentErrorCode.CONTENT_ENTITY_NOT_IN_FRAME, `frame.entity:${entityId}`),
-      );
+  const packFrameIds = new Set<string>();
+  for (const [index, frameContent] of pack.frames.entries()) {
+    const path = `frames[${index}]`;
+    if (!frameContent.frameId.trim()) {
+      issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND, `${path}.frameId`));
+      continue;
     }
-  }
-  if (
-    new Set(frameContent.presentationOrder).size !==
-    frameContent.presentationOrder.length
-  ) {
-    issues.push(
-      issue(SceneContentErrorCode.CONTENT_SCENE_ORDER_DUPLICATE, "presentationOrder"),
-    );
-  }
-  for (const factId of frameContent.factIds) {
-    if (!frame.initialFacts.some((fact) => fact.id === factId)) {
-      issues.push(issue(SceneContentErrorCode.CONTENT_FACT_NOT_FOUND, `frame.fact:${factId}`));
+    if (packFrameIds.has(frameContent.frameId)) {
+      issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_ID_DUPLICATE, `${path}.frameId`));
+      continue;
     }
+    packFrameIds.add(frameContent.frameId);
+    const runtime = runtimeFrames.find((item) => item.id === frameContent.frameId);
+    if (!runtime) {
+      issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND, `${path}.frameId`));
+      continue;
+    }
+    if (runtime.skeletonId !== skeleton.id) {
+      issues.push(issue(SceneContentErrorCode.CONTENT_SKELETON_NOT_FOUND, `${path}.skeletonId`));
+    }
+    issues.push(...validatePackFrame(frameContent, runtime, path));
   }
 
-  const targets = new Set<string>();
-  const orders = new Set<number>();
-  const entities = new Set<string>();
-  const tokens = new Set<string>();
+  const targetsByFrame = new Map<string, Set<string>>();
+  const ordersByFrame = new Map<string, Set<number>>();
+  const entitiesByFrame = new Map<string, Set<string>>();
+  const tokensByFrame = new Map<string, Set<string>>();
+
   for (const [index, lexeme] of pack.lexemes.entries()) {
     const path = `lexemes[${index}]`;
     if (!lexeme.target.lexemeId.trim() || !lexeme.target.senseId.trim()) {
       issues.push(issue(SceneContentErrorCode.CONTENT_TARGET_INVALID, `${path}.target`));
     }
-    const targetKey = `${lexeme.target.lexemeId}::${lexeme.target.senseId}`;
-    if (targets.has(targetKey)) {
-      issues.push(issue(SceneContentErrorCode.CONTENT_TARGET_DUPLICATE, `${path}.target`));
-    }
-    targets.add(targetKey);
-    if (orders.has(lexeme.membership.sceneOrder)) {
-      issues.push(
-        issue(SceneContentErrorCode.CONTENT_SCENE_ORDER_DUPLICATE, `${path}.sceneOrder`),
-      );
-    }
-    orders.add(lexeme.membership.sceneOrder);
-    if (!lexeme.membership.presentationToken.trim()) {
-      issues.push(
-        issue(SceneContentErrorCode.CONTENT_TARGET_INVALID, `${path}.presentationToken`),
-      );
-    } else if (tokens.has(lexeme.membership.presentationToken)) {
-      issues.push(
-        issue(SceneContentErrorCode.CONTENT_TARGET_DUPLICATE, `${path}.presentationToken`),
-      );
-    } else {
-      tokens.add(lexeme.membership.presentationToken);
-    }
-    if (entities.has(lexeme.membership.entityId)) {
-      issues.push(
-        issue(SceneContentErrorCode.CONTENT_ENTITY_BINDING_DUPLICATE, `${path}.entityId`),
-      );
-    }
-    entities.add(lexeme.membership.entityId);
     if (!lexeme.canonicalKey.trim()) {
       issues.push(
         issue(SceneContentErrorCode.CONTENT_CANONICAL_KEY_INVALID, `${path}.canonicalKey`),
       );
     }
-    if (!lexeme.membership.frameIds.includes(frame.id)) {
-      issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND, `${path}.frameIds`));
-    }
-    if (!frame.entityBindings.some((item) => item.entityId === lexeme.membership.entityId)) {
+    if (!lexeme.membership.presentationToken.trim()) {
       issues.push(
-        issue(SceneContentErrorCode.CONTENT_ENTITY_NOT_IN_FRAME, `${path}.entityId`),
+        issue(SceneContentErrorCode.CONTENT_TARGET_INVALID, `${path}.presentationToken`),
       );
     }
-    if (!skeleton.roleDefinitions.some((role) => role.id === lexeme.membership.roleId)) {
-      issues.push(issue(SceneContentErrorCode.CONTENT_ROLE_NOT_FOUND, `${path}.roleId`));
-    }
-    if (lexeme.grounding.entityId !== lexeme.membership.entityId) {
+    if (!lexeme.membership.presentationRole.trim()) {
       issues.push(
-        issue(SceneContentErrorCode.CONTENT_ENTITY_NOT_IN_FRAME, `${path}.grounding.entityId`),
+        issue(SceneContentErrorCode.CONTENT_TARGET_INVALID, `${path}.presentationRole`),
       );
     }
-    if (lexeme.grounding.roleId !== lexeme.membership.roleId) {
-      issues.push(issue(SceneContentErrorCode.CONTENT_ROLE_NOT_FOUND, `${path}.grounding.roleId`));
+    if (lexeme.membership.frameBindings.length === 0) {
+      issues.push(
+        issue(SceneContentErrorCode.CONTENT_FRAME_BINDING_MISSING, `${path}.frameBindings`),
+      );
+    }
+    const lexemeFrameIds = new Set<string>();
+    for (const [bindingIndex, binding] of lexeme.membership.frameBindings.entries()) {
+      const bindingPath = `${path}.frameBindings[${bindingIndex}]`;
+      if (!packFrameIds.has(binding.frameId)) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND, bindingPath));
+        continue;
+      }
+      if (lexemeFrameIds.has(binding.frameId)) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_ID_DUPLICATE, bindingPath));
+        continue;
+      }
+      lexemeFrameIds.add(binding.frameId);
+      const runtime = runtimeFrames.find((item) => item.id === binding.frameId);
+      if (!runtime) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND, bindingPath));
+        continue;
+      }
+      const targetKey = `${lexeme.target.lexemeId}::${lexeme.target.senseId}`;
+      const targets = setFor(targetsByFrame, binding.frameId);
+      if (targets.has(targetKey)) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_TARGET_DUPLICATE, `${path}.target`));
+      }
+      targets.add(targetKey);
+      const orders = setFor(ordersByFrame, binding.frameId);
+      if (orders.has(binding.sceneOrder)) {
+        issues.push(
+          issue(SceneContentErrorCode.CONTENT_SCENE_ORDER_DUPLICATE, `${bindingPath}.sceneOrder`),
+        );
+      }
+      orders.add(binding.sceneOrder);
+      const entities = setFor(entitiesByFrame, binding.frameId);
+      if (entities.has(binding.entityId)) {
+        issues.push(
+          issue(SceneContentErrorCode.CONTENT_ENTITY_BINDING_DUPLICATE, `${bindingPath}.entityId`),
+        );
+      }
+      entities.add(binding.entityId);
+      const tokens = setFor(tokensByFrame, binding.frameId);
+      if (lexeme.membership.presentationToken.trim()) {
+        if (tokens.has(lexeme.membership.presentationToken)) {
+          issues.push(
+            issue(SceneContentErrorCode.CONTENT_TARGET_DUPLICATE, `${path}.presentationToken`),
+          );
+        }
+        tokens.add(lexeme.membership.presentationToken);
+      }
+      if (!runtime.entityBindings.some((item) => item.entityId === binding.entityId)) {
+        issues.push(
+          issue(SceneContentErrorCode.CONTENT_ENTITY_NOT_IN_FRAME, `${bindingPath}.entityId`),
+        );
+      }
+      if (!skeleton.roleDefinitions.some((role) => role.id === binding.roleId)) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_ROLE_NOT_FOUND, `${bindingPath}.roleId`));
+      }
+      const packFrame = pack.frames.find((item) => item.frameId === binding.frameId);
+      if (packFrame && !packFrame.entityIds.includes(binding.entityId)) {
+        issues.push(
+          issue(SceneContentErrorCode.CONTENT_ENTITY_NOT_IN_FRAME, `${bindingPath}.entityId`),
+        );
+      }
+      for (const [factIndex, factRef] of lexeme.grounding.facts.entries()) {
+        if (packFrame && !packFrame.factIds.includes(factRef.factId)) {
+          continue;
+        }
+        issues.push(
+          ...validateFactRef(
+            factRef,
+            runtime,
+            binding.entityId,
+            `${path}.facts[${factIndex}]`,
+          ),
+        );
+      }
     }
 
     const bundled = loadLexeme(lexeme.canonicalKey);
@@ -237,11 +284,6 @@ export function validateSceneContent(input: {
         );
       }
     }
-    for (const [factIndex, factRef] of lexeme.grounding.facts.entries()) {
-      issues.push(
-        ...validateFactRef(factRef, frame, lexeme.membership.entityId, `${path}.facts[${factIndex}]`),
-      );
-    }
     if (lexeme.build.connectFactId) {
       const referenced = lexeme.grounding.facts.find(
         (item) => item.factId === lexeme.build.connectFactId,
@@ -272,10 +314,51 @@ export function validateSceneContent(input: {
         issues.push(
           issue(SceneContentErrorCode.CONTENT_CONTRAST_TARGET_NOT_FOUND, contrastPath),
         );
+      } else {
+        const sharesFrame = lexeme.membership.frameBindings.some((binding) =>
+          frameBindingFor(contrastMember, binding.frameId),
+        );
+        if (!sharesFrame) {
+          issues.push(
+            issue(SceneContentErrorCode.CONTENT_CONTRAST_TARGET_NOT_FOUND, contrastPath),
+          );
+        }
       }
     }
   }
   return issues.length === 0 ? { ok: true } : fail(issues);
+}
+
+function validatePackFrame(
+  frameContent: ContextualSceneContentPack["frames"][number],
+  runtime: ContextFrame,
+  path: string,
+): SceneContentIssue[] {
+  const issues: SceneContentIssue[] = [];
+  for (const entityId of [
+    ...frameContent.entityIds,
+    ...frameContent.presentationOrder,
+  ]) {
+    if (!runtime.entityBindings.some((entity) => entity.entityId === entityId)) {
+      issues.push(
+        issue(SceneContentErrorCode.CONTENT_ENTITY_NOT_IN_FRAME, `${path}.entity:${entityId}`),
+      );
+    }
+  }
+  if (
+    new Set(frameContent.presentationOrder).size !==
+    frameContent.presentationOrder.length
+  ) {
+    issues.push(
+      issue(SceneContentErrorCode.CONTENT_SCENE_ORDER_DUPLICATE, `${path}.presentationOrder`),
+    );
+  }
+  for (const factId of frameContent.factIds) {
+    if (!runtime.initialFacts.some((fact) => fact.id === factId)) {
+      issues.push(issue(SceneContentErrorCode.CONTENT_FACT_NOT_FOUND, `${path}.fact:${factId}`));
+    }
+  }
+  return issues;
 }
 
 function validateFactRef(
@@ -322,14 +405,8 @@ function sameFactArgs(
   }
   return authored.every((arg, index) => {
     const frameArg = frameArgs[index];
-    if (!frameArg || arg.kind !== frameArg.kind && !(arg.kind === "VALUE" && frameArg.kind === "LITERAL")) {
-      if (arg.kind === "ENTITY") {
-        return frameArg?.kind === "ENTITY" && frameArg.entityId === arg.entityId;
-      }
-      if (arg.kind === "ROLE") {
-        return frameArg?.kind === "ROLE" && frameArg.roleId === arg.roleId;
-      }
-      return frameArg?.kind === "LITERAL" && String(frameArg.value) === arg.value;
+    if (!frameArg) {
+      return false;
     }
     if (arg.kind === "ENTITY") {
       return frameArg.kind === "ENTITY" && frameArg.entityId === arg.entityId;
@@ -337,8 +414,55 @@ function sameFactArgs(
     if (arg.kind === "ROLE") {
       return frameArg.kind === "ROLE" && frameArg.roleId === arg.roleId;
     }
-    return String(frameArg.value) === arg.value;
+    return (
+      (frameArg.kind === "LITERAL" || frameArg.kind === "VALUE") &&
+      String(frameArg.value) === arg.value
+    );
   });
+}
+
+function findForbiddenKeys(value: unknown, path: string): SceneContentIssue[] {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  const issues: SceneContentIssue[] = [];
+  if (!Array.isArray(value)) {
+    for (const key of Object.keys(value)) {
+      if (FORBIDDEN_KEYS.has(key)) {
+        issues.push(issue(SceneContentErrorCode.CONTENT_OUTCOME_FORBIDDEN, `${path}.${key}`));
+      }
+    }
+  }
+  const entries = Array.isArray(value)
+    ? value.map((item, index) => [String(index), item] as const)
+    : Object.entries(value);
+  for (const [key, child] of entries) {
+    issues.push(...findForbiddenKeys(child, `${path}.${key}`));
+  }
+  return issues;
+}
+
+function uniqueFrames(frames: readonly ContextFrame[]): ContextFrame[] {
+  const seen = new Set<string>();
+  const unique: ContextFrame[] = [];
+  for (const frame of frames) {
+    if (seen.has(frame.id)) {
+      continue;
+    }
+    seen.add(frame.id);
+    unique.push(frame);
+  }
+  return unique;
+}
+
+function setFor<T>(store: Map<string, Set<T>>, frameId: string): Set<T> {
+  const existing = store.get(frameId);
+  if (existing) {
+    return existing;
+  }
+  const created = new Set<T>();
+  store.set(frameId, created);
+  return created;
 }
 
 function leaksForm(displayForm: string, texts: readonly string[]): boolean {

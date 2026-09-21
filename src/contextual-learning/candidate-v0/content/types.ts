@@ -36,10 +36,29 @@ export interface ContextualContrastBinding {
 }
 
 export interface ContextualLexemeGrounding {
-  entityId: string;
-  roleId: string;
   facts: ContextualFactRef[];
   requiredRelationIds?: string[];
+}
+
+export interface ContextualFrameBinding {
+  frameId: string;
+  entityId: string;
+  roleId: string;
+  sceneOrder: number;
+}
+
+export interface ContextualScenePlanningContent {
+  planIdNamespace: string;
+  activeGoalId: string;
+  sourceLearningNeedRef: string;
+  guidedRationales: {
+    ground: string;
+    connect: string;
+    teach: string;
+    contrast: string;
+    fade: string;
+    reconnect: string;
+  };
 }
 
 export interface ContextualBuildContent {
@@ -75,12 +94,9 @@ export interface ContextualSceneLexemeContent {
   fixtureSense: LexemeSenseRef;
   canonicalKey: string;
   membership: {
-    frameIds: string[];
-    entityId: string;
-    roleId: string;
-    sceneOrder: number;
+    frameBindings: ContextualFrameBinding[];
     presentationToken: string;
-    publicVisualRole: "FOOD" | "CONTAINER" | "TOOL";
+    presentationRole: string;
   };
   probe: {
     skills: Array<"ACTIVE_RECALL" | "MEANING_RECOGNITION">;
@@ -106,6 +122,7 @@ export interface ContextualSceneContentPack {
   skeletonId: string;
   frames: ContextualFrameContent[];
   lexemes: ContextualSceneLexemeContent[];
+  planning: ContextualScenePlanningContent;
   provenance: {
     status: "CANDIDATE" | "APPROVED_FOR_EXPERIMENT";
     sourceRefs: string[];
@@ -142,7 +159,7 @@ export interface ResolvedContextualSceneLexeme {
   roleId: string;
   sceneOrder: number;
   presentationToken: string;
-  publicVisualRole: "FOOD" | "CONTAINER" | "TOOL";
+  presentationRole: string;
   groundingFacts: ResolvedContextualFact[];
   requiredRelationIds: string[];
   contrasts: ResolvedContextualContrast[];
@@ -155,6 +172,10 @@ export interface ResolvedContextualSceneContent {
   packId: string;
   sceneClusterId: string;
   skeletonId: string;
+  activeGoalId: string;
+  planIdNamespace: string;
+  sourceLearningNeedRef: string;
+  guidedRationales: ContextualScenePlanningContent["guidedRationales"];
   frame: ContextualFrameContent;
   lexemes: ResolvedContextualSceneLexeme[];
 }

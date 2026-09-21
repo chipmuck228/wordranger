@@ -1,5 +1,5 @@
 /**
- * Resolves a validated Scene Content pack against runtime authorities.
+ * Resolves a validated Scene Content pack against one runtime frame.
  * Fail closed. No spoon fallback. No invented IPA.
  */
 
@@ -7,6 +7,8 @@ import { sameLexemeSense } from "../domain/lexeme-sense";
 import type { ContextFrame, SemanticSkeleton } from "../domain/types";
 import type { SceneVocabularyCluster } from "../memory-routing/types";
 import { SceneContentErrorCode } from "./errors";
+import { frameBindingFor } from "./frame-binding";
+import { cloneFrozen } from "./immutable";
 import { validateSceneContent } from "./validate-scene-content";
 import type {
   ContextualSceneContentPack,
@@ -20,6 +22,7 @@ import type {
 export function resolveSceneContent(input: {
   pack: ContextualSceneContentPack;
   frame: ContextFrame;
+  frames?: readonly ContextFrame[];
   skeleton: SemanticSkeleton;
   cluster: SceneVocabularyCluster;
   loadLexeme: SceneLexemeLoader;
@@ -43,8 +46,9 @@ export function resolveSceneContent(input: {
     };
   }
   const lexemes = [...input.pack.lexemes]
-    .sort((left, right) => left.membership.sceneOrder - right.membership.sceneOrder)
-    .map((lexeme) => resolveLexeme(lexeme, input.pack, input.loadLexeme));
+    .filter((lexeme) => frameBindingFor(lexeme, input.frame.id))
+    .map((lexeme) => resolveLexeme(lexeme, input.pack, input.frame.id, input.loadLexeme))
+    .sort((left, right) => (left?.sceneOrder ?? 0) - (right?.sceneOrder ?? 0));
   if (lexemes.some((item) => item === null)) {
     return {
       ok: false,
@@ -59,10 +63,14 @@ export function resolveSceneContent(input: {
   }
   return {
     ok: true,
-    content: freezeContent({
+    content: cloneFrozen({
       packId: input.pack.id,
       sceneClusterId: input.pack.sceneClusterId,
       skeletonId: input.pack.skeletonId,
+      activeGoalId: input.pack.planning.activeGoalId,
+      planIdNamespace: input.pack.planning.planIdNamespace,
+      sourceLearningNeedRef: input.pack.planning.sourceLearningNeedRef,
+      guidedRationales: { ...input.pack.planning.guidedRationales },
       frame: {
         ...frameContent,
         entityIds: [...frameContent.entityIds],
@@ -77,8 +85,14 @@ export function resolveSceneContent(input: {
 function resolveLexeme(
   lexeme: ContextualSceneContentPack["lexemes"][number],
   pack: ContextualSceneContentPack,
+  frameId: string,
   loadLexeme: SceneLexemeLoader,
 ): ResolvedContextualSceneLexeme | null {
+  const binding = frameBindingFor(lexeme, frameId);
+  const frameContent = pack.frames.find((item) => item.frameId === frameId);
+  if (!binding || !frameContent) {
+    return null;
+  }
   const bundled = loadLexeme(lexeme.canonicalKey);
   const displayForm = bundled?.display.trim() || bundled?.lemma.trim() || "";
   const meaningGloss = bundled?.meaningsZh[0]?.trim() || "";
@@ -86,27 +100,30 @@ function resolveLexeme(
   if (!bundled || bundled.id !== lexeme.target.lexemeId || !displayForm || !meaningGloss) {
     return null;
   }
-  const contrasts: ResolvedContextualContrast[] = lexeme.contrastBindings.map((binding) => {
-    const other = pack.lexemes.find((item) =>
-      sameLexemeSense(item.target, binding.contrastTarget),
+  const contrasts: ResolvedContextualContrast[] = lexeme.contrastBindings.map((item) => {
+    const other = pack.lexemes.find((candidate) =>
+      sameLexemeSense(candidate.target, item.contrastTarget),
     );
+    const otherBinding = other ? frameBindingFor(other, frameId) : null;
     return {
-      kind: binding.kind,
-      contrastTarget: { ...binding.contrastTarget },
-      contrastEntityId: other?.membership.entityId ?? "",
-      instruction: binding.instruction,
-      caption: binding.caption,
+      kind: item.kind,
+      contrastTarget: { ...item.contrastTarget },
+      contrastEntityId: otherBinding?.entityId ?? "",
+      instruction: item.instruction,
+      caption: item.caption,
     };
   });
   if (contrasts.some((item) => !item.contrastEntityId)) {
     return null;
   }
-  const groundingFacts: ResolvedContextualFact[] = lexeme.grounding.facts.map((fact) => ({
-    factId: fact.factId,
-    predicate: fact.predicate,
-    args: fact.args.map((arg) => ({ ...arg })),
-    caption: fact.caption,
-  }));
+  const groundingFacts: ResolvedContextualFact[] = lexeme.grounding.facts
+    .filter((fact) => frameContent.factIds.includes(fact.factId))
+    .map((fact) => ({
+      factId: fact.factId,
+      predicate: fact.predicate,
+      args: fact.args.map((arg) => ({ ...arg })),
+      caption: fact.caption,
+    }));
   return {
     id: lexeme.id,
     target: { ...lexeme.target },
@@ -116,12 +133,12 @@ function resolveLexeme(
     meaningGloss,
     phonetic,
     displayLabel: lexeme.lexicalPresentation.displayLabel,
-    frameId: lexeme.membership.frameIds[0] ?? "",
-    entityId: lexeme.membership.entityId,
-    roleId: lexeme.membership.roleId,
-    sceneOrder: lexeme.membership.sceneOrder,
+    frameId,
+    entityId: binding.entityId,
+    roleId: binding.roleId,
+    sceneOrder: binding.sceneOrder,
     presentationToken: lexeme.membership.presentationToken,
-    publicVisualRole: lexeme.membership.publicVisualRole,
+    presentationRole: lexeme.membership.presentationRole,
     groundingFacts,
     requiredRelationIds: [...(lexeme.grounding.requiredRelationIds ?? [])],
     contrasts,
@@ -132,20 +149,4 @@ function resolveLexeme(
     build: { ...lexeme.build },
     strengthen: { ...lexeme.strengthen },
   };
-}
-
-function freezeContent(
-  content: ResolvedContextualSceneContent,
-): ResolvedContextualSceneContent {
-  return deepFreeze(structuredClone(content));
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value && typeof value === "object") {
-    Object.freeze(value);
-    for (const child of Object.values(value)) {
-      deepFreeze(child);
-    }
-  }
-  return value;
 }

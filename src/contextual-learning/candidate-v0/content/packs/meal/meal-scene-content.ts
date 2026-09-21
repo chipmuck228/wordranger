@@ -34,6 +34,19 @@ function bundledTarget(key: keyof typeof BUNDLED_LEXEME_BINDINGS) {
   };
 }
 
+function frameBinding(
+  entityId: string,
+  roleId: string,
+  sceneOrder: number,
+) {
+  return {
+    frameId: HOME_BREAKFAST_FRAME_ID,
+    entityId,
+    roleId,
+    sceneOrder,
+  };
+}
+
 function lexeme(
   id: string,
   key: "soup" | "bowl" | "spoon" | "fork",
@@ -88,12 +101,9 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
     lexeme("meal-soup", "soup", {
       displayLabel: "汤",
       membership: {
-        frameIds: [HOME_BREAKFAST_FRAME_ID],
-        entityId: "home-soup",
-        roleId: "FOOD",
-        sceneOrder: 0,
+        frameBindings: [frameBinding("home-soup", "FOOD", 0)],
         presentationToken: "soup",
-        publicVisualRole: "FOOD",
+        presentationRole: "FOOD",
       },
       probe: {
         enabled: true,
@@ -101,8 +111,6 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
         recallInstruction: "写出当前物品的英文单词",
       },
       grounding: {
-        entityId: "home-soup",
-        roleId: "FOOD",
         facts: [
           {
             factId: HOME_CONTAINS_BOWL_SOUP,
@@ -143,12 +151,9 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
     lexeme("meal-bowl", "bowl", {
       displayLabel: "碗",
       membership: {
-        frameIds: [HOME_BREAKFAST_FRAME_ID],
-        entityId: "home-bowl",
-        roleId: "FOOD_CONTAINER",
-        sceneOrder: 1,
+        frameBindings: [frameBinding("home-bowl", "FOOD_CONTAINER", 1)],
         presentationToken: "bowl",
-        publicVisualRole: "CONTAINER",
+        presentationRole: "CONTAINER",
       },
       probe: {
         enabled: true,
@@ -156,8 +161,6 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
         recallInstruction: "写出当前物品的英文单词",
       },
       grounding: {
-        entityId: "home-bowl",
-        roleId: "FOOD_CONTAINER",
         facts: [
           {
             factId: HOME_CONTAINS_BOWL_SOUP,
@@ -199,12 +202,9 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
     lexeme("meal-spoon", "spoon", {
       displayLabel: "勺子",
       membership: {
-        frameIds: [HOME_BREAKFAST_FRAME_ID],
-        entityId: "home-spoon",
-        roleId: "EATING_TOOL",
-        sceneOrder: 2,
+        frameBindings: [frameBinding("home-spoon", "EATING_TOOL", 2)],
         presentationToken: "spoon",
-        publicVisualRole: "TOOL",
+        presentationRole: "TOOL",
       },
       probe: {
         enabled: true,
@@ -212,8 +212,6 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
         recallInstruction: "写出当前物品的英文单词",
       },
       grounding: {
-        entityId: "home-spoon",
-        roleId: "EATING_TOOL",
         requiredRelationIds: ["SUITABLE_FOR"],
         facts: [
           {
@@ -255,12 +253,9 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
     lexeme("meal-fork", "fork", {
       displayLabel: "叉子",
       membership: {
-        frameIds: [HOME_BREAKFAST_FRAME_ID],
-        entityId: "home-fork",
-        roleId: "EATING_TOOL",
-        sceneOrder: 3,
+        frameBindings: [frameBinding("home-fork", "EATING_TOOL", 3)],
         presentationToken: "fork",
-        publicVisualRole: "TOOL",
+        presentationRole: "TOOL",
       },
       probe: {
         enabled: true,
@@ -268,8 +263,6 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
         recallInstruction: "写出当前物品的英文单词",
       },
       grounding: {
-        entityId: "home-fork",
-        roleId: "EATING_TOOL",
         facts: [],
       },
       contrastBindings: [
@@ -298,6 +291,24 @@ export const MEAL_SCENE_CONTENT_PACK: ContextualSceneContentPack = {
       },
     }),
   ],
+  planning: {
+    planIdNamespace: "meal",
+    activeGoalId: "EATER_CAN_EAT_FOOD",
+    sourceLearningNeedRef: "need-opaque-ref",
+    guidedRationales: {
+      ground:
+        "Show the scene and the current entity before any judgment. Acknowledgement is not Evidence.",
+      connect:
+        "Connect the entity, scene role, and Chinese meaning. Acknowledgement is not independent recall.",
+      teach: "Present the English form as teaching support, not as a test.",
+      contrast:
+        "Show an authored contrast binding. Acknowledgement is not Evidence.",
+      fade:
+        "Withdraw the full form and leave a spelling cue. Acknowledgement is support exposure, not Evidence.",
+      reconnect:
+        "Re-show the scene object with the English form. Acknowledgement is support exposure, not Evidence.",
+    },
+  },
   provenance: {
     status: "APPROVED_FOR_EXPERIMENT",
     sourceRefs: [...MEAL_SCENE_CONTENT_SOURCE_REFS],

@@ -14,6 +14,13 @@ import { HOME_BREAKFAST_FRAME_ID } from "@/contextual-learning/candidate-v0/cont
 
 export { HOME_BREAKFAST_FRAME_ID };
 
+function mealPresentationRole(role: string): ContextEntityRole | undefined {
+  if (role === "FOOD" || role === "CONTAINER" || role === "TOOL") {
+    return role;
+  }
+  return undefined;
+}
+
 const snapshot = snapshotSceneContentFromPack(
   MEAL_SCENE_CONTENT_PACK,
   HOME_BREAKFAST_FRAME_ID,
@@ -26,10 +33,12 @@ const HOME_BREAKFAST_ENTITIES: Record<
   string,
   { label: string; role: ContextEntityRole }
 > = Object.fromEntries(
-  (snapshot?.lexemes ?? []).map((lexeme) => [
-    lexeme.entityId,
-    { label: lexeme.displayLabel, role: lexeme.publicVisualRole },
-  ]),
+  (snapshot?.lexemes ?? []).flatMap((lexeme) => {
+    const role = mealPresentationRole(lexeme.presentationRole);
+    return role
+      ? [[lexeme.entityId, { label: lexeme.displayLabel, role }]]
+      : [];
+  }),
 );
 
 const HOME_BREAKFAST_COPY = {
