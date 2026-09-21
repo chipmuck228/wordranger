@@ -11,7 +11,8 @@ import { CONTENT_REVIEW_TARGETS } from "./review-target-registry";
 import type { HumanContentReviewDecision, SaveContentReviewResult } from "./types";
 
 export async function saveContentReviewDecision(input: {
-  expectedFingerprint: string;
+  fingerprint: string;
+  revision: number;
   decision: Exclude<HumanContentReviewDecision, "PENDING">;
   notes: string[];
   now?: string;
@@ -27,6 +28,13 @@ export async function saveContentReviewDecision(input: {
         "Review writes are disabled. Set CONTEXTUAL_CONTENT_REVIEW_WRITE_ENABLED=1 on local development only.",
     };
   }
+  if (!Number.isInteger(input.revision) || input.revision < 0) {
+    return {
+      ok: false,
+      code: "CONTENT_REVIEW_INVALID",
+      message: "Revision must be a non-negative integer from the current review snapshot.",
+    };
+  }
   if (
     (input.decision === "REVISE" || input.decision === "REJECTED") &&
     input.notes.filter((note) => note.trim()).length === 0
@@ -39,7 +47,7 @@ export async function saveContentReviewDecision(input: {
   }
   const matches = CONTENT_REVIEW_TARGETS.flatMap((spec) => {
     const fingerprint = currentContentFingerprint(spec);
-    return fingerprint === input.expectedFingerprint ? [{ spec, fingerprint }] : [];
+    return fingerprint === input.fingerprint ? [{ spec, fingerprint }] : [];
   });
   if (matches.length !== 1) {
     return {
@@ -51,29 +59,19 @@ export async function saveContentReviewDecision(input: {
   const { spec, fingerprint } = matches[0]!;
   const repository = input.repository ?? fileContentReviewRepository;
   const notes = input.notes.map((note) => note.trim()).filter(Boolean);
-  const saved = await repository.commit({
-    reviewKey: spec.reviewKey,
-    next: (existing) => {
-      if (
-        existing &&
-        existing.contentFingerprint === fingerprint &&
-        existing.decision === input.decision &&
-        JSON.stringify(existing.notes) === JSON.stringify(notes)
-      ) {
-        return { ok: true, record: existing, idempotent: true };
-      }
-      return {
-        schemaVersion: "candidate-v0" as const,
-        reviewKey: spec.reviewKey,
-        packId: spec.packId,
-        target: spec.target,
-        contentFingerprint: fingerprint,
-        decision: input.decision,
-        notes,
-        reviewedAt: input.now ?? new Date().toISOString(),
-        revision: (existing?.revision ?? 0) + 1,
-        reviewer: "LOCAL_INTERNAL_REVIEWER" as const,
-      };
+  const saved = await repository.saveIfRevision({
+    expectedRevision: input.revision,
+    record: {
+      schemaVersion: "candidate-v0",
+      reviewKey: spec.reviewKey,
+      packId: spec.packId,
+      target: spec.target,
+      contentFingerprint: fingerprint,
+      decision: input.decision,
+      notes,
+      reviewedAt: input.now ?? new Date().toISOString(),
+      revision: input.revision + 1,
+      reviewer: "LOCAL_INTERNAL_REVIEWER",
     },
   });
   if (saved.ok && input.syncMarkdown !== false) {

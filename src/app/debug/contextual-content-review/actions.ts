@@ -2,36 +2,45 @@
 
 import { isContextualContentReviewWriteEnabled } from "@/server/contextual-content-review/gates";
 import { saveContentReviewDecision } from "@/server/contextual-content-review/save-review-decision";
-import type { HumanContentReviewDecision } from "@/server/contextual-content-review/types";
+import type { HumanContentReviewDecision, SaveContentReviewResult } from "@/server/contextual-content-review/types";
 
 export async function submitContentReviewDecision(input: {
-  expectedFingerprint: string;
+  fingerprint: string;
+  revision: number;
   decision: Exclude<HumanContentReviewDecision, "PENDING">;
   notes: string[];
-}): Promise<{ ok: boolean; message?: string }> {
+}): Promise<{
+  ok: boolean;
+  message?: string;
+  code?: Extract<SaveContentReviewResult, { ok: false }>["code"];
+}> {
   if (!isContextualContentReviewWriteEnabled()) {
     return {
       ok: false,
+      code: "CONTENT_REVIEW_WRITE_DISABLED",
       message: "Review writes are disabled.",
     };
   }
   if (
     !input ||
-    typeof input.expectedFingerprint !== "string" ||
+    typeof input.fingerprint !== "string" ||
+    !Number.isInteger(input.revision) ||
+    input.revision < 0 ||
     (input.decision !== "APPROVED" &&
       input.decision !== "REVISE" &&
       input.decision !== "REJECTED") ||
     !Array.isArray(input.notes)
   ) {
-    return { ok: false, message: "Invalid review payload." };
+    return { ok: false, code: "CONTENT_REVIEW_INVALID", message: "Invalid review payload." };
   }
   const result = await saveContentReviewDecision({
-    expectedFingerprint: input.expectedFingerprint,
+    fingerprint: input.fingerprint,
+    revision: input.revision,
     decision: input.decision,
     notes: input.notes.map((note) => String(note)),
   });
   if (!result.ok) {
-    return { ok: false, message: result.message };
+    return { ok: false, code: result.code, message: result.message };
   }
   return { ok: true };
 }

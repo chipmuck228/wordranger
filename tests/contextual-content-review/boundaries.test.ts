@@ -21,6 +21,12 @@ describe("Content review boundaries", () => {
       expect(source, file).not.toMatch(/processEvidence|submitTaskAction|default-task-evaluator/);
       expect(source, file).not.toMatch(/LearningEvidence|StudentLexemeModel/);
     }
+    const bar = readFileSync(
+      "src/app/debug/contextual-content-review/review-decision-bar.tsx",
+      "utf8",
+    );
+    expect(bar).not.toMatch(/<input[\s\S]*fingerprint/);
+    expect(bar).toContain("review-confirm-fingerprint");
     const actions = readFileSync(
       "src/app/debug/contextual-content-review/actions.ts",
       "utf8",
@@ -28,7 +34,9 @@ describe("Content review boundaries", () => {
     expect(actions).not.toContain("userId");
     expect(actions).not.toContain("registry status");
     expect(actions).not.toContain("pack path");
-    expect(actions).toContain("expectedFingerprint");
+    expect(actions).toContain("fingerprint");
+    expect(actions).toContain("revision");
+    expect(actions).not.toContain("expectedFingerprint");
   });
 
   it("does not wire /train, Context Lab runs, or migrations", () => {

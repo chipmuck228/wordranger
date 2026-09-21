@@ -95,6 +95,7 @@ export interface ContentReviewPacket {
   reviewStatus: HumanContentReviewDecision;
   staleState: ContentReviewStaleState;
   writeEnabled: boolean;
+  reviewRevision: number;
   pack: {
     packId: string;
     registryStatus: "CANDIDATE";

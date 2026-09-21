@@ -5,16 +5,17 @@ export function renderHumanReviewMarkdown(input: {
   record: HumanContentReviewRecord | null;
 }): string {
   const decision = input.record?.decision ?? "PENDING";
-  const reviewer = input.record ? input.record.reviewer : "";
+  const reviewer = input.record?.reviewer ?? "";
   const reviewedAt = input.record?.reviewedAt ?? "";
   const fingerprint = input.record?.contentFingerprint ?? input.fingerprint;
-  const notes =
-    input.record?.notes.length ? input.record.notes.map((note) => `- ${note}`).join("\n") : "";
+  const notes = input.record?.notes.length
+    ? input.record.notes.map((note) => `- ${note}`).join("\n")
+    : "";
   return `# Human review
 
 Decision: ${decision}
-Reviewer: ${reviewer}
-Reviewed at: ${reviewedAt}
+Reviewer:${reviewer ? ` ${reviewer}` : ""}
+Reviewed at:${reviewedAt ? ` ${reviewedAt}` : ""}
 Reviewed fingerprint: ${fingerprint}
 
 Notes:

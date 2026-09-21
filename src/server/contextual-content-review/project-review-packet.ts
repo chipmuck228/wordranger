@@ -551,6 +551,7 @@ export function projectContentReviewPacket(input: {
     reviewStatus,
     staleState: stale,
     writeEnabled: input.writeEnabled ?? isContextualContentReviewWriteEnabled(),
+    reviewRevision: record?.revision ?? 0,
     pack: {
       packId: pack.id,
       registryStatus: "CANDIDATE",

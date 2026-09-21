@@ -12,10 +12,11 @@ export function ReviewWorkspace({
 }: {
   packet: ContentReviewPacket;
   onSubmit(input: {
-    expectedFingerprint: string;
+    fingerprint: string;
+    revision: number;
     decision: "APPROVED" | "REVISE" | "REJECTED";
     notes: string[];
-  }): Promise<{ ok: boolean; message?: string }>;
+  }): Promise<{ ok: boolean; message?: string; code?: string }>;
 }) {
   const [frameId, setFrameId] = useState(packet.frames[0]?.frameId ?? "");
   const frame = useMemo(
@@ -57,6 +58,10 @@ export function ReviewWorkspace({
             <dt className="text-muted-foreground">内容状态</dt>
             <dd data-testid="review-stale-state">{packet.staleState}</dd>
           </div>
+          <div>
+            <dt className="text-muted-foreground">review revision</dt>
+            <dd data-testid="review-revision">{packet.reviewRevision}</dd>
+          </div>
         </dl>
         <p className="text-sm">机器验证通过不等于人工批准</p>
         <div role="tablist" aria-label="场景切换" className="flex flex-wrap gap-2">
@@ -97,6 +102,7 @@ export function ReviewWorkspace({
       </ol>
       <ReviewDecisionBar
         fingerprint={packet.pack.contentFingerprint}
+        revision={packet.reviewRevision}
         writeEnabled={packet.writeEnabled}
         onSubmit={onSubmit}
       />

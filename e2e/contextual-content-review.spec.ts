@@ -144,14 +144,42 @@ test.describe("writable review host", () => {
     await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
   });
 
-  test("rejects a stale fingerprint from the page", async ({ page }) => {
+  test("rejects a conflicting decision and refreshes the current review record", async ({
+    page,
+  }) => {
     await page.goto(REVIEW_URL);
-    await page.getByRole("button", { name: "通过审核" }).click();
-    await page.getByTestId("review-expected-fingerprint").fill("0".repeat(64));
+    await expect(page.getByTestId("review-revision")).toHaveText("0");
+    const fingerprint = (await page.getByTestId("review-fingerprint").innerText()).trim();
+    const manifest = JSON.parse(
+      readFileSync("docs/contextual-content-reviews/meal-expansion-batch-01-cup/REVIEW_MANIFEST.json", "utf8"),
+    ) as { target: { lexemeId: string; senseId: string } };
+    writeFileSync(
+      RECORD_PATH,
+      `${JSON.stringify(
+        {
+          schemaVersion: "candidate-v0",
+          reviewKey: "meal-expansion-batch-01-cup",
+          packId: "meal-scene-expansion-batch-01",
+          target: manifest.target,
+          contentFingerprint: fingerprint,
+          decision: "APPROVED",
+          notes: [],
+          reviewedAt: "2026-09-21T00:00:00.000Z",
+          revision: 1,
+          reviewer: "LOCAL_INTERNAL_REVIEWER",
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await page.getByRole("button", { name: "拒绝" }).click();
+    await page.getByLabel("拒绝理由").fill("Not ready.");
     await page.getByRole("button", { name: "确认" }).click();
     await expect(page.getByTestId("review-save-message")).toHaveText(
-      "The submitted fingerprint does not match current review content.",
+      "Another review decision was saved first.",
     );
+    await expect(page.getByTestId("review-human-status")).toHaveText("APPROVED");
+    await expect(page.getByTestId("review-revision")).toHaveText("1");
     await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
   });
 });

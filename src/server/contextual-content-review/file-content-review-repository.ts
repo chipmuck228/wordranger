@@ -28,14 +28,6 @@ export class FileContentReviewRepository implements ContentReviewRepository {
     return this.commit({
       reviewKey: input.record.reviewKey,
       next: (existing) => {
-        const currentRevision = existing?.revision ?? 0;
-        if (currentRevision !== input.expectedRevision) {
-          return {
-            ok: false,
-            code: "CONTENT_REVIEW_CONFLICT",
-            message: "Another review decision was saved first.",
-          };
-        }
         if (
           existing &&
           existing.contentFingerprint === input.record.contentFingerprint &&
@@ -43,6 +35,14 @@ export class FileContentReviewRepository implements ContentReviewRepository {
           JSON.stringify(existing.notes) === JSON.stringify(input.record.notes)
         ) {
           return { ok: true, record: existing, idempotent: true };
+        }
+        const currentRevision = existing?.revision ?? 0;
+        if (currentRevision !== input.expectedRevision) {
+          return {
+            ok: false,
+            code: "CONTENT_REVIEW_CONFLICT",
+            message: "Another review decision was saved first.",
+          };
         }
         return {
           ...input.record,

@@ -7,6 +7,7 @@ import { fingerprintContent } from "@/server/contextual-content-review/fingerpri
 import { projectContentReviewPacket } from "@/server/contextual-content-review/project-review-packet";
 import { CONTENT_REVIEW_TARGETS } from "@/server/contextual-content-review/review-target-registry";
 import { generateMealBatch01CupReviewArtifacts } from "@/server/contextual-content-review/generate-review-artifacts";
+import { renderHumanReviewMarkdown } from "@/server/contextual-content-review/human-review-markdown";
 import { readFileSync } from "node:fs";
 
 const spec = CONTENT_REVIEW_TARGETS[0]!;
@@ -28,6 +29,7 @@ describe("Content review packet projection", () => {
     expect(packet!.target.displayForm).toBe(bundled!.display.trim() || bundled!.lemma);
     expect(packet!.target.meaningsZh).toEqual([...bundled!.meaningsZh]);
     expect(packet!.target.phonetic).toBe(bundled!.ipa[0]);
+    expect(packet!.reviewRevision).toBe(0);
   });
 
   it("keeps Home and Restaurant facts on their own frames", () => {
@@ -77,6 +79,25 @@ describe("Content review packet projection", () => {
     expect(manifest).not.toMatch(/answerKey|correctCandidateIds|Evidence|mastery|userId/);
     const approved = getApprovedExperimentSceneContent(MEAL_SCENE_CONTENT_PACK.id);
     expect(approved.ok && approved.pack.lexemes).toHaveLength(4);
+  });
+
+  it("writes HUMAN_REVIEW.md without trailing whitespace", () => {
+    const pending = renderHumanReviewMarkdown({
+      fingerprint: "abc",
+      record: null,
+    });
+    for (const line of pending.split("\n")) {
+      expect(line).toBe(line.trimEnd());
+    }
+    expect(pending).toContain("Reviewer:\n");
+    expect(pending).toContain("Reviewed at:\n");
+    const generated = readFileSync(
+      "docs/contextual-content-reviews/meal-expansion-batch-01-cup/HUMAN_REVIEW.md",
+      "utf8",
+    );
+    for (const line of generated.split("\n")) {
+      expect(line).toBe(line.trimEnd());
+    }
   });
 });
 

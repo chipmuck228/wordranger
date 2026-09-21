@@ -1,23 +1,27 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { HumanContentReviewDecision } from "@/server/contextual-content-review/types";
 
 export function ReviewDecisionBar({
   fingerprint,
+  revision,
   writeEnabled,
   onSubmit,
 }: {
   fingerprint: string;
+  revision: number;
   writeEnabled: boolean;
   onSubmit(input: {
-    expectedFingerprint: string;
+    fingerprint: string;
+    revision: number;
     decision: Exclude<HumanContentReviewDecision, "PENDING">;
     notes: string[];
-  }): Promise<{ ok: boolean; message?: string }>;
+  }): Promise<{ ok: boolean; message?: string; code?: string }>;
 }) {
-  const expectedRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
   const [pending, setPending] = useState<Exclude<HumanContentReviewDecision, "PENDING"> | null>(
     null,
   );
@@ -34,9 +38,9 @@ export function ReviewDecisionBar({
       .map((item) => item.trim())
       .filter(Boolean);
     setBusy(true);
-    const expected = expectedRef.current?.value.trim() || fingerprint;
     const result = await onSubmit({
-      expectedFingerprint: expected,
+      fingerprint,
+      revision,
       decision: pending,
       notes: trimmed,
     });
@@ -44,6 +48,11 @@ export function ReviewDecisionBar({
     setMessage(result.ok ? "已保存人工审核记录。Registry 仍为 CANDIDATE。" : result.message ?? "保存失败");
     if (result.ok) {
       setPending(null);
+      router.refresh();
+      return;
+    }
+    if (result.code === "CONTENT_REVIEW_CONFLICT" || result.code === "CONTENT_REVIEW_STALE") {
+      router.refresh();
     }
   }
 
@@ -87,15 +96,10 @@ export function ReviewDecisionBar({
         >
           <p className="text-sm leading-relaxed">
             你正在{pending === "APPROVED" ? "通过" : pending === "REVISE" ? "要求修改" : "拒绝"}
-            fingerprint
-            <input
-              ref={expectedRef}
-              readOnly={!writeEnabled}
-              data-testid="review-expected-fingerprint"
-              defaultValue={fingerprint}
-              className="mt-2 block w-full break-all rounded-lg border border-border bg-transparent px-3 py-2 font-mono text-xs"
-              aria-label="确认 fingerprint"
-            />
+            fingerprint{" "}
+            <code data-testid="review-confirm-fingerprint" className="break-all">
+              {fingerprint}
+            </code>{" "}
             对应的内容。
           </p>
           {pending === "APPROVED" ? (

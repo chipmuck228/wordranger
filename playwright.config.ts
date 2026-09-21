@@ -31,6 +31,9 @@ export default defineConfig({
         CONTEXT_LAB_RUNTIME: "memory",
         CONTEXT_LAB_E2E: "1",
         CONTEXT_LAB_E2E_PROBE_ENABLED: "1",
+        DEBUG_TOOLS_ENABLED: "0",
+        CONTEXTUAL_CONTENT_REVIEW_ENABLED: "0",
+        CONTEXTUAL_CONTENT_REVIEW_WRITE_ENABLED: "0",
       },
     },
     {

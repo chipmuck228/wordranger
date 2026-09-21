@@ -31,7 +31,8 @@ describe("Content review decisions", () => {
     const fingerprint = currentContentFingerprint(spec)!;
     expect(await repository.get(spec.reviewKey)).toBeNull();
     const saved = await saveContentReviewDecision({
-      expectedFingerprint: fingerprint,
+      fingerprint,
+      revision: 0,
       decision: "APPROVED",
       notes: [],
       env: writeEnv,
@@ -43,6 +44,7 @@ describe("Content review decisions", () => {
       return;
     }
     expect(saved.record.decision).toBe("APPROVED");
+    expect(saved.record.revision).toBe(1);
     expect(saved.record.reviewer).toBe("LOCAL_INTERNAL_REVIEWER");
     expect(MEAL_SCENE_EXPANSION_BATCH_01_PACK.provenance.status).toBe("CANDIDATE");
     expect(registryStatusFor(MEAL_SCENE_EXPANSION_BATCH_01_PACK.id)).toBe("CANDIDATE");
@@ -57,7 +59,8 @@ describe("Content review decisions", () => {
     const repository = tempRepository();
     const fingerprint = currentContentFingerprint(spec)!;
     const revise = await saveContentReviewDecision({
-      expectedFingerprint: fingerprint,
+      fingerprint,
+      revision: 0,
       decision: "REVISE",
       notes: [],
       env: writeEnv,
@@ -65,7 +68,8 @@ describe("Content review decisions", () => {
       syncMarkdown: false,
     });
     const rejected = await saveContentReviewDecision({
-      expectedFingerprint: fingerprint,
+      fingerprint,
+      revision: 0,
       decision: "REJECTED",
       notes: [" "],
       env: writeEnv,
@@ -80,7 +84,8 @@ describe("Content review decisions", () => {
     const repository = tempRepository();
     const fingerprint = currentContentFingerprint(spec)!;
     const first = await saveContentReviewDecision({
-      expectedFingerprint: fingerprint,
+      fingerprint,
+      revision: 0,
       decision: "REVISE",
       notes: ["fix contrast copy"],
       env: writeEnv,
@@ -88,7 +93,8 @@ describe("Content review decisions", () => {
       syncMarkdown: false,
     });
     const again = await saveContentReviewDecision({
-      expectedFingerprint: fingerprint,
+      fingerprint,
+      revision: 0,
       decision: "REVISE",
       notes: ["fix contrast copy"],
       env: writeEnv,
@@ -96,7 +102,8 @@ describe("Content review decisions", () => {
       syncMarkdown: false,
     });
     const stale = await saveContentReviewDecision({
-      expectedFingerprint: "0".repeat(64),
+      fingerprint: "0".repeat(64),
+      revision: 0,
       decision: "APPROVED",
       notes: [],
       env: writeEnv,
@@ -108,27 +115,27 @@ describe("Content review decisions", () => {
     expect(stale).toMatchObject({ ok: false, code: "CONTENT_REVIEW_STALE" });
   });
 
-  it("fail-closes concurrent different decisions", async () => {
+  it("fail-closes concurrent different decisions on the public save path", async () => {
     const repository = tempRepository();
     const fingerprint = currentContentFingerprint(spec)!;
-    const base = {
-      schemaVersion: "candidate-v0" as const,
-      reviewKey: spec.reviewKey,
-      packId: spec.packId,
-      target: spec.target,
-      contentFingerprint: fingerprint,
-      reviewedAt: "2026-09-21T00:00:00.000Z",
-      revision: 1,
-      reviewer: "LOCAL_INTERNAL_REVIEWER" as const,
-    };
     const [left, right] = await Promise.all([
-      repository.saveIfRevision({
-        record: { ...base, decision: "APPROVED", notes: [] },
-        expectedRevision: 0,
+      saveContentReviewDecision({
+        fingerprint,
+        revision: 0,
+        decision: "APPROVED",
+        notes: [],
+        env: writeEnv,
+        repository,
+        syncMarkdown: false,
       }),
-      repository.saveIfRevision({
-        record: { ...base, decision: "REJECTED", notes: ["no"] },
-        expectedRevision: 0,
+      saveContentReviewDecision({
+        fingerprint,
+        revision: 0,
+        decision: "REJECTED",
+        notes: ["no"],
+        env: writeEnv,
+        repository,
+        syncMarkdown: false,
       }),
     ]);
     const outcomes = [left, right];
@@ -136,13 +143,16 @@ describe("Content review decisions", () => {
     expect(outcomes.some((item) => !item.ok && item.code === "CONTENT_REVIEW_CONFLICT")).toBe(
       true,
     );
+    const stored = await repository.get(spec.reviewKey);
+    expect(stored?.revision).toBe(1);
   });
 
   it("cannot write without the local write gate or on deployed hosts", async () => {
     const repository = tempRepository();
     const fingerprint = currentContentFingerprint(spec)!;
     const disabled = await saveContentReviewDecision({
-      expectedFingerprint: fingerprint,
+      fingerprint,
+      revision: 0,
       decision: "APPROVED",
       notes: [],
       env: {
@@ -153,7 +163,8 @@ describe("Content review decisions", () => {
       syncMarkdown: false,
     });
     const production = await saveContentReviewDecision({
-      expectedFingerprint: fingerprint,
+      fingerprint,
+      revision: 0,
       decision: "APPROVED",
       notes: [],
       env: { ...writeEnv, VERCEL_ENV: "production" },
@@ -161,7 +172,8 @@ describe("Content review decisions", () => {
       syncMarkdown: false,
     });
     const preview = await saveContentReviewDecision({
-      expectedFingerprint: fingerprint,
+      fingerprint,
+      revision: 0,
       decision: "APPROVED",
       notes: [],
       env: { ...writeEnv, VERCEL_ENV: "preview" },
