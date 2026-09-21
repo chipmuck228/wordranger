@@ -19,7 +19,7 @@ describe("Homepage / Settings debug navigation", () => {
     expect(home).toContain("/play/ranger-trial");
   });
 
-  it("keeps a Settings Debug 工具 group with five paths", () => {
+  it("keeps a Settings Debug 工具 group with six paths", () => {
     expect(menu).toContain("Debug 工具");
     expect(DEBUG_TOOL_LINKS).toEqual([
       { href: "/debug/vocabulary", label: "词汇调试" },
@@ -27,6 +27,7 @@ describe("Homepage / Settings debug navigation", () => {
       { href: "/debug/scheduler", label: "调度器调试" },
       { href: "/debug/learning", label: "Learning Core 调试" },
       { href: "/debug/contextual-content-review", label: "内容审核工具" },
+      { href: "/debug/contextual-content-release", label: "内容发布工具" },
     ]);
   });
 

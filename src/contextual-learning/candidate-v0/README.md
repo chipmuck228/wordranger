@@ -173,6 +173,10 @@ Default is closed. When the feature flag is absent, the route returns `notFound(
 
 Current coverage is Meal BUILD on `home-breakfast-v0` only. School Challenge and Borrowing-Sharing are not wired.
 
+## Content Release Pipeline Candidate V0
+
+`release/` is a dry-run / validation domain. Phase 1 only allows `DRAFT → PREFLIGHT_VALIDATED`. It does not publish, activate a pointer, or change the code-defined six-word Context Lab. See `docs/CONTEXTUAL_CONTENT_RELEASE_CANDIDATE_V0.md`.
+
 The server is authoritative for the current step:
 
 ```text

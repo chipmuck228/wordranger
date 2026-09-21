@@ -9,4 +9,5 @@ export const DEBUG_TOOL_LINKS: readonly DebugToolLink[] = [
   { href: "/debug/scheduler", label: "调度器调试" },
   { href: "/debug/learning", label: "Learning Core 调试" },
   { href: "/debug/contextual-content-review", label: "内容审核工具" },
+  { href: "/debug/contextual-content-release", label: "内容发布工具" },
 ];

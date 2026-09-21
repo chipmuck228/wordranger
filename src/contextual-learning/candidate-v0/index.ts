@@ -30,6 +30,21 @@ export {
 } from "./domain/types";
 export { sameLexemeSense, lexemeSenseKey } from "./domain/lexeme-sense";
 
+export {
+  CONTEXTUAL_CONTENT_RELEASE_KIND,
+  MEAL_MIGRATION_RELEASE_ID,
+  fingerprintReleaseSnapshot,
+  parseReleaseManifest,
+  validateDraftRelease,
+  validateReleaseTransition,
+} from "./release";
+export type {
+  ContextualContentReleaseManifest,
+  ReleaseTargetEntry,
+  ReleaseValidationIssue,
+  ReleaseValidationResult,
+} from "./release";
+
 export { validateSemanticSkeleton } from "./validation/validate-semantic-skeleton";
 export { validateContextFrame } from "./validation/validate-context-frame";
 export { validateExperiencePlan } from "./validation/validate-experience-plan";

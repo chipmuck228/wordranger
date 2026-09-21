@@ -50,7 +50,7 @@ const PLATE_REVIEW_URL = "/debug/contextual-content-review/meal-expansion-batch-
 test.describe("readonly review host", () => {
   test.use({ baseURL: "http://127.0.0.1:3318" });
 
-  test("Settings shows five Debug tools and review pages stay read-only", async ({
+  test("Settings shows six Debug tools and review pages stay read-only", async ({
     page,
   }) => {
     await page.goto("/");
@@ -76,6 +76,10 @@ test.describe("readonly review host", () => {
     await expect(group.getByRole("link", { name: "内容审核工具" })).toHaveAttribute(
       "href",
       "/debug/contextual-content-review",
+    );
+    await expect(group.getByRole("link", { name: "内容发布工具" })).toHaveAttribute(
+      "href",
+      "/debug/contextual-content-release",
     );
 
     await page.goto("/debug/contextual-content-review");

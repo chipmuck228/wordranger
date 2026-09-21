@@ -3,6 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "e2e",
   fullyParallel: false,
+  workers: 1,
   retries: 0,
   timeout: 60_000,
   use: {
@@ -34,6 +35,8 @@ export default defineConfig({
         DEBUG_TOOLS_ENABLED: "0",
         CONTEXTUAL_CONTENT_REVIEW_ENABLED: "0",
         CONTEXTUAL_CONTENT_REVIEW_WRITE_ENABLED: "0",
+        CONTEXTUAL_CONTENT_RELEASE_ENABLED: "0",
+        CONTEXTUAL_CONTENT_RELEASE_WRITE_ENABLED: "0",
       },
     },
     {
@@ -54,6 +57,9 @@ export default defineConfig({
         DEBUG_TOOLS_ENABLED: "1",
         CONTEXTUAL_CONTENT_REVIEW_ENABLED: "1",
         CONTEXTUAL_CONTENT_REVIEW_WRITE_ENABLED: "0",
+        CONTEXTUAL_CONTENT_RELEASE_ENABLED: "1",
+        CONTEXTUAL_CONTENT_RELEASE_WRITE_ENABLED: "0",
+        CONTEXTUAL_RELEASE_RUNTIME: "memory",
       },
     },
     {
@@ -74,6 +80,9 @@ export default defineConfig({
         DEBUG_TOOLS_ENABLED: "1",
         CONTEXTUAL_CONTENT_REVIEW_ENABLED: "1",
         CONTEXTUAL_CONTENT_REVIEW_WRITE_ENABLED: "1",
+        CONTEXTUAL_CONTENT_RELEASE_ENABLED: "1",
+        CONTEXTUAL_CONTENT_RELEASE_WRITE_ENABLED: "1",
+        CONTEXTUAL_RELEASE_RUNTIME: "memory",
       },
     },
   ],
