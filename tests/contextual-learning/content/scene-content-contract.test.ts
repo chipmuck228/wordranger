@@ -161,7 +161,84 @@ describe("Scene Content Contract schema", () => {
         ],
       },
     };
+    expect(issuesOf(unknownFact)).toContain(SceneContentErrorCode.CONTENT_FACT_NOT_BOUND_TO_FRAME);
     expect(issuesOf(unknownFact)).toContain(SceneContentErrorCode.CONTENT_FACT_NOT_FOUND);
+  });
+
+  it("rejects an orphan grounding fact that no frame accepts", () => {
+    const orphan = cloneMealPack();
+    orphan.lexemes[0] = {
+      ...orphan.lexemes[0]!,
+      grounding: {
+        ...orphan.lexemes[0]!.grounding,
+        facts: [
+          ...orphan.lexemes[0]!.grounding.facts,
+          {
+            factId: "orphan-fact",
+            predicate: "contains",
+            args: [
+              { kind: "ENTITY", entityId: "home-bowl" },
+              { kind: "ENTITY", entityId: "home-soup" },
+            ],
+          },
+        ],
+      },
+    };
+    const result = validateSceneContent({ pack: orphan, ...authorities });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          {
+            code: SceneContentErrorCode.CONTENT_FACT_NOT_BOUND_TO_FRAME,
+            path: "lexemes[0].grounding.facts[1]",
+          },
+        ]),
+      );
+    }
+  });
+
+  it("rejects a connectFactId that is not on the lexeme's frame", () => {
+    const pack = cloneMealPack();
+    pack.frames[0] = {
+      ...pack.frames[0]!,
+      factIds: pack.frames[0]!.factIds.filter(
+        (factId) => factId !== "home-fact-contains-bowl-soup",
+      ),
+    };
+    const result = validateSceneContent({ pack, ...authorities });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.map((item) => item.code)).toEqual(
+        expect.arrayContaining([
+          SceneContentErrorCode.CONTENT_FACT_NOT_BOUND_TO_FRAME,
+          SceneContentErrorCode.CONTENT_CONNECT_FACT_NOT_IN_FRAME,
+        ]),
+      );
+    }
+  });
+
+  it("rejects unknown fields with a precise path", () => {
+    const pack = cloneMealPack();
+    (pack.lexemes[0]!.build as unknown as Record<string, unknown>).inventedPolicy = true;
+    (pack.lexemes[0]!.build as unknown as Record<string, unknown>).conectInstruction =
+      pack.lexemes[0]!.build.connectInstruction;
+    const result = validateSceneContent({ pack, ...authorities });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          {
+            code: SceneContentErrorCode.CONTENT_UNKNOWN_FIELD,
+            path: "lexemes[0].build.inventedPolicy",
+          },
+          {
+            code: SceneContentErrorCode.CONTENT_UNKNOWN_FIELD,
+            path: "lexemes[0].build.conectInstruction",
+          },
+        ]),
+      );
+    }
   });
 
   it("rejects wrong predicate and reversed contains(bowl, soup)", () => {
@@ -462,6 +539,39 @@ describe("Scene Content multi-frame and safety", () => {
       roleId: "FOOD_CONTAINER",
       sceneOrder: 1,
     });
+    soup.grounding = {
+      ...soup.grounding,
+      facts: [
+        ...soup.grounding.facts,
+        {
+          factId: "rest-fact-contains-bowl-soup",
+          predicate: "contains",
+          args: [
+            { kind: "ENTITY", entityId: "rest-bowl" },
+            { kind: "ENTITY", entityId: "rest-soup" },
+          ],
+        },
+      ],
+    };
+    pack.lexemes[1]!.grounding = {
+      ...pack.lexemes[1]!.grounding,
+      facts: [
+        ...pack.lexemes[1]!.grounding.facts,
+        {
+          factId: "rest-fact-contains-bowl-soup",
+          predicate: "contains",
+          args: [
+            { kind: "ENTITY", entityId: "rest-bowl" },
+            { kind: "ENTITY", entityId: "rest-soup" },
+          ],
+        },
+      ],
+    };
+    soup.build = { ...soup.build, connectFactId: undefined };
+    pack.lexemes[1]!.build = {
+      ...pack.lexemes[1]!.build,
+      connectFactId: undefined,
+    };
     const resolvedHome = resolveSceneContent({
       pack,
       frame: homeBreakfastFrame,

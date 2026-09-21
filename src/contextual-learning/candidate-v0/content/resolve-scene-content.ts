@@ -124,6 +124,12 @@ function resolveLexeme(
       args: fact.args.map((arg) => ({ ...arg })),
       caption: fact.caption,
     }));
+  if (
+    lexeme.build.connectFactId &&
+    !groundingFacts.some((fact) => fact.factId === lexeme.build.connectFactId)
+  ) {
+    return null;
+  }
   return {
     id: lexeme.id,
     target: { ...lexeme.target },

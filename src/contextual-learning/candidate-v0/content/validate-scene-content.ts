@@ -13,10 +13,11 @@ import {
   type SceneContentIssue,
   type SceneContentValidation,
 } from "./errors";
+import { validatePackAllowedKeys } from "./allowed-pack-keys";
+import { sameAuthoredAndFrameFactArgs } from "./fact-args";
 import { frameBindingFor } from "./frame-binding";
 import {
   SCENE_CONTENT_SCHEMA_VERSION,
-  type ContextualFactArgument,
   type ContextualFactRef,
   type ContextualSceneContentPack,
   type SceneLexemeLoader,
@@ -27,15 +28,6 @@ const CONTRAST_KINDS = new Set([
   "FUNCTION_CONTRAST",
   "FORM_CONTRAST",
   "MEANING_CONTRAST",
-]);
-
-const FORBIDDEN_KEYS = new Set([
-  "evidenceOutcome",
-  "mastery",
-  "masteryScore",
-  "learnerScore",
-  "answerKey",
-  "correctCandidateIds",
 ]);
 
 export function validateSceneContent(input: {
@@ -83,7 +75,7 @@ export function validateSceneContent(input: {
   if (!pack.planning?.planIdNamespace?.trim() || !pack.planning.activeGoalId?.trim()) {
     issues.push(issue(SceneContentErrorCode.CONTENT_PROVENANCE_INVALID, "planning"));
   }
-  issues.push(...findForbiddenKeys(pack, "pack"));
+  issues.push(...validatePackAllowedKeys(pack));
 
   if (pack.frames.length === 0) {
     issues.push(issue(SceneContentErrorCode.CONTENT_FRAME_NOT_FOUND, "frames"));
@@ -143,6 +135,7 @@ export function validateSceneContent(input: {
       );
     }
     const lexemeFrameIds = new Set<string>();
+    const factAccepted = lexeme.grounding.facts.map(() => false);
     for (const [bindingIndex, binding] of lexeme.membership.frameBindings.entries()) {
       const bindingPath = `${path}.frameBindings[${bindingIndex}]`;
       if (!packFrameIds.has(binding.frameId)) {
@@ -217,15 +210,26 @@ export function validateSceneContent(input: {
         );
       }
       for (const [factIndex, factRef] of lexeme.grounding.facts.entries()) {
-        if (packFrame && !packFrame.factIds.includes(factRef.factId)) {
+        if (!packFrame?.factIds.includes(factRef.factId)) {
           continue;
         }
+        factAccepted[factIndex] = true;
         issues.push(
           ...validateFactRef(
             factRef,
             runtime,
             binding.entityId,
-            `${path}.facts[${factIndex}]`,
+            `${path}.grounding.facts[${factIndex}]`,
+          ),
+        );
+      }
+    }
+    for (const [factIndex] of lexeme.grounding.facts.entries()) {
+      if (!factAccepted[factIndex]) {
+        issues.push(
+          issue(
+            SceneContentErrorCode.CONTENT_FACT_NOT_BOUND_TO_FRAME,
+            `${path}.grounding.facts[${factIndex}]`,
           ),
         );
       }
@@ -306,6 +310,23 @@ export function validateSceneContent(input: {
         issues.push(
           issue(SceneContentErrorCode.CONTENT_FACT_NOT_FOUND, `${path}.build.connectFactId`),
         );
+      } else {
+        for (const [bindingIndex, binding] of lexeme.membership.frameBindings.entries()) {
+          const packFrame = pack.frames.find((item) => item.frameId === binding.frameId);
+          const runtime = runtimeFrames.find((item) => item.id === binding.frameId);
+          const onPackFrame = Boolean(packFrame?.factIds.includes(lexeme.build.connectFactId));
+          const onRuntime = Boolean(
+            runtime?.initialFacts.some((fact) => fact.id === lexeme.build.connectFactId),
+          );
+          if (!onPackFrame || !onRuntime) {
+            issues.push(
+              issue(
+                SceneContentErrorCode.CONTENT_CONNECT_FACT_NOT_IN_FRAME,
+                `${path}.frameBindings[${bindingIndex}].connectFactId`,
+              ),
+            );
+          }
+        }
       }
     }
     for (const [contrastIndex, contrast] of lexeme.contrastBindings.entries()) {
@@ -389,11 +410,11 @@ function validateFactRef(
   if (matched.predicate !== factRef.predicate) {
     issues.push(issue(SceneContentErrorCode.CONTENT_FACT_ARGUMENT_MISMATCH, `${path}.predicate`));
   }
-  if (!sameFactArgs(factRef.args, matched.arguments)) {
+  if (!sameAuthoredAndFrameFactArgs(factRef.args, matched.arguments)) {
     const reversed = [...factRef.args].reverse();
     issues.push(
       issue(
-        sameFactArgs(reversed, matched.arguments)
+        sameAuthoredAndFrameFactArgs(reversed, matched.arguments)
           ? SceneContentErrorCode.CONTENT_FACT_DIRECTION_MISMATCH
           : SceneContentErrorCode.CONTENT_FACT_ARGUMENT_MISMATCH,
         `${path}.args`,
@@ -406,52 +427,6 @@ function validateFactRef(
     )
   ) {
     issues.push(issue(SceneContentErrorCode.CONTENT_FACT_ENTITY_ABSENT, path));
-  }
-  return issues;
-}
-
-function sameFactArgs(
-  authored: readonly ContextualFactArgument[],
-  frameArgs: readonly { kind: string; entityId?: string; roleId?: string; value?: string | number | boolean }[],
-): boolean {
-  if (authored.length !== frameArgs.length) {
-    return false;
-  }
-  return authored.every((arg, index) => {
-    const frameArg = frameArgs[index];
-    if (!frameArg) {
-      return false;
-    }
-    if (arg.kind === "ENTITY") {
-      return frameArg.kind === "ENTITY" && frameArg.entityId === arg.entityId;
-    }
-    if (arg.kind === "ROLE") {
-      return frameArg.kind === "ROLE" && frameArg.roleId === arg.roleId;
-    }
-    return (
-      (frameArg.kind === "LITERAL" || frameArg.kind === "VALUE") &&
-      String(frameArg.value) === arg.value
-    );
-  });
-}
-
-function findForbiddenKeys(value: unknown, path: string): SceneContentIssue[] {
-  if (!value || typeof value !== "object") {
-    return [];
-  }
-  const issues: SceneContentIssue[] = [];
-  if (!Array.isArray(value)) {
-    for (const key of Object.keys(value)) {
-      if (FORBIDDEN_KEYS.has(key)) {
-        issues.push(issue(SceneContentErrorCode.CONTENT_OUTCOME_FORBIDDEN, `${path}.${key}`));
-      }
-    }
-  }
-  const entries = Array.isArray(value)
-    ? value.map((item, index) => [String(index), item] as const)
-    : Object.entries(value);
-  for (const [key, child] of entries) {
-    issues.push(...findForbiddenKeys(child, `${path}.${key}`));
   }
   return issues;
 }

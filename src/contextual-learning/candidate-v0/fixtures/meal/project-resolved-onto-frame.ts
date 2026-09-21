@@ -2,11 +2,21 @@
  * Meal-only remapping of a home-breakfast snapshot onto another
  * same-skeleton Meal frame. Generic plan factories must not do this
  * lookup; they consume already-bound entity IDs.
+ *
+ * Facts are not rewritten by entity-ID substitution. The destination
+ * frame must already contain a fact with the same predicate and the
+ * same ordered arguments after entity remapping. The destination
+ * factId is taken from that matched runtime fact.
  */
 
-import type { ResolvedContextualSceneContent } from "../../content/types";
+import { sameAuthoredAndFrameFactArgs } from "../../content/fact-args";
+import type {
+  ContextualFactArgument,
+  ResolvedContextualFact,
+  ResolvedContextualSceneContent,
+} from "../../content/types";
 import { sameLexemeSense } from "../../domain/lexeme-sense";
-import type { ContextFrame } from "../../domain/types";
+import type { ContextFrame, SemanticFact } from "../../domain/types";
 
 export function projectResolvedMealContentOntoFrame(
   content: ResolvedContextualSceneContent,
@@ -33,6 +43,31 @@ export function projectResolvedMealContentOntoFrame(
     );
   };
 
+  const projectFact = (fact: ResolvedContextualFact): ResolvedContextualFact | null => {
+    const args: ContextualFactArgument[] = [];
+    for (const arg of fact.args) {
+      if (arg.kind !== "ENTITY") {
+        args.push(arg);
+        continue;
+      }
+      const remapped = remap(arg.entityId);
+      if (!remapped) {
+        return null;
+      }
+      args.push({ ...arg, entityId: remapped });
+    }
+    const matched = matchDestinationFact(frame, fact.predicate, args);
+    if (!matched?.id) {
+      return null;
+    }
+    return {
+      factId: matched.id,
+      predicate: matched.predicate,
+      args,
+      caption: fact.caption,
+    };
+  };
+
   const lexemes = [];
   for (const lexeme of content.lexemes) {
     const entityId = remap(lexeme.entityId);
@@ -49,19 +84,25 @@ export function projectResolvedMealContentOntoFrame(
     }
     const groundingFacts = [];
     for (const fact of lexeme.groundingFacts) {
-      const args = [];
-      for (const arg of fact.args) {
-        if (arg.kind !== "ENTITY") {
-          args.push(arg);
-          continue;
-        }
-        const remapped = remap(arg.entityId);
-        if (!remapped) {
-          return null;
-        }
-        args.push({ ...arg, entityId: remapped });
+      const projected = projectFact(fact);
+      if (!projected) {
+        return null;
       }
-      groundingFacts.push({ ...fact, args });
+      groundingFacts.push(projected);
+    }
+    let build = { ...lexeme.build };
+    if (build.connectFactId) {
+      const source =
+        lexeme.groundingFacts.find((item) => item.factId === build.connectFactId) ??
+        sourceFactById(content, build.connectFactId);
+      if (!source) {
+        return null;
+      }
+      const projected = projectFact(source);
+      if (!projected) {
+        return null;
+      }
+      build = { ...build, connectFactId: projected.factId };
     }
     lexemes.push({
       ...lexeme,
@@ -69,6 +110,7 @@ export function projectResolvedMealContentOntoFrame(
       entityId,
       contrasts,
       groundingFacts,
+      build,
     });
   }
 
@@ -88,6 +130,18 @@ export function projectResolvedMealContentOntoFrame(
     }
     entityIds.push(remapped);
   }
+  const factIds = [];
+  for (const catalogFactId of content.frame.factIds) {
+    const source = sourceFactById(content, catalogFactId);
+    if (!source) {
+      return null;
+    }
+    const projected = projectFact(source);
+    if (!projected) {
+      return null;
+    }
+    factIds.push(projected.factId);
+  }
 
   return {
     ...content,
@@ -95,8 +149,36 @@ export function projectResolvedMealContentOntoFrame(
       ...content.frame,
       frameId: frame.id,
       entityIds,
+      factIds,
       presentationOrder,
     },
     lexemes,
   };
+}
+
+function sourceFactById(
+  content: ResolvedContextualSceneContent,
+  factId: string,
+): ResolvedContextualFact | null {
+  for (const lexeme of content.lexemes) {
+    const found = lexeme.groundingFacts.find((item) => item.factId === factId);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+function matchDestinationFact(
+  frame: ContextFrame,
+  predicate: string,
+  args: readonly ContextualFactArgument[],
+): SemanticFact | null {
+  return (
+    frame.initialFacts.find(
+      (fact) =>
+        fact.predicate === predicate &&
+        sameAuthoredAndFrameFactArgs(args, fact.arguments),
+    ) ?? null
+  );
 }

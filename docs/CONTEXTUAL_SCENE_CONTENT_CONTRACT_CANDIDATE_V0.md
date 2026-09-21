@@ -84,8 +84,10 @@ with `CONTENT_FACT_DIRECTION_MISMATCH`.
 ## 9. Validator vs resolver
 
 The validator checks authored data. It does not touch UI, learner
-state, or Evidence. It recursively rejects Evidence/mastery fields
-anywhere in the pack, not only on the top-level object.
+state, or Evidence. Every object layer has a closed allowed-key
+schema. Unknown fields fail with `CONTENT_UNKNOWN_FIELD` at that
+field path. Evidence/mastery fields still fail with
+`CONTENT_OUTCOME_FORBIDDEN`.
 
 It validates **every** pack frame. A second frame with a bad entity or
 fact fails even when the current runtime frame is valid. Frame IDs must
@@ -103,6 +105,13 @@ The validator also requires that the bound runtime entity's
 `lexemeSenseBindings` contain `fixtureSense`. A matching entity ID
 without that sense is `CONTENT_ENTITY_SENSE_BINDING_MISMATCH`.
 
+Every authored grounding fact must be accepted by at least one pack
+frame and fully validated there (predicate, ordered arguments, runtime
+`initialFacts`). A fact that no frame lists is
+`CONTENT_FACT_NOT_BOUND_TO_FRAME`. `build.connectFactId` must exist in
+`lexeme.grounding.facts` and must belong to every frame the lexeme is
+bound to; otherwise `CONTENT_CONNECT_FACT_NOT_IN_FRAME`.
+
 TypeScript types are not enough. Authored JSON must pass the runtime
 validator.
 
@@ -117,7 +126,11 @@ and contrast / fact entity IDs. They do not look entities up again by
 factory returns an empty plan.
 
 Same-skeleton remapping (home-breakfast snapshot → restaurant / picnic)
-belongs in the Meal wrapper, not the generic factory.
+belongs in the Meal wrapper, not the generic factory. That projection
+may remap entities by `fixtureSense`, but it must rematch destination
+facts by predicate and ordered arguments and take the destination
+`factId`. Substituting entity IDs while keeping a home `factId` is not
+a valid resolved snapshot.
 
 Meal-specific values such as `EATER_CAN_EAT_FOOD` and `planIdNamespace:
 "meal"` live in the Meal pack or Meal wrappers. Presentation roles are
