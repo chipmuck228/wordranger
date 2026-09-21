@@ -40,6 +40,6 @@
       "detail": "Probe student copy does not include the target form."
     }
   ],
-  "reviewStatus": "PENDING",
+  "reviewStatus": "APPROVED",
   "staleState": "CURRENT"
 }

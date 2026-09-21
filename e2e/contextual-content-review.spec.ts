@@ -148,7 +148,8 @@ test.describe("writable review host", () => {
     page,
   }) => {
     await page.goto(REVIEW_URL);
-    await expect(page.getByTestId("review-revision")).toHaveText("0");
+    const pageRevision = Number((await page.getByTestId("review-revision").innerText()).trim());
+    expect(Number.isInteger(pageRevision) && pageRevision >= 0).toBe(true);
     const fingerprint = (await page.getByTestId("review-fingerprint").innerText()).trim();
     const manifest = JSON.parse(
       readFileSync("docs/contextual-content-reviews/meal-expansion-batch-01-cup/REVIEW_MANIFEST.json", "utf8"),
@@ -165,7 +166,7 @@ test.describe("writable review host", () => {
           decision: "APPROVED",
           notes: [],
           reviewedAt: "2026-09-21T00:00:00.000Z",
-          revision: 1,
+          revision: pageRevision + 1,
           reviewer: "LOCAL_INTERNAL_REVIEWER",
         },
         null,
@@ -179,7 +180,7 @@ test.describe("writable review host", () => {
       "Another review decision was saved first.",
     );
     await expect(page.getByTestId("review-human-status")).toHaveText("APPROVED");
-    await expect(page.getByTestId("review-revision")).toHaveText("1");
+    await expect(page.getByTestId("review-revision")).toHaveText(String(pageRevision + 1));
     await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
   });
 });

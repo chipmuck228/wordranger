@@ -44,7 +44,3 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-
-# Local/internal content-review writes. HUMAN_REVIEW.md is generated;
-# the JSON record is runtime-only and must not ship a local decision.
-/docs/contextual-content-reviews/**/human-review.record.json

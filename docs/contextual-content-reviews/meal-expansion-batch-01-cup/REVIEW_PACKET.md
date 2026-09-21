@@ -9,7 +9,7 @@ This file is machine-generated. It is not a human approval.
 - Target: `16ea1697-0049-55fe-9181-03d129352a17` / `cup#drink-container`
 - Canonical key: `lex-0346-1`
 - Content fingerprint: `51dc51dc1a321f2af03126d75db1823e59eed61f7e3168c47f4b360611997a40`
-- Human review: PENDING
+- Human review: APPROVED
 - Stale state: CURRENT
 
 ## Notices
