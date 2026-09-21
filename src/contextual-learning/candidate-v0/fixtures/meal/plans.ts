@@ -5,7 +5,15 @@ import type {
   GuidedExperienceStepSpec,
   LearningExperiencePlan,
 } from "../../domain/types";
-import { identityForFixtureSense } from "../../strengthen/meal-lexical-profiles";
+import {
+  mealSceneEntityIds,
+  prefixedMealEntityId,
+} from "../../build/meal-lexical-build-profiles";
+import { MEAL_BUILD_SCENE_BINDINGS } from "../../build/meal-lexical-build-profiles";
+import {
+  identityForBundledTarget,
+  identityForFixtureSense,
+} from "../../strengthen/meal-lexical-profiles";
 import type { MealLexicalStrengthenIdentity } from "../../strengthen/meal-lexical-profiles";
 import {
   FIXTURE_PROVENANCE,
@@ -61,75 +69,6 @@ function mealRecallStep(
     requiredCapabilities: [`frozen-text-input:TYPE`],
     transition: nextOrEnd(true),
   });
-}
-
-function mealGuidedBuildSteps(prefix: string): ExperienceStepSpec[] {
-  const present: GuidedExperienceStepSpec = {
-    id: `${prefix}-build-present`,
-    purpose: "GROUND",
-    targetIds: ["target-spoon"],
-    semanticAction: "OBSERVE",
-    executionIntent: {
-      kind: "GUIDED",
-      guidedActivityKind: "PRESENT_CONTEXT",
-      completionMode: "ACKNOWLEDGE_ONLY",
-      rationale:
-        "Show soup, bowl, and tools before any judgment so the learner can see the scene.",
-    },
-    presentation: {
-      instruction: "Look at the soup, bowl, and eating tools on the table.",
-      presentedEntityIds: [
-        `${prefix}-soup`,
-        `${prefix}-bowl`,
-        `${prefix}-spoon`,
-        `${prefix}-fork`,
-      ],
-    },
-    transition: nextOrEnd(false),
-  };
-
-  const observe: GuidedExperienceStepSpec = {
-    id: `${prefix}-build-observe-relation`,
-    purpose: "CONNECT",
-    targetIds: ["target-spoon"],
-    semanticAction: "OBSERVE",
-    executionIntent: {
-      kind: "GUIDED",
-      guidedActivityKind: "OBSERVE_RELATION",
-      completionMode: "ACKNOWLEDGE_ONLY",
-      rationale:
-        "Present that the spoon is suitable for soup. Acknowledgement is not a correctness judgment.",
-    },
-    presentation: {
-      instruction:
-        "Notice that the spoon is the tool suitable for taking the soup.",
-      presentedEntityIds: [`${prefix}-spoon`, `${prefix}-soup`],
-      presentedFactPredicates: ["suitable_for"],
-    },
-    transition: nextOrEnd(false),
-  };
-
-  const contrast: GuidedExperienceStepSpec = {
-    id: `${prefix}-build-show-contrast`,
-    purpose: "DISCRIMINATE",
-    targetIds: ["target-spoon"],
-    semanticAction: "OBSERVE",
-    executionIntent: {
-      kind: "GUIDED",
-      guidedActivityKind: "SHOW_CONTRAST",
-      completionMode: "ACKNOWLEDGE_ONLY",
-      rationale:
-        "Show spoon vs fork as a contrast, without asking which option is correct.",
-    },
-    presentation: {
-      instruction:
-        "Compare the spoon and the fork. One is for liquid food; the other is not.",
-      presentedEntityIds: [`${prefix}-spoon`, `${prefix}-fork`],
-    },
-    transition: nextOrEnd(false),
-  };
-
-  return [present, observe, contrast, mealRecallStep(prefix, "BUILD")];
 }
 
 function mealAssessableStrengthenSteps(prefix: string): ExperienceStepSpec[] {
@@ -218,22 +157,213 @@ function mealAssessableStrengthenSteps(prefix: string): ExperienceStepSpec[] {
   ];
 }
 
-export function createMealBuildPlan(frame: ContextFrame): LearningExperiencePlan {
-  const prefix = mealPrefixForFrame(frame.id);
-  const steps = mealGuidedBuildSteps(prefix);
+function emptyMealBuildPlan(frame: ContextFrame): LearningExperiencePlan {
   return {
-    id: `meal-build-${frame.id}`,
+    id: `meal-build-${frame.id}-unresolved`,
     schemaVersion: "candidate-v0",
     mode: "BUILD",
-    sourceLearningNeedRef: "need-meal-spoon",
-    targets: [spoonInterpretationTarget(), spoonFormTarget()],
+    sourceLearningNeedRef: "need-opaque-ref",
+    targets: [],
     skeletonId: MEAL_SKELETON_ID,
     contextFrameId: frame.id,
+    activeGoalId: "EATER_CAN_EAT_FOOD",
+    steps: [],
+    completionPolicy: completeAll([]),
+    provenance: FIXTURE_PROVENANCE,
+  };
+}
+
+export function createMealLexicalBuildPlan(input: {
+  frame: ContextFrame;
+  profile: MealLexicalStrengthenIdentity;
+}): LearningExperiencePlan {
+  const binding = MEAL_BUILD_SCENE_BINDINGS[input.profile.stepToken];
+  const prefix = mealPrefixForFrame(input.frame.id);
+  const entityId = `${prefix}-${input.profile.stepToken}`;
+  const contrastEntityId = prefixedMealEntityId(prefix, binding.contrastEntityId);
+  const relatedEntityId = binding.relatedEntityId
+    ? prefixedMealEntityId(prefix, binding.relatedEntityId)
+    : null;
+  if (!contrastEntityId || (binding.relatedEntityId && !relatedEntityId)) {
+    return emptyMealBuildPlan(input.frame);
+  }
+  const interpretationTargetId = `target-${input.profile.stepToken}`;
+  const formTargetId = `target-${input.profile.stepToken}-form`;
+  const bundledTarget = {
+    lexemeId: input.profile.target.lexemeId,
+    senseId: input.profile.target.senseId,
+  };
+  const interpretationTarget = {
+    id: interpretationTargetId,
+    sense: input.profile.fixtureSense,
+    focus: "CONTEXT_INTERPRETATION" as const,
+    requiredRoleIds: [input.profile.roleId],
+    requiredRelationIds:
+      binding.relationPredicate === "suitable_for" ? ["SUITABLE_FOR"] : undefined,
+  };
+  const formTarget = {
+    id: formTargetId,
+    sense: input.profile.fixtureSense,
+    focus: "MEANING_TO_FORM" as const,
+  };
+
+  const ground: GuidedExperienceStepSpec = {
+    id: `${prefix}-build-${input.profile.stepToken}-ground`,
+    purpose: "GROUND",
+    targetIds: [interpretationTargetId],
+    semanticAction: "OBSERVE",
+    executionIntent: {
+      kind: "GUIDED",
+      guidedActivityKind: "PRESENT_CONTEXT",
+      completionMode: "ACKNOWLEDGE_ONLY",
+      rationale:
+        "Show the Meal scene and the current entity before any judgment. Acknowledgement is not Evidence.",
+    },
+    presentation: {
+      instruction: binding.groundingInstruction,
+      presentedEntityIds: mealSceneEntityIds(prefix),
+    },
+    transition: nextOrEnd(false),
+  };
+
+  const connect: GuidedExperienceStepSpec = {
+    id: `${prefix}-build-${input.profile.stepToken}-connect`,
+    purpose: "CONNECT",
+    targetIds: [interpretationTargetId],
+    semanticAction: "OBSERVE",
+    executionIntent: {
+      kind: "GUIDED",
+      guidedActivityKind: binding.relationPredicate
+        ? "OBSERVE_RELATION"
+        : "CONNECT_ENTITY_AND_MEANING",
+      completionMode: "ACKNOWLEDGE_ONLY",
+      rationale:
+        "Connect the entity, scene role, and Chinese meaning. Acknowledgement is not independent recall.",
+    },
+    presentation: {
+      instruction: binding.connectInstruction,
+      presentedEntityIds: relatedEntityId
+        ? [entityId, relatedEntityId]
+        : [entityId],
+      presentedFactPredicates: binding.relationPredicate
+        ? [binding.relationPredicate]
+        : undefined,
+    },
+    transition: nextOrEnd(false),
+  };
+
+  const teach: GuidedExperienceStepSpec = {
+    id: `${prefix}-build-${input.profile.stepToken}-teach`,
+    purpose: "CONNECT",
+    targetIds: [formTargetId],
+    semanticAction: "OBSERVE",
+    executionIntent: {
+      kind: "GUIDED",
+      guidedActivityKind: "PRESENT_LEXICAL_FORM",
+      completionMode: "ACKNOWLEDGE_ONLY",
+      rationale:
+        "Present the English form as teaching support, not as a test.",
+    },
+    presentation: {
+      instruction: binding.teachInstruction,
+      presentedEntityIds: [entityId],
+    },
+    supportExposure: {
+      kinds: ["LEXICAL_FORM", "MEANING_GLOSS"],
+      target: bundledTarget,
+    },
+    transition: nextOrEnd(false),
+  };
+
+  const contrast: GuidedExperienceStepSpec = {
+    id: `${prefix}-build-${input.profile.stepToken}-contrast`,
+    purpose: "DISCRIMINATE",
+    targetIds: [interpretationTargetId],
+    semanticAction: "OBSERVE",
+    executionIntent: {
+      kind: "GUIDED",
+      guidedActivityKind: "SHOW_CONTRAST",
+      completionMode: "ACKNOWLEDGE_ONLY",
+      rationale:
+        "Show an authored contrast binding. Acknowledgement is not Evidence.",
+    },
+    presentation: {
+      instruction: binding.contrastInstruction,
+      presentedEntityIds: [entityId, contrastEntityId],
+    },
+    transition: nextOrEnd(false),
+  };
+
+  const fade: GuidedExperienceStepSpec = {
+    id: `${prefix}-build-${input.profile.stepToken}-fade`,
+    purpose: "CONNECT",
+    targetIds: [formTargetId],
+    semanticAction: "OBSERVE",
+    executionIntent: {
+      kind: "GUIDED",
+      guidedActivityKind: "FADE_FORM",
+      completionMode: "ACKNOWLEDGE_ONLY",
+      rationale:
+        "Withdraw the full form and leave a spelling cue. Acknowledgement is support exposure, not Evidence.",
+    },
+    presentation: {
+      instruction: binding.fadeInstruction,
+      presentedEntityIds: [entityId],
+    },
+    supportExposure: {
+      kinds: ["SPELLING_CUE"],
+      target: bundledTarget,
+    },
+    transition: nextOrEnd(false),
+  };
+
+  const recall = assessable({
+    id: `${prefix}-build-${input.profile.stepToken}-recall`,
+    purpose: "RECALL",
+    targetIds: [formTargetId],
+    semanticAction: "TYPE",
+    promptIntent: {
+      instructionKey: binding.recallInstructionKey,
+      semanticQuestion: pred("name_required_object", [entityArg(entityId)]),
+      mustNotRevealTargetForm: true,
+    },
+    expectedResponse: {
+      kind: "LEXICAL_FORM",
+      sense: input.profile.fixtureSense,
+    },
+    supportPolicy: MINIMAL_SUPPORT,
+    requiredCapabilities: [`frozen-text-input:TYPE`],
+    transition: nextOrEnd(true),
+  });
+
+  const steps = [ground, connect, teach, contrast, fade, recall];
+  return {
+    id: `meal-build-${input.frame.id}-${input.profile.stepToken}`,
+    schemaVersion: "candidate-v0",
+    mode: "BUILD",
+    sourceLearningNeedRef: "need-opaque-ref",
+    targets: [interpretationTarget, formTarget],
+    skeletonId: MEAL_SKELETON_ID,
+    contextFrameId: input.frame.id,
     activeGoalId: "EATER_CAN_EAT_FOOD",
     steps,
     completionPolicy: completeAll(steps),
     provenance: FIXTURE_PROVENANCE,
   };
+}
+
+export function createMealBuildPlan(
+  frame: ContextFrame,
+  request?: { targets?: readonly ExperienceTarget[] },
+): LearningExperiencePlan {
+  const requested = request?.targets?.[0]?.sense;
+  const identity = requested
+    ? identityForFixtureSense(requested) ?? identityForBundledTarget(requested)
+    : identityForFixtureSense(MEAL_SENSE.spoon);
+  if (!identity || (request && (request.targets?.length ?? 0) !== 1)) {
+    return emptyMealBuildPlan(frame);
+  }
+  return createMealLexicalBuildPlan({ frame, profile: identity });
 }
 
 export function createMealActiveRecallStrengthenPlan(input: {

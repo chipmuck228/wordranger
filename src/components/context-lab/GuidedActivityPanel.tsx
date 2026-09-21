@@ -14,6 +14,7 @@ export function GuidedActivityPanel({
   return (
     <div
       data-strengthen-phase={screen.strengthenPhase}
+      data-build-phase={screen.buildPhase}
       className="flex min-w-0 flex-1 flex-col gap-6"
     >
       <MealSceneCard context={screen.context} />

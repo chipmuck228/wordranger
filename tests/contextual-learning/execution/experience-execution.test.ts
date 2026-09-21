@@ -755,12 +755,12 @@ describe("Candidate V0 experience execution — immutability", () => {
 });
 
 describe("Candidate V0 experience execution — Meal guided then recall", () => {
-  it("acknowledges three guided steps then issues one frozen recall", () => {
+  it("acknowledges five guided steps then issues one frozen recall", () => {
     const plan = createMealBuildPlan(homeBreakfastFrame);
     let run = expectReadyRun(plan);
-    expect(plan.steps).toHaveLength(4);
+    expect(plan.steps).toHaveLength(6);
 
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       const issued = issueCurrentStep({ run, now });
       expect(issued.ok).toBe(true);
       if (!issued.ok) {
@@ -814,7 +814,7 @@ describe("Candidate V0 experience execution — Meal guided then recall", () => 
     expect(finished.run.status).toBe("COMPLETED");
     expect(
       finished.run.stepRuns.filter((item) => item.status === "STEP_COMPLETED"),
-    ).toHaveLength(4);
+    ).toHaveLength(6);
   });
 });
 

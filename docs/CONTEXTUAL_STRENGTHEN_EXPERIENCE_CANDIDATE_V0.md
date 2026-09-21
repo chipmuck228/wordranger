@@ -28,8 +28,8 @@ task IDs are nonempty and distinct
 ```
 
 Unknown or future Evidence outcomes fail closed. READY, BUILD, and
-UNRESOLVED do not enter the STRENGTHEN queue. Non-spoon BUILD remains an
-explicit capability gap and is never rewritten as STRENGTHEN.
+UNRESOLVED do not enter the STRENGTHEN queue. BUILD is a separate
+experience and is never rewritten as STRENGTHEN.
 
 The browser submits only `{ runId, revision, intent? }`.
 `intent` is `START_BUILD` or `START_STRENGTHEN`. The client cannot submit

@@ -79,15 +79,15 @@ function mealVariant(
       id: `meal-build:${frame.id}`,
       priority: 20,
       mode: "BUILD",
-      supportedSenses: MEAL_SPOON,
-      requiredSenses: MEAL_SPOON,
+      supportedSenses: MEAL_PROBE_LEXICAL,
+      requiredSenses: [],
       contextFrameId: frame.id,
       skeletonId: mealSkeleton.id,
       requiredCapabilityIds: TYPING,
       containsGuidedSteps: true,
       containsAssessableSteps: true,
       reviewStatus: "REVIEWED",
-      createPlan: () => createMealBuildPlan(frame),
+      createPlan: (request) => createMealBuildPlan(frame, request),
     };
   }
   if (kind === "strengthen-recall") {

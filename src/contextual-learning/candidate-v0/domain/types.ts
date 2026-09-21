@@ -411,6 +411,8 @@ export interface StepTransitionPolicy {
 export type GuidedActivityKind =
   | "PRESENT_CONTEXT"
   | "OBSERVE_RELATION"
+  | "CONNECT_ENTITY_AND_MEANING"
+  | "PRESENT_LEXICAL_FORM"
   | "SHOW_CONTRAST"
   | "RECONNECT_FORM"
   | "FADE_FORM";

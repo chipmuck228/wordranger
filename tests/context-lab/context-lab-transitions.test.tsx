@@ -36,6 +36,7 @@ async function renderFirstScreen(reduce = false) {
 
 describe("Context Lab transition races", () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     mockMotion(false);
     vi.useFakeTimers();
   });
@@ -46,15 +47,15 @@ describe("Context Lab transition races", () => {
     fireEvent.click(next);
     fireEvent.click(next);
     fireEvent.click(next);
-    expect(screen.getByText("1 / 4")).toBeTruthy();
+    expect(screen.getByText("1 / 6")).toBeTruthy();
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.queryByText("3 / 4")).toBeNull();
+    expect(screen.queryByText("3 / 6")).toBeNull();
     act(() => {
       vi.advanceTimersByTime(160);
     });
-    expect(screen.getByText("2 / 4")).toBeTruthy();
+    expect(screen.getByText("2 / 6")).toBeTruthy();
     expect(screen.getByText("勺子 → 适合舀汤")).toBeTruthy();
     if (initialScreen.kind === "GUIDED") {
       expect(initialScreen.progress.current).toBe(1);
@@ -100,10 +101,14 @@ describe("Context Lab transition races", () => {
 });
 
 describe("Context Lab reduced-motion and restart", () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
   it("reduced motion advances immediately without a timer", async () => {
     await renderFirstScreen(true);
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("2 / 4")).toBeTruthy();
+    expect(await screen.findByText("2 / 6")).toBeTruthy();
     expect(
       document.querySelector('[data-presentation-state="TRANSITIONING"]'),
     ).toBeNull();
@@ -112,7 +117,7 @@ describe("Context Lab reduced-motion and restart", () => {
   it("restart clears preview text and works from the boundary", async () => {
     const harness = createMealLabHarness();
     let current = await harness.controller.start();
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       if (current.kind !== "GUIDED") {
         throw new Error("guided");
       }
@@ -132,28 +137,36 @@ describe("Context Lab reduced-motion and restart", () => {
     fireEvent.click(screen.getByRole("button", { name: "提交" }));
     expect(await screen.findByText("这次练习已记录。")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "重新体验" }));
-    expect(await screen.findByText("1 / 4")).toBeTruthy();
+    expect(await screen.findByText("1 / 6")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("2 / 4")).toBeTruthy();
+    expect(await screen.findByText("2 / 6")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("3 / 4")).toBeTruthy();
+    expect(await screen.findByText("3 / 6")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
+    expect(await screen.findByText("4 / 6")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "继续" }));
+    expect(await screen.findByText("5 / 6")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "试着自己写" }));
     expect(
       (await screen.findByLabelText("英文答案") as HTMLInputElement).value,
     ).toBe("");
   });
 
-  it("progress stays within 1 / 4 through 4 / 4", async () => {
+  it("progress stays within 1 / 6 through 6 / 6", async () => {
     await renderFirstScreen(true);
-    expect(screen.getByLabelText("进度 1 / 4")).toBeTruthy();
+    expect(screen.getByLabelText("进度 1 / 6")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByLabelText("进度 2 / 4")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 2 / 6")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByLabelText("进度 3 / 4")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 3 / 6")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByLabelText("进度 4 / 4")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 4 / 6")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "继续" }));
+    expect(await screen.findByLabelText("进度 5 / 6")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "试着自己写" }));
+    expect(await screen.findByLabelText("进度 6 / 6")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "提交" }));
-    expect(screen.getByLabelText("进度 4 / 4")).toBeTruthy();
-    expect(screen.queryByText("5 / 4")).toBeNull();
+    expect(screen.getByLabelText("进度 6 / 6")).toBeTruthy();
+    expect(screen.queryByText("7 / 6")).toBeNull();
   });
 });

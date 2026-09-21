@@ -82,6 +82,7 @@ export { MEAL_FRAMES } from "./fixtures/meal/contexts";
 export {
   createMealActiveRecallStrengthenPlan,
   createMealBuildPlan,
+  createMealLexicalBuildPlan,
   createMealRecallStrengthenPlan,
   createMealStrengthenPlan,
 } from "./fixtures/meal/plans";

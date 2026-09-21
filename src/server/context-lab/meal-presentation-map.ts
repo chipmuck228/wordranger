@@ -35,8 +35,10 @@ const HOME_BREAKFAST_COPY = {
 
 const GUIDED_INSTRUCTIONS: Record<GuidedActivityKind, string> = {
   PRESENT_CONTEXT: "桌上有汤、碗、勺子和叉子。先看看这些物品。",
-  OBSERVE_RELATION: "勺子适合用来喝汤或舀取流质食物。",
-  SHOW_CONTRAST: "比较一下勺子和叉子：它们的用途有什么不同？",
+  OBSERVE_RELATION: "先看当前物品和它在场景里的关系。",
+  CONNECT_ENTITY_AND_MEANING: "把当前物品和它的意思联系起来。",
+  PRESENT_LEXICAL_FORM: "这是教学，不是测试。看一看这个词和它的英文词形。",
+  SHOW_CONTRAST: "比较一下这两个物品：它们有什么不同？",
   RECONNECT_FORM: "这是强化，不是测试。重新看一看这个词和它的英文词形。",
   FADE_FORM: "完整英文已经收起。下面是提示，不是答案。",
 };
@@ -48,9 +50,12 @@ const FROZEN_PREVIEW_INSTRUCTION = "根据刚才看到的早餐情景，试着�
 
 const RELATION_CAPTIONS: Record<string, string> = {
   "suitable_for|home-spoon|home-soup": "勺子 → 适合舀汤",
+  "contains|home-bowl|home-soup": "碗里装着汤",
 };
 
 const CONTRAST_CAPTIONS: Record<string, string> = {
+  "home-soup": "汤：碗里的食物",
+  "home-bowl": "碗：盛汤的容器",
   "home-spoon": "勺子：舀取汤或柔软食物",
   "home-fork": "叉子：叉取食物块",
 };
@@ -83,6 +88,14 @@ export function strengthenReconnectInstruction(displayLabel: string): string {
 
 export function strengthenTitleFor(displayLabel: string): string {
   return `加强${displayLabel}的记忆连接`;
+}
+
+export function buildTitleFor(displayLabel: string): string {
+  return `建立${displayLabel}的情境记忆`;
+}
+
+export function buildVerifyInstruction(displayLabel: string): string {
+  return `根据刚才看到的${displayLabel}，写出英文单词。当前页面没有完整答案或拼写提示。`;
 }
 
 export function mappedMealEntity(

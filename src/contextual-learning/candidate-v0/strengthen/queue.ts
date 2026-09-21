@@ -9,19 +9,23 @@ import type {
   ContextualProbeTarget,
   ContextualProbeRoutingResult,
 } from "../probe/types";
+import {
+  createContextualTargetQueueState,
+  currentQueueItem,
+  markQueueItemCompleted,
+  queueHandoffLabel,
+  readContextualTargetQueue,
+  type ContextualTargetQueueState,
+} from "../queue/target-queue";
+import { mealLexicalQueueCatalog } from "../build/meal-lexical-build-profiles";
 import { isActiveRecallStrengthenEligible } from "./eligibility";
 import {
   MEAL_STRENGTHEN_ORCHESTRATION_VERSION,
   type ContextualStrengthenQueueItem,
 } from "./types";
 
-export interface MealStrengthenQueueState {
-  version: typeof MEAL_STRENGTHEN_ORCHESTRATION_VERSION;
-  items: ContextualStrengthenQueueItem[];
-  currentIndex: number;
-  completed: LexemeSenseRef[];
-  currentPlanId: string | null;
-}
+export type MealStrengthenQueueState =
+  ContextualTargetQueueState<typeof MEAL_STRENGTHEN_ORCHESTRATION_VERSION>;
 
 export function buildMealStrengthenQueue(input: {
   targets: readonly ContextualProbeTarget[];
@@ -60,20 +64,10 @@ export function buildMealStrengthenQueue(input: {
 export function createMealStrengthenQueueState(
   items: readonly ContextualStrengthenQueueItem[],
 ): MealStrengthenQueueState | null {
-  if (items.length === 0) {
-    return null;
-  }
-  return {
-    version: MEAL_STRENGTHEN_ORCHESTRATION_VERSION,
-    items: items.map((item) => ({
-      target: { ...item.target },
-      entityId: item.entityId,
-      sourceProbeTaskIds: [...item.sourceProbeTaskIds],
-    })),
-    currentIndex: 0,
-    completed: [],
-    currentPlanId: null,
-  };
+  return createContextualTargetQueueState(
+    MEAL_STRENGTHEN_ORCHESTRATION_VERSION,
+    items,
+  );
 }
 
 export function readMealStrengthenQueue(
@@ -81,47 +75,25 @@ export function readMealStrengthenQueue(
 ):
   | { ok: true; queue: MealStrengthenQueueState }
   | { ok: false; reason: "STRENGTHEN_QUEUE_PERSISTENCE_GAP" } {
-  if (!value || typeof value !== "object") {
+  const catalog = mealLexicalQueueCatalog();
+  if (!catalog.ok) {
     return { ok: false, reason: "STRENGTHEN_QUEUE_PERSISTENCE_GAP" };
   }
-  const queue = value as MealStrengthenQueueState;
-  if (
-    queue.version !== MEAL_STRENGTHEN_ORCHESTRATION_VERSION ||
-    !Array.isArray(queue.items) ||
-    !Array.isArray(queue.completed) ||
-    !Number.isInteger(queue.currentIndex) ||
-    queue.currentIndex < 0 ||
-    queue.currentIndex > queue.items.length ||
-    queue.items.some(
-      (item) =>
-        !item?.target?.lexemeId?.trim() ||
-        !item.target.senseId?.trim() ||
-        !item.entityId?.trim() ||
-        !Array.isArray(item.sourceProbeTaskIds),
-    )
-  ) {
-    return { ok: false, reason: "STRENGTHEN_QUEUE_PERSISTENCE_GAP" };
-  }
-  return {
-    ok: true,
-    queue: {
-      version: MEAL_STRENGTHEN_ORCHESTRATION_VERSION,
-      items: queue.items.map((item) => ({
-        target: { ...item.target },
-        entityId: item.entityId,
-        sourceProbeTaskIds: [...item.sourceProbeTaskIds],
-      })),
-      currentIndex: queue.currentIndex,
-      completed: queue.completed.map((item) => ({ ...item })),
-      currentPlanId: queue.currentPlanId,
-    },
-  };
+  const read = readContextualTargetQueue({
+    value,
+    expectedVersion: MEAL_STRENGTHEN_ORCHESTRATION_VERSION,
+    catalog: catalog.catalog,
+    gapReason: "STRENGTHEN_QUEUE_PERSISTENCE_GAP",
+  });
+  return read.ok
+    ? { ok: true, queue: read.queue }
+    : { ok: false, reason: "STRENGTHEN_QUEUE_PERSISTENCE_GAP" };
 }
 
 export function currentStrengthenQueueItem(
   queue: MealStrengthenQueueState,
 ): ContextualStrengthenQueueItem | null {
-  return queue.items[queue.currentIndex] ?? null;
+  return currentQueueItem(queue);
 }
 
 export function markStrengthenQueueItemCompleted(
@@ -130,27 +102,13 @@ export function markStrengthenQueueItemCompleted(
 ):
   | { ok: true; queue: MealStrengthenQueueState }
   | { ok: false; reason: "STRENGTHEN_TARGET_IDENTITY_MISMATCH" } {
-  const current = currentStrengthenQueueItem(queue);
-  if (!current || !sameLexemeSense(current.target, target)) {
+  const marked = markQueueItemCompleted(queue, target);
+  if (!marked.ok) {
     return { ok: false, reason: "STRENGTHEN_TARGET_IDENTITY_MISMATCH" };
   }
-  if (queue.completed.some((item) => sameLexemeSense(item, target))) {
-    return { ok: true, queue };
-  }
-  return {
-    ok: true,
-    queue: {
-      ...queue,
-      completed: [...queue.completed, { ...target }],
-      currentIndex: queue.currentIndex + 1,
-      currentPlanId: null,
-    },
-  };
+  return marked;
 }
 
 export function strengthenHandoffLabel(count: number): string {
-  if (count <= 1) {
-    return "开始需要的强化";
-  }
-  return `开始强化 ${count} 个词`;
+  return queueHandoffLabel("STRENGTHEN", count);
 }

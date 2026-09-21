@@ -42,7 +42,7 @@ export function ProbeSummaryPanel({
           className="h-12 w-full min-h-12 rounded-2xl text-base"
           onClick={() => onHandoff("START_STRENGTHEN")}
         >
-          {screen.strengthenButtonLabel ?? "开始需要的强化"}
+          {screen.strengthenButtonLabel ?? "开始强化"}
         </Button>
       ) : null}
       {screen.canHandoffToBuild ? (
@@ -52,7 +52,7 @@ export function ProbeSummaryPanel({
           className="h-12 w-full min-h-12 rounded-2xl text-base"
           onClick={() => onHandoff("START_BUILD")}
         >
-          开始勺子教学
+          {screen.buildButtonLabel ?? "开始建立"}
         </Button>
       ) : null}
     </div>

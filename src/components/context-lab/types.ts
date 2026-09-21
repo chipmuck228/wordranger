@@ -75,6 +75,7 @@ export type ContextLabCurrentScreen =
       canHandoffToBuild: boolean;
       canHandoffToStrengthen: boolean;
       strengthenButtonLabel?: string;
+      buildButtonLabel?: string;
       pendingMessage: string | null;
     }
   | {
@@ -85,6 +86,7 @@ export type ContextLabCurrentScreen =
       progress: ContextLabProgress;
       teachingPhase?: boolean;
       strengthenPhase?: "RECONNECT" | "FADE";
+      buildPhase?: "GROUND" | "CONNECT" | "TEACH" | "CONTRAST" | "FADE";
       acknowledgeLabel?: string;
     }
   | {
@@ -95,6 +97,7 @@ export type ContextLabCurrentScreen =
       progress: ContextLabProgress;
       presentationMode?: ContextLabTaskPresentationMode;
       strengthenPhase?: "VERIFY";
+      buildPhase?: "VERIFY";
     }
   | {
       kind: "PROBE_TASK_RECORDED";
@@ -156,6 +159,10 @@ export const CONTEXT_LAB_STRENGTHEN_ASSISTED_MESSAGE = "这次是在提示后答
 export const CONTEXT_LAB_STRENGTHEN_QUEUE_COMPLETE_MESSAGE =
   "本次需要强化的词已经完成。";
 export const CONTEXT_LAB_STRENGTHEN_NEXT_LABEL = "继续下一个";
+export const CONTEXT_LAB_BUILD_QUEUE_COMPLETE_MESSAGE =
+  "本次需要建立的词已经完成。";
+export const CONTEXT_LAB_BUILD_NEXT_LABEL = "继续下一个";
+export const CONTEXT_LAB_RETURN_TO_SUMMARY_LABEL = "回到这次检查";
 export const CONTEXT_LAB_PROBE_RECORDED_MESSAGE = "这次回答已记录，请继续。";
 export const CONTEXT_LAB_BOUNDARY_MESSAGE =
   "语境体验已到达现有学习任务的交接点。\n下一阶段会通过 WordRanger 原有提交与证据流程完成这道题。";

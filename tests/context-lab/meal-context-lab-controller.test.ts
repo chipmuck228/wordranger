@@ -27,7 +27,7 @@ describe("Meal Context Lab controller", () => {
     const { controller } = createMealLabHarness();
     const screen = await controller.start();
     assertGuided(screen);
-    expect(screen.progress).toEqual({ current: 1, total: 4 });
+    expect(screen.progress).toEqual({ current: 1, total: 6 });
     expect(screen.activity.kind).toBe("PRESENT_CONTEXT");
     expect(screen.context.entities.map((entity) => entity.label)).toEqual([
       "汤",
@@ -60,7 +60,7 @@ describe("Meal Context Lab controller", () => {
       activityId: first.activity.id,
     });
     assertGuided(second);
-    expect(second.progress).toEqual({ current: 2, total: 4 });
+    expect(second.progress).toEqual({ current: 2, total: 6 });
     expect(second.context.relationCaption).toBe("勺子 → 适合舀汤");
     expect(second.handle.revision).toBe(1);
   });
@@ -169,10 +169,10 @@ describe("Meal Context Lab controller", () => {
     }
   });
 
-  it("after three legal acknowledgements, server returns frozen task preview", async () => {
+  it("after five legal acknowledgements, server returns frozen task preview", async () => {
     const { controller, repository } = createMealLabHarness();
     let screen = await controller.start();
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       assertGuided(screen);
       screen = await controller.acknowledge({
         runId: screen.handle.runId,
@@ -181,7 +181,7 @@ describe("Meal Context Lab controller", () => {
       });
     }
     assertFrozen(screen);
-    expect(screen.progress).toEqual({ current: 4, total: 4 });
+    expect(screen.progress).toEqual({ current: 6, total: 6 });
     expect(screen.task.taskType).toBe(LearningTaskType.ACTIVE_RECALL_TYPING);
     expect("answerKey" in screen).toBe(false);
     expect("answerKey" in screen.task).toBe(false);
@@ -207,7 +207,7 @@ describe("Meal Context Lab controller", () => {
     assertGuided(restarted);
     expect(restarted.handle.runId).not.toBe(first.handle.runId);
     expect(restarted.handle.revision).toBe(0);
-    expect(restarted.progress).toEqual({ current: 1, total: 4 });
+    expect(restarted.progress).toEqual({ current: 1, total: 6 });
   });
 
   it("disabled feature gate performs no repository write", async () => {
@@ -250,13 +250,18 @@ describe("Meal Context Lab controller", () => {
     expect(ACTIONS_SOURCE).toContain("restartMealContextLab");
     expect(ACTIONS_SOURCE).toContain("submitContextLabFrozenTask");
     expect(ACTIONS_SOURCE).not.toMatch(/userId\s*:/);
+    expect(ACTIONS_SOURCE).not.toMatch(/hintCount\s*:/);
+    expect(ACTIONS_SOURCE).not.toMatch(/queueIndex\s*:/);
+    expect(ACTIONS_SOURCE).not.toMatch(/planId\s*:/);
+    expect(ACTIONS_SOURCE).not.toMatch(/disposition\s*:/);
+    expect(ACTIONS_SOURCE).not.toMatch(/targetId\s*:/);
     expect(ACTIONS_SOURCE).toContain("createContextLabRuntime");
   });
 
   it("serialized public screens contain no forbidden fields", async () => {
     const { controller } = createMealLabHarness();
     let screen = await controller.start();
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       const keys = collectKeys(screen);
       for (const field of FORBIDDEN_CLIENT_FIELDS) {
         expect(keys.has(field), field).toBe(false);

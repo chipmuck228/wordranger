@@ -551,19 +551,21 @@ function persistStrengthenRun(screen: ContextLabCurrentScreen): void {
   if (typeof window === "undefined" || !("handle" in screen)) {
     return;
   }
-  const persist =
-    (screen.kind === "GUIDED" && screen.strengthenPhase != null) ||
-    (screen.kind === "FROZEN_TASK_PREVIEW" && screen.strengthenPhase === "VERIFY") ||
+  const persistExperience =
+    screen.kind === "GUIDED" ||
+    (screen.kind === "FROZEN_TASK_PREVIEW" &&
+      (screen.strengthenPhase === "VERIFY" || screen.buildPhase === "VERIFY")) ||
     (screen.kind === "FROZEN_TASK_RECORDED" &&
       Boolean(screen.queueCompleteMessage || screen.continueLabel));
-  if (persist) {
+  if (persistExperience) {
     window.sessionStorage.setItem(STRENGTHEN_RUN_STORAGE_KEY, screen.handle.runId);
     return;
   }
   if (
     screen.kind === "PROBE_INTRO" ||
     screen.kind === "PROBE_SUMMARY" ||
-    screen.kind === "PROBE_TASK_RECORDED"
+    screen.kind === "PROBE_TASK_RECORDED" ||
+    screen.kind === "FROZEN_TASK_PREVIEW"
   ) {
     window.sessionStorage.removeItem(STRENGTHEN_RUN_STORAGE_KEY);
   }

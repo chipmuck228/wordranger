@@ -8,6 +8,9 @@ import "server-only";
 
 import {
   CONTEXT_LAB_ERROR_CODES,
+  CONTEXT_LAB_BUILD_NEXT_LABEL,
+  CONTEXT_LAB_BUILD_QUEUE_COMPLETE_MESSAGE,
+  CONTEXT_LAB_RETURN_TO_SUMMARY_LABEL,
   CONTEXT_LAB_STRENGTHEN_NEXT_LABEL,
   CONTEXT_LAB_STRENGTHEN_QUEUE_COMPLETE_MESSAGE,
   CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
@@ -19,7 +22,6 @@ import { findProfile } from "@/contextual-learning/candidate-v0/domain/lexeme-se
 import {
   isGuidedExperienceStep,
   type ExperienceStepSpec,
-  type ExperienceTarget,
   type LearningExperiencePlan,
   type ResolvedTargetSnapshot,
   type RuntimeCapability,
@@ -88,16 +90,27 @@ import {
 import { generateMealProbeTask } from "./generate-meal-probe-task";
 import { mealColdProbeTargets } from "./meal-probe-targets";
 import {
+  currentBuildQueueItem,
+  markBuildQueueItemCompleted,
+} from "@/contextual-learning/candidate-v0/build/queue";
+import type { MealLexicalBuildProfile } from "@/contextual-learning/candidate-v0/build/types";
+import {
+  buildButtonLabelForProbe,
+  canHandoffRecallBuild,
   canHandoffRecallStrengthen,
-  canHandoffSpoonBuild,
   capabilityNoteForResult,
   createMealProbeOrchestration,
+  initializeBuildQueue,
   initializeStrengthenQueue,
   nextProbeSkill,
   probePendingMessage,
   publicDispositionLabel,
+  remainingBuildCount,
+  remainingStrengthenCount,
+  requireBuildQueue,
   requireStrengthenQueue,
   routingResultsForProbe,
+  strengthenButtonLabelForProbe,
   type MealProbeOrchestration,
 } from "./meal-probe-orchestration";
 import type { StudentAction } from "@/domain/tasks/student-action";
@@ -105,19 +118,20 @@ import {
   BUNDLED_LEXEME_BINDINGS,
   bundledBindingLexemeId,
 } from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
-import { isActiveRecallStrengthenEligible } from "@/contextual-learning/candidate-v0/strengthen/eligibility";
 import { deriveFrozenHintCountFromSupportExposure } from "@/contextual-learning/candidate-v0/strengthen/derive-frozen-hint-count";
 import {
   currentStrengthenQueueItem,
   markStrengthenQueueItemCompleted,
-  strengthenHandoffLabel,
 } from "@/contextual-learning/candidate-v0/strengthen/queue";
 import {
   mergeSupportExposures,
   supportExposuresForStrengthenStep,
 } from "@/contextual-learning/candidate-v0/strengthen/record-support-exposure";
 import type { MealLexicalStrengthenProfile } from "@/contextual-learning/candidate-v0/strengthen/types";
-import { mealProfileForTarget } from "./meal-strengthen-profiles";
+import {
+  mealBuildProfileForTarget,
+  mealProfileForTarget,
+} from "./meal-strengthen-profiles";
 import { toGeneratedLearningTask } from "./to-generated-learning-task";
 
 const TYPING_CAPABILITY = FROZEN_RUNTIME_CAPABILITIES.find(
@@ -481,10 +495,20 @@ export class MealContextLabController {
     if (record.probe.phase === "STRENGTHEN_ITEM_RECORDED") {
       return this.continueStrengthenQueue(record);
     }
+    if (record.probe.phase === "BUILD_ITEM_RECORDED") {
+      return this.continueBuildQueue(record);
+    }
+    if (
+      record.probe.phase === "BUILD_QUEUE_COMPLETED" ||
+      record.probe.phase === "STRENGTHEN_QUEUE_COMPLETED"
+    ) {
+      return this.returnToSummary(record);
+    }
     if (
       record.probe.phase !== "PROBE_INTRO" &&
       record.probe.phase !== "PROBE_FEEDBACK_RECORDED" &&
-      record.probe.phase !== "ROUTING_SUMMARY"
+      record.probe.phase !== "ROUTING_SUMMARY" &&
+      record.probe.phase !== "PROBE_COMPLETED"
     ) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
         recoverable: true,
@@ -562,7 +586,7 @@ export class MealContextLabController {
       });
     }
 
-    const nextProbe = completeStrengthenAfterEvidence({
+    const nextProbe = completeExperienceAfterEvidence({
       probe: input.record.probe,
       plan: input.record.experienceRun.planSnapshot.plan,
     });
@@ -599,7 +623,7 @@ export class MealContextLabController {
       feedback: input.feedback,
       progress: progressForIssuedRun(recorded.run),
       planMode: planModeOf(recorded.run),
-      ...strengthenRecordedCopy(nextProbe ?? input.record.probe, recorded.run),
+      ...experienceRecordedCopy(nextProbe ?? input.record.probe, recorded.run),
     });
   }
 
@@ -620,7 +644,7 @@ export class MealContextLabController {
         feedback: contextLabFeedbackFromEvidence(evidence),
         progress: progressForIssuedRun(record.experienceRun),
         planMode: planModeOf(record.experienceRun),
-        ...strengthenRecordedCopy(record.probe, record.experienceRun),
+        ...experienceRecordedCopy(record.probe, record.experienceRun),
       });
     }
     return this.completeAfterEvidence({
@@ -655,7 +679,7 @@ export class MealContextLabController {
       feedback: contextLabFeedbackFromEvidence(evidence),
       progress: progressForIssuedRun(record.experienceRun),
       planMode: planModeOf(record.experienceRun),
-      ...strengthenRecordedCopy(record.probe, record.experienceRun),
+      ...experienceRecordedCopy(record.probe, record.experienceRun),
     });
   }
 
@@ -774,6 +798,8 @@ export class MealContextLabController {
     if (
       record.probe &&
       record.probe.phase !== "BUILD_HANDOFF" &&
+      record.probe.phase !== "BUILD_ITEM_RECORDED" &&
+      record.probe.phase !== "BUILD_QUEUE_COMPLETED" &&
       record.probe.phase !== "STRENGTHEN_HANDOFF" &&
       record.probe.phase !== "STRENGTHEN_ITEM_RECORDED" &&
       record.probe.phase !== "STRENGTHEN_QUEUE_COMPLETED"
@@ -782,6 +808,10 @@ export class MealContextLabController {
         return this.presentIssuedProbeTask(record);
       }
       return this.presentProbe(record);
+    }
+    const aligned = rejectMisalignedQueue(record);
+    if (aligned) {
+      return aligned;
     }
     const run = record.experienceRun;
     const current = run.stepRuns[run.currentStepIndex];
@@ -804,6 +834,7 @@ export class MealContextLabController {
         progress,
         planMode: planModeOf(run),
         strengthenProfile: strengthenProfileForRun(run),
+        buildProfile: buildProfileForRun(run),
       });
     }
     if (run.status === "FROZEN_TASK_ISSUED" && current?.taskId) {
@@ -820,6 +851,7 @@ export class MealContextLabController {
         progress,
         planMode: planModeOf(run),
         strengthenProfile: strengthenProfileForRun(run),
+        buildProfile: buildProfileForRun(run),
       });
     }
     if (run.status === "COMPLETED" && current?.taskId) {
@@ -843,6 +875,7 @@ export class MealContextLabController {
         progress,
         planMode: planModeOf(run),
         strengthenProfile: strengthenProfileForRun(run),
+        buildProfile: buildProfileForRun(run),
       });
     }
     if (issued.issuedTask) {
@@ -853,6 +886,7 @@ export class MealContextLabController {
         progress,
         planMode: planModeOf(run),
         strengthenProfile: strengthenProfileForRun(run),
+        buildProfile: buildProfileForRun(run),
       });
     }
     return errorScreen(CONTEXT_LAB_ERROR_CODES.FROZEN_COMPILATION_FAILURE);
@@ -908,9 +942,6 @@ export class MealContextLabController {
     }
     if (probe.phase === "ROUTING_SUMMARY" || probe.phase === "PROBE_COMPLETED") {
       const results = routingResultsForProbe(probe);
-      const strengthenCount = results.filter((result) =>
-        isEligibleStrengthenResult(result),
-      ).length;
       return presentProbeSummaryScreen({
         handle,
         progress: { current: probe.targets.length, total: probe.targets.length },
@@ -918,11 +949,12 @@ export class MealContextLabController {
           entityId: probe.targets[index].entityId,
           label: probe.targets[index].displayLabel,
           summary: publicDispositionLabel(result.disposition),
-          capabilityNote: capabilityNoteForResult({ result }) ?? undefined,
+          capabilityNote: capabilityNoteForResult() ?? undefined,
         })),
-        canHandoffToBuild: canHandoffSpoonBuild(results),
+        canHandoffToBuild: canHandoffRecallBuild(probe),
         canHandoffToStrengthen: canHandoffRecallStrengthen(probe),
-        strengthenButtonLabel: strengthenHandoffLabel(strengthenCount),
+        strengthenButtonLabel: strengthenButtonLabelForProbe(probe),
+        buildButtonLabel: buildButtonLabelForProbe(probe),
         pendingMessage: probePendingMessage(results),
       });
     }
@@ -1367,33 +1399,95 @@ export class MealContextLabController {
   private async handoffToBuild(
     record: ContextLabRunRecord,
   ): Promise<ContextLabCurrentScreen> {
-    const results = record.probe ? routingResultsForProbe(record.probe) : [];
-    if (!canHandoffSpoonBuild(results)) {
+    if (!record.probe || !canHandoffRecallBuild(record.probe)) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
         recoverable: true,
       });
     }
-    const issued = issueCurrentStep({
-      run: record.experienceRun,
-      now: this.now(),
-      createId: frozenTaskCreateId(record.experienceRun),
-    });
-    if (!issued.ok) {
-      return errorScreen(mapIssueError(issued.error.code), {
-        detail: issued.error.code,
+    const initialized = initializeBuildQueue(record.probe);
+    if (!initialized.ok) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: true,
+        detail: initialized.reason,
       });
     }
-    const nextProbe: MealProbeOrchestration = {
-      ...record.probe!,
+    return this.issueBuildTarget(record, {
+      ...record.probe,
       phase: "BUILD_HANDOFF",
       experienceMode: "BUILD",
       supportExposures: [],
+      buildQueue: initialized.queue,
+    });
+  }
+
+  private async continueBuildQueue(
+    record: ContextLabRunRecord,
+  ): Promise<ContextLabCurrentScreen> {
+    if (!record.probe) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: true,
+      });
+    }
+    const queue = requireBuildQueue(record.probe);
+    if (!queue.ok || !currentBuildQueueItem(queue.queue)) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: true,
+      });
+    }
+    return this.issueBuildTarget(record, {
+      ...record.probe,
+      phase: "BUILD_HANDOFF",
+      experienceMode: "BUILD",
+      supportExposures: [],
+      buildQueue: queue.queue,
+    });
+  }
+
+  private async issueBuildTarget(
+    record: ContextLabRunRecord,
+    probe: MealProbeOrchestration,
+  ): Promise<ContextLabCurrentScreen> {
+    const queue = requireBuildQueue(probe);
+    if (!queue.ok) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: false,
+        detail: queue.reason,
+      });
+    }
+    const current = currentBuildQueueItem(queue.queue);
+    if (!current) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: true,
+      });
+    }
+    const profile = mealBuildProfileForTarget(current.target);
+    if (!profile) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.PLANNER_FAILURE, {
+        detail: "MEAL_TARGET_PROFILE_UNRESOLVED",
+      });
+    }
+    const prepared = this.createIssuedRun({
+      planningInput: mealBuildPlanningInput(profile),
+      runId: record.id,
+    });
+    if ("screen" in prepared) {
+      return prepared.screen;
+    }
+    const nextProbe: MealProbeOrchestration = {
+      ...probe,
+      phase: "BUILD_HANDOFF",
+      experienceMode: "BUILD",
+      supportExposures: [],
+      buildQueue: {
+        ...queue.queue,
+        currentPlanId: prepared.run.planSnapshot.plan.id,
+      },
     };
     const saved = await this.repository.saveIfRevision({
       runId: record.id,
       userId: this.userId,
       expectedRevision: record.revision,
-      nextRun: issued.run,
+      nextRun: prepared.run,
       nextProbe,
       updatedAt: this.now(),
     });
@@ -1402,9 +1496,41 @@ export class MealContextLabController {
         ? staleRunScreen()
         : notFoundRunScreen();
     }
-    return this.toPublicScreen(issued.run, saved.revision, {
-      issuedActivity: issued.issuedActivity,
-      issuedTask: issued.issuedTask,
+    return this.toPublicScreen(prepared.run, saved.revision, prepared.issued);
+  }
+
+  private async returnToSummary(
+    record: ContextLabRunRecord,
+  ): Promise<ContextLabCurrentScreen> {
+    if (!record.probe) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: true,
+      });
+    }
+    const nextProbe: MealProbeOrchestration = {
+      ...record.probe,
+      phase: "ROUTING_SUMMARY",
+      experienceMode: null,
+      issued: null,
+      currentSkill: null,
+    };
+    const saved = await this.repository.saveIfRevision({
+      runId: record.id,
+      userId: this.userId,
+      expectedRevision: record.revision,
+      nextRun: record.experienceRun,
+      nextProbe,
+      updatedAt: this.now(),
+    });
+    if (!saved.ok) {
+      return saved.reason === "REVISION_CONFLICT"
+        ? staleRunScreen()
+        : notFoundRunScreen();
+    }
+    return this.presentProbe({
+      ...record,
+      probe: nextProbe,
+      revision: saved.revision,
     });
   }
 }
@@ -1415,14 +1541,28 @@ interface IssuedPayload {
 }
 
 export function mealBuildPlanningInput(
+  profileOrCapabilities?: MealLexicalBuildProfile | RuntimeCapability[],
   capabilities: RuntimeCapability[] = typingCapabilities(),
 ): ExperiencePlanningInput {
+  const profile = Array.isArray(profileOrCapabilities)
+    ? null
+    : profileOrCapabilities;
+  const runtime = Array.isArray(profileOrCapabilities)
+    ? profileOrCapabilities
+    : capabilities;
+  const sense = profile?.fixtureSense ?? MEAL_SENSE.spoon;
   return {
     learningNeedRef: "need-opaque-ref",
     mode: "BUILD",
-    targets: [spoonFormTarget()],
+    targets: [
+      {
+        id: `target-${profile?.stepToken ?? "spoon"}-form`,
+        sense,
+        focus: "MEANING_TO_FORM",
+      },
+    ],
     allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
-    runtimeCapabilities: capabilities,
+    runtimeCapabilities: runtime,
   };
 }
 
@@ -1461,14 +1601,6 @@ function resolvePlanTargets(
     displayForm: findProfile(PLANNER_SENSE_PROFILES, target.sense)?.displayForm ?? "",
     focus: target.focus,
   }));
-}
-
-function spoonFormTarget(): ExperienceTarget {
-  return {
-    id: "target-spoon",
-    sense: MEAL_SENSE.spoon,
-    focus: "MEANING_TO_FORM",
-  };
 }
 
 function typingCapabilities(): RuntimeCapability[] {
@@ -1600,6 +1732,11 @@ function strengthenProfileForRun(
   return sense ? mealProfileForTarget(sense) : null;
 }
 
+function buildProfileForRun(run: ExperienceRun): MealLexicalBuildProfile | null {
+  const sense = run.planSnapshot.plan.targets[0]?.sense;
+  return sense ? mealBuildProfileForTarget(sense) : null;
+}
+
 function frozenHintCountForRecord(record: ContextLabRunRecord): number | null {
   if (record.experienceRun.planSnapshot.plan.mode !== "STRENGTHEN") {
     return 0;
@@ -1627,7 +1764,12 @@ function recordSupportExposureOnProbe(input: {
   planId: string;
   shownAt: string;
 }): MealProbeOrchestration | null {
-  if (!input.probe || input.probe.experienceMode !== "STRENGTHEN" || !input.step) {
+  if (
+    !input.probe ||
+    (input.probe.experienceMode !== "STRENGTHEN" &&
+      input.probe.experienceMode !== "BUILD") ||
+    !input.step
+  ) {
     return input.probe;
   }
   const next = supportExposuresForStrengthenStep({
@@ -1644,11 +1786,20 @@ function recordSupportExposureOnProbe(input: {
   };
 }
 
-function completeStrengthenAfterEvidence(input: {
+function completeExperienceAfterEvidence(input: {
   probe: MealProbeOrchestration | null;
   plan: LearningExperiencePlan;
 }): MealProbeOrchestration | { screen: ContextLabCurrentScreen } | null {
-  if (!input.probe || input.probe.experienceMode !== "STRENGTHEN") {
+  if (!input.probe) {
+    return input.probe;
+  }
+  if (input.probe.experienceMode === "BUILD") {
+    return completeBuildAfterEvidence({
+      probe: input.probe,
+      plan: input.plan,
+    });
+  }
+  if (input.probe.experienceMode !== "STRENGTHEN") {
     return input.probe;
   }
   const queue = requireStrengthenQueue(input.probe);
@@ -1685,7 +1836,47 @@ function completeStrengthenAfterEvidence(input: {
   };
 }
 
-function strengthenRecordedCopy(
+function completeBuildAfterEvidence(input: {
+  probe: MealProbeOrchestration;
+  plan: LearningExperiencePlan;
+}): MealProbeOrchestration | { screen: ContextLabCurrentScreen } {
+  const queue = requireBuildQueue(input.probe);
+  if (!queue.ok) {
+    return {
+      screen: errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: false,
+        detail: queue.reason,
+      }),
+    };
+  }
+  const profile = mealBuildProfileForTarget(
+    input.plan.targets[0]?.sense ?? { lexemeId: "", senseId: "" },
+  );
+  if (!profile) {
+    return {
+      screen: errorScreen(CONTEXT_LAB_ERROR_CODES.PLANNER_FAILURE, {
+        detail: "MEAL_TARGET_PROFILE_UNRESOLVED",
+      }),
+    };
+  }
+  const marked = markBuildQueueItemCompleted(queue.queue, profile.target);
+  if (!marked.ok) {
+    return {
+      screen: errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: false,
+        detail: marked.reason,
+      }),
+    };
+  }
+  const remaining = currentBuildQueueItem(marked.queue);
+  return {
+    ...input.probe,
+    phase: remaining ? "BUILD_ITEM_RECORDED" : "BUILD_QUEUE_COMPLETED",
+    buildQueue: marked.queue,
+  };
+}
+
+function experienceRecordedCopy(
   probe: MealProbeOrchestration | null,
   run: ExperienceRun,
 ): {
@@ -1694,7 +1885,34 @@ function strengthenRecordedCopy(
   continueLabel?: string;
   queueCompleteMessage?: string;
 } {
-  if (!probe || probe.experienceMode !== "STRENGTHEN") {
+  if (!probe) {
+    return {};
+  }
+  if (probe.experienceMode === "BUILD") {
+    const completed = probe.buildQueue?.completed.at(-1);
+    const profile = completed
+      ? mealBuildProfileForTarget(completed)
+      : buildProfileForRun(run);
+    const remaining = probe.buildQueue
+      ? currentBuildQueueItem(probe.buildQueue)
+      : null;
+    const otherAvailable = remainingStrengthenCount(probe) > 0;
+    return {
+      recordedMessage: profile
+        ? `“${profile.displayLabel}”的这次建立已记录。`
+        : CONTEXT_LAB_BUILD_QUEUE_COMPLETE_MESSAGE,
+      continueAvailable: remaining !== null || otherAvailable,
+      continueLabel: remaining
+        ? CONTEXT_LAB_BUILD_NEXT_LABEL
+        : otherAvailable
+          ? CONTEXT_LAB_RETURN_TO_SUMMARY_LABEL
+          : undefined,
+      queueCompleteMessage: remaining
+        ? undefined
+        : CONTEXT_LAB_BUILD_QUEUE_COMPLETE_MESSAGE,
+    };
+  }
+  if (probe.experienceMode !== "STRENGTHEN") {
     return {};
   }
   const completed = probe.strengthenQueue?.completed.at(-1);
@@ -1704,26 +1922,62 @@ function strengthenRecordedCopy(
   const remaining = probe.strengthenQueue
     ? currentStrengthenQueueItem(probe.strengthenQueue)
     : null;
+  const otherAvailable = remainingBuildCount(probe) > 0;
   return {
     recordedMessage: profile
       ? `“${profile.displayLabel}”的这次强化已记录。`
       : CONTEXT_LAB_STRENGTHEN_QUEUE_COMPLETE_MESSAGE,
-    continueAvailable: remaining !== null,
-    continueLabel: remaining ? CONTEXT_LAB_STRENGTHEN_NEXT_LABEL : undefined,
+    continueAvailable: remaining !== null || otherAvailable,
+    continueLabel: remaining
+      ? CONTEXT_LAB_STRENGTHEN_NEXT_LABEL
+      : otherAvailable
+        ? CONTEXT_LAB_RETURN_TO_SUMMARY_LABEL
+        : undefined,
     queueCompleteMessage: remaining
       ? undefined
       : CONTEXT_LAB_STRENGTHEN_QUEUE_COMPLETE_MESSAGE,
   };
 }
 
-function isEligibleStrengthenResult(
-  result: Parameters<typeof isActiveRecallStrengthenEligible>[0],
-): boolean {
-  return isActiveRecallStrengthenEligible({
-    target: result.target,
-    disposition: result.disposition,
-    observations: result.observations,
-  });
+function rejectMisalignedQueue(
+  record: ContextLabRunRecord,
+): ContextLabCurrentScreen | null {
+  const probe = record.probe;
+  if (!probe) {
+    return null;
+  }
+  const planId = record.experienceRun.planSnapshot.plan.id;
+  if (probe.phase === "BUILD_HANDOFF") {
+    const queue = requireBuildQueue(probe);
+    if (!queue.ok) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: false,
+        detail: queue.reason,
+      });
+    }
+    if (queue.queue.currentPlanId !== planId) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: false,
+        detail: "BUILD_QUEUE_PLAN_MISMATCH",
+      });
+    }
+  }
+  if (probe.phase === "STRENGTHEN_HANDOFF") {
+    const queue = requireStrengthenQueue(probe);
+    if (!queue.ok) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: false,
+        detail: queue.reason,
+      });
+    }
+    if (queue.queue.currentPlanId !== planId) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_ACK_REJECTED, {
+        recoverable: false,
+        detail: "STRENGTHEN_QUEUE_PLAN_MISMATCH",
+      });
+    }
+  }
+  return null;
 }
 
 function rejectMalformedContinue(input: {

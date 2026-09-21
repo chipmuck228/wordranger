@@ -25,10 +25,13 @@ import {
   type PublicProbeRoutingItem,
 } from "@/components/context-lab/types";
 import type { ContextualProbeSkill } from "@/contextual-learning/candidate-v0/probe/types";
+import type { MealLexicalBuildProfile } from "@/contextual-learning/candidate-v0/build/types";
 import type { MealLexicalStrengthenProfile } from "@/contextual-learning/candidate-v0/strengthen/types";
 import { spellingCueFromDisplayForm } from "@/contextual-learning/candidate-v0/strengthen/spelling-cue";
 import { errorScreen } from "./context-lab-errors";
 import {
+  buildTitleFor,
+  buildVerifyInstruction,
   contrastCaptionFor,
   frozenPreviewInstruction,
   guidedInstructionFor,
@@ -49,6 +52,7 @@ export function presentGuidedScreen(input: {
   planMode?: "BUILD" | "STRENGTHEN";
   supportReveal?: PublicContextPresentation["supportReveal"];
   strengthenProfile?: MealLexicalStrengthenProfile | null;
+  buildProfile?: MealLexicalBuildProfile | null;
 }): ContextLabCurrentScreen {
   const context = presentGuidedContext(input.activity, input.resolvedContext);
   if ("error" in context) {
@@ -92,14 +96,45 @@ export function presentGuidedScreen(input: {
       acknowledgeLabel: strengthenPhase === "FADE" ? "试着自己写" : "继续",
     };
   }
+  if (input.planMode === "BUILD") {
+    const profile = input.buildProfile;
+    if (!profile) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION);
+    }
+    const buildPhase = buildPhaseFor(input.activity.kind);
+    const supportReveal =
+      input.supportReveal ??
+      (buildPhase === "TEACH" || buildPhase === "FADE"
+        ? buildSupportReveal(profile, buildPhase)
+        : undefined);
+    if ((buildPhase === "TEACH" || buildPhase === "FADE") && !supportReveal) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION);
+    }
+    const title = buildTitleFor(profile.displayLabel);
+    return {
+      kind: "GUIDED",
+      handle: input.handle,
+      activity: input.activity,
+      context: {
+        ...context,
+        title,
+        settingLabel: `教学阶段：${title}`,
+        instruction: buildInstructionFor(profile, buildPhase),
+        highlightedEntityIds:
+          buildPhase === "GROUND" ? [profile.entityId] : context.highlightedEntityIds,
+        supportReveal,
+      },
+      progress: input.progress,
+      teachingPhase: true,
+      buildPhase,
+      acknowledgeLabel: buildPhase === "FADE" ? "试着自己写" : "继续",
+    };
+  }
   return {
     kind: "GUIDED",
     handle: input.handle,
     activity: input.activity,
-    context: {
-      ...context,
-      settingLabel: "教学阶段：建立勺子的情境记忆",
-    },
+    context,
     progress: input.progress,
     teachingPhase: true,
   };
@@ -112,8 +147,12 @@ export function presentFrozenTaskScreen(input: {
   progress: ContextLabProgress;
   planMode?: "BUILD" | "STRENGTHEN";
   strengthenProfile?: MealLexicalStrengthenProfile | null;
+  buildProfile?: MealLexicalBuildProfile | null;
 }): ContextLabCurrentScreen {
-  const context = presentFrozenContext(input.resolvedContext, input.strengthenProfile);
+  const context = presentFrozenContext(
+    input.resolvedContext,
+    input.strengthenProfile ?? input.buildProfile,
+  );
   if ("error" in context) {
     return errorScreen(context.error);
   }
@@ -138,6 +177,29 @@ export function presentFrozenTaskScreen(input: {
       progress: input.progress,
       presentationMode: "SCENE_TARGET",
       strengthenPhase: "VERIFY",
+    };
+  }
+  if (input.planMode === "BUILD") {
+    const profile = input.buildProfile;
+    if (!profile) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION);
+    }
+    const title = buildTitleFor(profile.displayLabel);
+    return {
+      kind: "FROZEN_TASK_PREVIEW",
+      handle: input.handle,
+      task: input.task,
+      context: {
+        ...context,
+        title,
+        settingLabel: `教学阶段：${title}`,
+        instruction: buildVerifyInstruction(profile.displayLabel),
+        highlightedEntityIds: [profile.entityId],
+        supportReveal: undefined,
+      },
+      progress: input.progress,
+      presentationMode: "SCENE_TARGET",
+      buildPhase: "VERIFY",
     };
   }
   return {
@@ -270,6 +332,7 @@ export function presentProbeSummaryScreen(input: {
   canHandoffToBuild: boolean;
   canHandoffToStrengthen: boolean;
   strengthenButtonLabel?: string;
+  buildButtonLabel?: string;
   pendingMessage: string | null;
 }): ContextLabCurrentScreen {
   const frameCopy = homeBreakfastFrameCopy();
@@ -288,6 +351,7 @@ export function presentProbeSummaryScreen(input: {
     canHandoffToBuild: input.canHandoffToBuild,
     canHandoffToStrengthen: input.canHandoffToStrengthen,
     strengthenButtonLabel: input.strengthenButtonLabel,
+    buildButtonLabel: input.buildButtonLabel,
     pendingMessage: input.pendingMessage,
   };
 }
@@ -397,8 +461,57 @@ export function presentFrozenContext(
     settingLabel: frameCopy.settingLabel,
     instruction: frozenPreviewInstruction(),
     entities: scene,
-    highlightedEntityIds: [strengthenProfile?.entityId ?? "home-spoon"],
+    highlightedEntityIds: strengthenProfile?.entityId
+      ? [strengthenProfile.entityId]
+      : [],
   };
+}
+
+function buildPhaseFor(
+  kind: PublicGuidedActivity["kind"],
+): "GROUND" | "CONNECT" | "TEACH" | "CONTRAST" | "FADE" {
+  if (kind === "PRESENT_CONTEXT") {
+    return "GROUND";
+  }
+  if (kind === "OBSERVE_RELATION" || kind === "CONNECT_ENTITY_AND_MEANING") {
+    return "CONNECT";
+  }
+  if (kind === "PRESENT_LEXICAL_FORM") {
+    return "TEACH";
+  }
+  if (kind === "SHOW_CONTRAST") {
+    return "CONTRAST";
+  }
+  return "FADE";
+}
+
+function buildInstructionFor(
+  profile: MealLexicalBuildProfile,
+  phase: "GROUND" | "CONNECT" | "TEACH" | "CONTRAST" | "FADE",
+): string {
+  if (phase === "GROUND") {
+    return profile.groundingInstruction;
+  }
+  if (phase === "CONNECT") {
+    return profile.connectInstruction;
+  }
+  if (phase === "TEACH") {
+    return profile.teachInstruction;
+  }
+  if (phase === "CONTRAST") {
+    return profile.contrastInstruction;
+  }
+  return profile.fadeInstruction;
+}
+
+function buildSupportReveal(
+  profile: MealLexicalBuildProfile,
+  phase: "TEACH" | "FADE",
+): PublicContextPresentation["supportReveal"] | undefined {
+  return strengthenSupportReveal(
+    profile,
+    phase === "TEACH" ? "RECONNECT_FORM" : "FADE_FORM",
+  );
 }
 
 function sceneEntities(

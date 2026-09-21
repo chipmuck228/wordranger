@@ -199,7 +199,7 @@ describe("Context Lab frozen task submission", () => {
       userId: V1_PLACEHOLDER_USER_ID,
     });
     expect(concurrentRun?.experienceRun.status).toBe("COMPLETED");
-    expect(concurrentRun?.revision).toBe(4);
+    expect(concurrentRun?.revision).toBe(6);
   });
 
   it("reconciles Evidence-success / run-CAS-failure without a second Evidence", async () => {

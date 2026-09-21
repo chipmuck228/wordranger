@@ -139,7 +139,8 @@ describe("Meal spoon active-recall STRENGTHEN", () => {
     });
     const summary = await reachSpoonStrengthenSummary(controller, learningTasks);
     expect(summary.canHandoffToStrengthen).toBe(true);
-    expect(summary.canHandoffToBuild).toBe(false);
+    expect(summary.canHandoffToBuild).toBe(true);
+    expect(summary.buildButtonLabel).toBe("开始建立 3 个词");
     const reconnect = await controller.continueProbe({
       runId: summary.handle.runId,
       revision: summary.handle.revision,
@@ -329,6 +330,7 @@ describe("Meal spoon active-recall STRENGTHEN", () => {
     });
     assertKind(teaching, "GUIDED");
     expect(teaching.context.settingLabel).toContain("教学阶段");
+    expect(teaching.context.title).toBe("建立汤的情境记忆");
     const stored = await repository.get({
       runId: teaching.handle.runId,
       userId: V1_PLACEHOLDER_USER_ID,
@@ -338,19 +340,14 @@ describe("Meal spoon active-recall STRENGTHEN", () => {
     expect(stored?.experienceRun.planSnapshot.plan.mode).toBe("BUILD");
 
     let current: ContextLabCurrentScreen = teaching;
-    current = await controller.acknowledge({
-      runId: teaching.handle.runId,
-      revision: teaching.handle.revision,
-      activityId: teaching.activity.id,
-    });
-    assertKind(current, "GUIDED");
-    const second = current;
-    current = await controller.acknowledge({
-      runId: second.handle.runId,
-      revision: second.handle.revision,
-      activityId: second.activity.id,
-    });
-    assertKind(current, "GUIDED");
+    for (let index = 0; index < 4; index += 1) {
+      current = await controller.acknowledge({
+        runId: current.handle.runId,
+        revision: current.handle.revision,
+        activityId: current.kind === "GUIDED" ? current.activity.id : "",
+      });
+      assertKind(current, "GUIDED");
+    }
     const preview = await controller.acknowledge({
       runId: current.handle.runId,
       revision: current.handle.revision,
@@ -358,10 +355,10 @@ describe("Meal spoon active-recall STRENGTHEN", () => {
     });
     assertKind(preview, "FROZEN_TASK_PREVIEW");
     const before = learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length;
-    const recorded = await submitTyping(controller, preview, "spoon");
+    const recorded = await submitTyping(controller, preview, "soup");
     assertKind(recorded, "FROZEN_TASK_RECORDED");
     expect(recorded.feedback.status).toBe("CORRECT");
-    expect(recorded.recordedMessage).toBe("这次练习已记录。");
+    expect(recorded.recordedMessage).toBe("“汤”的这次建立已记录。");
     const buildEvidence = learning
       .listEvidenceForUser(V1_PLACEHOLDER_USER_ID)
       .find((item) => item.taskId === preview.task.id);
@@ -509,7 +506,7 @@ describe("Meal four-target active-recall STRENGTHEN", () => {
       const recognition = FOUR_TARGETS.map((item) => item.lemma === target.lemma);
       const summary = await reachSummary(controller, learningTasks, recognition);
       expect(summary.canHandoffToStrengthen).toBe(true);
-      expect(summary.strengthenButtonLabel).toBe("开始需要的强化");
+      expect(summary.strengthenButtonLabel).toBe("开始强化 1 个词");
       const reconnect = await controller.continueProbe({
         runId: summary.handle.runId,
         revision: summary.handle.revision,
@@ -551,7 +548,8 @@ describe("Meal four-target active-recall STRENGTHEN", () => {
     expect(summary.canHandoffToBuild).toBe(true);
     expect(summary.items[1]?.capabilityNote).toBeUndefined();
     expect(summary.items[2]?.capabilityNote).toBeUndefined();
-    expect(summary.items[3]?.capabilityNote).toBe("建立记忆体验尚未实现");
+    expect(summary.items[3]?.capabilityNote).toBeUndefined();
+    expect(summary.buildButtonLabel).toBe("开始建立 2 个词");
     const skipped = await controller.continueProbe({
       runId: summary.handle.runId,
       revision: summary.handle.revision,
@@ -595,7 +593,8 @@ describe("Meal four-target active-recall STRENGTHEN", () => {
     const second = await walkStrengthenItem(controller, bowl, "bowl");
     assertKind(second.recorded, "FROZEN_TASK_RECORDED");
     expect(second.recorded.queueCompleteMessage).toBe("本次需要强化的词已经完成。");
-    expect(second.recorded.continueAvailable).toBe(false);
+    expect(second.recorded.continueAvailable).toBe(true);
+    expect(second.recorded.continueLabel).toBe("回到这次检查");
     expect(second.verify.task.lexemeId).toBe(FOUR_TARGETS[1].lexemeId);
     expect(
       learning
@@ -620,7 +619,9 @@ describe("Meal four-target active-recall STRENGTHEN", () => {
       runId: second.recorded.handle.runId,
       revision: second.recorded.handle.revision,
     });
-    expect(afterDone.kind).toBe("ERROR");
+    assertKind(afterDone, "PROBE_SUMMARY");
+    expect(afterDone.canHandoffToStrengthen).toBe(false);
+    expect(afterDone.canHandoffToBuild).toBe(true);
   });
 
   it("keeps mixed BUILD and STRENGTHEN as separate operations", async () => {
@@ -637,13 +638,16 @@ describe("Meal four-target active-recall STRENGTHEN", () => {
     expect(summary.canHandoffToBuild).toBe(true);
     expect(summary.items[0]?.summary).toBe("加强记忆连接");
     expect(summary.items[2]?.summary).toBe("建立情境记忆");
-    expect(summary.items[1]?.capabilityNote).toBe("建立记忆体验尚未实现");
+    expect(summary.items[1]?.capabilityNote).toBeUndefined();
+    expect(summary.buildButtonLabel).toBe("开始建立 3 个词");
+    expect(summary.strengthenButtonLabel).toBe("开始强化 1 个词");
     const build = await controller.continueProbe({
       runId: summary.handle.runId,
       revision: summary.handle.revision,
       intent: "START_BUILD",
     });
     assertKind(build, "GUIDED");
+    expect(build.context.title).toBe("建立碗的情境记忆");
     expect(build.context.settingLabel).toContain("教学阶段");
   });
 });

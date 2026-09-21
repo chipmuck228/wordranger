@@ -83,7 +83,7 @@ export async function acknowledgeUntilFrozen(
   startScreen?: ContextLabCurrentScreen,
 ) {
   let screen = startScreen ?? (await controller.start());
-  for (let index = 0; index < 3; index += 1) {
+  for (let index = 0; index < 5; index += 1) {
     assertGuided(screen);
     screen = await controller.acknowledge({
       runId: screen.handle.runId,

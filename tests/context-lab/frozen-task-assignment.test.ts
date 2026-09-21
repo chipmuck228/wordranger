@@ -35,7 +35,7 @@ describe("Context Lab frozen task assignment", () => {
       runId: screen.handle.runId,
       userId: V1_PLACEHOLDER_USER_ID,
     });
-    const step = stored?.experienceRun.planSnapshot.plan.steps[3];
+    const step = stored?.experienceRun.planSnapshot.plan.steps[5];
     expect(step).toBeDefined();
     expect(screen.task.id).toBe(
       contextLabFrozenTaskId(screen.handle.runId, step!.id),
@@ -80,7 +80,7 @@ describe("Context Lab frozen task assignment", () => {
   it("rejects a conflicting existing assignment", async () => {
     const harness = createMealLabHarness();
     let screen = await harness.controller.start();
-    for (let index = 0; index < 2; index += 1) {
+    for (let index = 0; index < 4; index += 1) {
       assertGuided(screen);
       screen = await harness.controller.acknowledge({
         runId: screen.handle.runId,
@@ -93,7 +93,7 @@ describe("Context Lab frozen task assignment", () => {
       runId: screen.handle.runId,
       userId: V1_PLACEHOLDER_USER_ID,
     });
-    const step = stored!.experienceRun.planSnapshot.plan.steps[3];
+    const step = stored!.experienceRun.planSnapshot.plan.steps[5];
     const taskId = contextLabFrozenTaskId(screen.handle.runId, step.id);
     const donor = createMealLabHarness();
     const donorScreen = await acknowledgeUntilFrozen(donor.controller);
@@ -129,7 +129,7 @@ describe("Context Lab frozen task assignment", () => {
   it("concurrent final acknowledgements expose only the winning assigned task", async () => {
     const harness = createMealLabHarness();
     let screen = await harness.controller.start();
-    for (let index = 0; index < 2; index += 1) {
+    for (let index = 0; index < 4; index += 1) {
       assertGuided(screen);
       screen = await harness.controller.acknowledge({
         runId: screen.handle.runId,

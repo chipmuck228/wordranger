@@ -11,7 +11,7 @@ async function acknowledgeUntilPreview(
   harness: ReturnType<typeof createMealLabHarness>,
 ) {
   let screenState = await harness.controller.start();
-  for (let index = 0; index < 3; index += 1) {
+  for (let index = 0; index < 5; index += 1) {
     if (screenState.kind !== "GUIDED") {
       throw new Error("guided");
     }
@@ -28,6 +28,7 @@ async function acknowledgeUntilPreview(
 }
 
 beforeEach(() => {
+  window.sessionStorage.clear();
   window.matchMedia = (query: string) =>
     ({
       matches: query.includes("prefers-reduced-motion"),
@@ -58,7 +59,7 @@ describe("Context Lab client presentation", () => {
   it("initially displays only the current server screen", async () => {
     await renderStarted();
     expect(screen.getByText("汤")).toBeTruthy();
-    expect(screen.getByText("1 / 4")).toBeTruthy();
+    expect(screen.getByText("1 / 6")).toBeTruthy();
     expect(screen.queryByText("勺子 → 适合舀汤")).toBeNull();
     expect(screen.getByText("Context Lab · Experimental")).toBeTruthy();
   });
@@ -83,7 +84,7 @@ describe("Context Lab client presentation", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "继续" }));
-    expect(screen.getByText("1 / 4")).toBeTruthy();
+    expect(screen.getByText("1 / 6")).toBeTruthy();
     expect(acknowledge).toHaveBeenCalledTimes(1);
     if (initialScreen.kind !== "GUIDED") {
       throw new Error("guided");
@@ -100,7 +101,7 @@ describe("Context Lab client presentation", () => {
         activityId: initialScreen.activity.id,
       }),
     );
-    expect(await screen.findByText("2 / 4")).toBeTruthy();
+    expect(await screen.findByText("2 / 6")).toBeTruthy();
   });
 
   it("server failure leaves the current screen visible", async () => {
@@ -117,7 +118,7 @@ describe("Context Lab client presentation", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("1 / 4")).toBeTruthy();
+    expect(await screen.findByText("1 / 6")).toBeTruthy();
     expect(screen.getByText("汤")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toMatch(/暂时没能继续|请再试/);
   });
@@ -143,7 +144,7 @@ describe("Context Lab client presentation", () => {
           }
           return {
             ...initialScreen,
-            progress: { current: 2, total: 4 },
+            progress: { current: 2, total: 6 },
             context: {
               ...initialScreen.context,
               relationCaption: "勺子 → 适合舀汤",
@@ -153,7 +154,7 @@ describe("Context Lab client presentation", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("2 / 4")).toBeTruthy();
+    expect(await screen.findByText("2 / 6")).toBeTruthy();
     expect(screen.getByText("勺子 → 适合舀汤")).toBeTruthy();
   });
 
@@ -198,9 +199,9 @@ describe("Context Lab client presentation", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("2 / 4")).toBeTruthy();
+    expect(await screen.findByText("2 / 6")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "重新体验" }));
-    expect(await screen.findByText("1 / 4")).toBeTruthy();
+    expect(await screen.findByText("1 / 6")).toBeTruthy();
     expect(restart).toHaveBeenCalledTimes(1);
     expect(screen.getByText("桌上有汤、碗、勺子和叉子。先看看这些物品。")).toBeTruthy();
   });
@@ -211,19 +212,16 @@ describe("Context Lab client presentation", () => {
     if (screenState.kind !== "GUIDED") {
       throw new Error("guided");
     }
-    screenState = await harness.controller.acknowledge({
-      runId: screenState.handle.runId,
-      revision: screenState.handle.revision,
-      activityId: screenState.activity.id,
-    });
-    if (screenState.kind !== "GUIDED") {
-      throw new Error("guided");
+    for (let index = 0; index < 4; index += 1) {
+      if (screenState.kind !== "GUIDED") {
+        throw new Error("guided");
+      }
+      screenState = await harness.controller.acknowledge({
+        runId: screenState.handle.runId,
+        revision: screenState.handle.revision,
+        activityId: screenState.activity.id,
+      });
     }
-    screenState = await harness.controller.acknowledge({
-      runId: screenState.handle.runId,
-      revision: screenState.handle.revision,
-      activityId: screenState.activity.id,
-    });
     if (screenState.kind !== "GUIDED") {
       throw new Error("guided");
     }
@@ -312,7 +310,7 @@ describe("Context Lab client presentation", () => {
     await user.click(screen.getByRole("button", { name: "提交" }));
     expect(await screen.findByText("这次练习已记录。")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "重新体验" }));
-    expect(await screen.findByText("1 / 4")).toBeTruthy();
+    expect(await screen.findByText("1 / 6")).toBeTruthy();
   });
 
   it("step 2 highlights only grounded entities", async () => {

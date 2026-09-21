@@ -362,7 +362,7 @@ describe("Meal cold Probe orchestration", () => {
     screen = await continueFrom(controller, screen);
     assertKind(screen, "PROBE_SUMMARY");
     expect(screen.items[2]?.summary).toBe("加强记忆连接");
-    expect(screen.canHandoffToBuild).toBe(false);
+    expect(screen.canHandoffToBuild).toBe(true);
     expect(screen.canHandoffToStrengthen).toBe(true);
     expect(screen.pendingMessage).toBeNull();
     const strengthen = await controller.continueProbe({
@@ -402,7 +402,7 @@ describe("Meal cold Probe orchestration", () => {
   it("keeps BUILD recorded feedback for the teaching path", async () => {
     const { controller } = createMealLabHarness({ beginAt: "BUILD" });
     let screen: ContextLabCurrentScreen = await controller.start();
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       if (screen.kind !== "GUIDED") {
         throw new Error("guided");
       }
