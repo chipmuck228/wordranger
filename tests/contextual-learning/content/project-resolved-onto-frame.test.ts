@@ -71,4 +71,27 @@ describe("Meal resolved-content projection", () => {
     };
     expect(projectResolvedMealContentOntoFrame(snapshot!, reversedContains)).toBeNull();
   });
+
+  it("fails closed when the destination frame has ambiguous duplicate facts", () => {
+    const snapshot = snapshotSceneContentFromPack(
+      MEAL_SCENE_CONTENT_PACK,
+      homeBreakfastFrame.id,
+    );
+    expect(snapshot).not.toBeNull();
+    const original = restaurantMealFrame.initialFacts.find(
+      (fact) => fact.id === "rest-fact-contains-bowl-soup",
+    );
+    expect(original).toBeDefined();
+    const ambiguous = {
+      ...restaurantMealFrame,
+      initialFacts: [
+        ...restaurantMealFrame.initialFacts,
+        {
+          ...original!,
+          id: "rest-fact-contains-bowl-soup-duplicate",
+        },
+      ],
+    };
+    expect(projectResolvedMealContentOntoFrame(snapshot!, ambiguous)).toBeNull();
+  });
 });

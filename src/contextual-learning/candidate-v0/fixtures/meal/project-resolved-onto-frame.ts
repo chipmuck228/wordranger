@@ -4,9 +4,10 @@
  * lookup; they consume already-bound entity IDs.
  *
  * Facts are not rewritten by entity-ID substitution. The destination
- * frame must already contain a fact with the same predicate and the
- * same ordered arguments after entity remapping. The destination
- * factId is taken from that matched runtime fact.
+ * frame must already contain exactly one fact with the same predicate
+ * and the same ordered arguments after entity remapping. Zero or
+ * multiple matches fail closed. The destination factId is taken from
+ * that unique runtime fact.
  */
 
 import { sameAuthoredAndFrameFactArgs } from "../../content/fact-args";
@@ -174,11 +175,10 @@ function matchDestinationFact(
   predicate: string,
   args: readonly ContextualFactArgument[],
 ): SemanticFact | null {
-  return (
-    frame.initialFacts.find(
-      (fact) =>
-        fact.predicate === predicate &&
-        sameAuthoredAndFrameFactArgs(args, fact.arguments),
-    ) ?? null
+  const matches = frame.initialFacts.filter(
+    (fact) =>
+      fact.predicate === predicate &&
+      sameAuthoredAndFrameFactArgs(args, fact.arguments),
   );
+  return matches.length === 1 ? matches[0]! : null;
 }
