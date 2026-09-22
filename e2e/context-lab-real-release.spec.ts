@@ -231,6 +231,7 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
     await page.getByRole("button", { name: "继续" }).click();
     await expect(page.locator('[data-build-phase="FADE"]')).toBeVisible();
     await expect(page.getByLabel("拼写提示")).toHaveText(PROBE_TARGETS[6]!.cue);
+    await capture(page, "1440x900-knife-fade-cue");
     await page.getByRole("button", { name: "试着自己写" }).click();
     await expect(page.getByLabel("英文答案")).toBeVisible();
     await capture(page, "1440x900-07-knife-frozen-verify");
@@ -371,6 +372,9 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
       await assertNoOverflow(page);
       await capture(page, `${viewport.name}-05-knife-build-contrast`);
       await page.getByRole("button", { name: "继续" }).click();
+      await expect(page.locator('[data-build-phase="FADE"]')).toBeVisible();
+      await expect(page.getByLabel("拼写提示")).toHaveText("k _ _ _ _");
+      await capture(page, `${viewport.name}-knife-fade-cue`);
       await page.getByRole("button", { name: "试着自己写" }).click();
       await assertPrimaryButtonVisible(page, "提交");
       await capture(page, `${viewport.name}-07-frozen-verify`);
