@@ -16,10 +16,10 @@ import {
   type ReleaseValidationIssue,
 } from "@/contextual-learning/candidate-v0/release";
 import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
-import type { ContentReviewRepository } from "@/server/contextual-content-review/content-review-repository";
 import { fileContentReviewRepository } from "@/server/contextual-content-review/file-content-review-repository";
-import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
-import { buildMealMigrationAuthority } from "./authority";
+import type { SceneLexemeLoader } from "@/contextual-learning/candidate-v0/content/types";
+import type { RuntimeCapability } from "@/contextual-learning/candidate-v0/domain/types";
+import { buildMealMigrationAuthority, uniquePackTargets, type ReleaseAssemblyOptions } from "./authority";
 
 function issue(
   code: ReleaseValidationIssue["code"],
@@ -45,9 +45,26 @@ export function releaseContainsForbiddenLearnerData(
   );
 }
 
-function evaluateSnapshotIntegrity(manifest: ContextualContentReleaseManifest): ReleaseValidationIssue[] {
+function evaluateSnapshotIntegrity(
+  manifest: ContextualContentReleaseManifest,
+  loadLexeme: SceneLexemeLoader = bundledSceneLexemeLoader,
+  capabilities?: readonly RuntimeCapability[],
+): ReleaseValidationIssue[] {
   const issues: ReleaseValidationIssue[] = [];
   issues.push(...validateDraftRelease(manifest).issues);
+  const uniqueTargets = uniquePackTargets(manifest.packSnapshot);
+  if (uniqueTargets.length < 1) {
+    issues.push(issue("RELEASE_PACK_MISMATCH", "targetEntries", "A release must contain at least one unique pack target."));
+  }
+  if (manifest.targetEntries.length !== uniqueTargets.length) {
+    issues.push(
+      issue(
+        "RELEASE_PACK_MISMATCH",
+        "targetEntries",
+        "targetEntries count must equal the unique target count in the source pack.",
+      ),
+    );
+  }
   const computed = fingerprintsForManifest(manifest);
   if (computed.releaseFingerprint !== manifest.releaseFingerprint) {
     issues.push(
@@ -90,7 +107,7 @@ function evaluateSnapshotIntegrity(manifest: ContextualContentReleaseManifest): 
       frames: authoredFrames(manifest),
       skeleton: manifest.contextSnapshot.skeleton,
       cluster: MEAL_SCENE_CLUSTER,
-      loadLexeme: bundledSceneLexemeLoader,
+      loadLexeme,
     });
     if (!packCheck.ok) {
       issues.push(issue("RELEASE_PACK_INVALID", frame.id, "Pack validator failed."));
@@ -99,6 +116,7 @@ function evaluateSnapshotIntegrity(manifest: ContextualContentReleaseManifest): 
   issues.push(
     ...validateMealReleaseCapabilities({
       targets: manifest.targetEntries.map((entry) => entry.target),
+      capabilities,
     }).issues,
   );
   if (releaseContainsForbiddenLearnerData(manifest)) {
@@ -197,16 +215,25 @@ export function evaluateHistoricalApprovalBindings(
   return issues;
 }
 
-export async function evaluatePublishReadiness(input: {
-  existing: ContextualContentReleaseManifest;
-  reviewRepository?: ContentReviewRepository;
-  pack?: ContextualSceneContentPack;
-}): Promise<ReleaseValidationIssue[]> {
-  const issues = evaluateSnapshotIntegrity(input.existing);
+export async function evaluatePublishReadiness(
+  input: ReleaseAssemblyOptions & {
+    existing: ContextualContentReleaseManifest;
+  },
+): Promise<ReleaseValidationIssue[]> {
+  const loadLexeme = input.loadLexeme ?? bundledSceneLexemeLoader;
+  const issues = evaluateSnapshotIntegrity(input.existing, loadLexeme, input.capabilities);
   issues.push(...evaluateHistoricalApprovalBindings(input.existing));
   const authority = await buildMealMigrationAuthority({
     reviewRepository: input.reviewRepository ?? fileContentReviewRepository,
+    loadLexeme,
     pack: input.pack,
+    registry: input.registry,
+    extraApprovalSources: input.extraApprovalSources,
+    extraPacks: input.extraPacks,
+    extraReviewTargets: input.extraReviewTargets,
+    context: input.context,
+    parentPackId: input.parentPackId,
+    capabilities: input.capabilities,
   });
   issues.push(...authority.issues);
   if (input.existing.packSnapshot.id !== authority.livePack.id) {

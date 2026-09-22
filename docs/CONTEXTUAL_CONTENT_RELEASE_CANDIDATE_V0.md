@@ -165,3 +165,22 @@ Flags:
 Allowed actions: create Draft, Preflight, Publish, pointer rollback, refresh, discard local Draft.
 
 The page must state that this is Experimental Context Lab content publishing and does not publish to `/train`. ACTIVE is shown only from the pointer, never inferred from `PUBLISHED`.
+
+Create Draft does not accept a client `packId`, target list, approval records, or fingerprints. The server selects the unique `RELEASE_ELIGIBLE` Meal Candidate pack or fails closed.
+
+The page shows that pack's id, parent pack id, target / legacy / human-approved / unresolved / stale-review counts, lineage result, and eligibility result. Unresolved, stale, or ambiguous approval state disables Create Draft. There is no bypass.
+
+## 7. Phase 3 — data-driven assembly
+
+Release authority iterates the selected source pack's targets and looks up exactly one approval source per target.
+
+- Zero matches or more than one match fail closed. The whole draft is refused.
+- Approval-registry targets that are not in the pack are diagnostics only. They do not enter the release.
+- Target order comes from validated scene membership, not from the source-array order.
+- Legacy approval is derived from the grandfathered baseline pack identity and fingerprints, not from a copied lemma list.
+- Human approval is resolved by review key, pack id, LexemeSenseRef, revision, and matching fingerprints. A stale inherited review cannot be reused.
+- `targetEntries.length` must equal the unique target count in the source pack and must be at least 1. The current six-word Meal release is one instance of this rule, not a special case.
+- Cumulative packs must declare a parent. Silent target removal is unsupported and fail-closed (`RELEASE_REMOVAL_UNSUPPORTED`).
+- Multiple `RELEASE_ELIGIBLE` packs without a unique selection rule fail closed.
+
+This remains Candidate V0 / Experimental. It is not Standard and is not wired to `/train`.

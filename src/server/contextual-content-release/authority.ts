@@ -5,35 +5,40 @@ import {
   experimentalMealContextLabPack,
   listSceneContentRegistry,
   MEAL_SCENE_CONTENT_PACK,
-  MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
-  MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET,
-  MEAL_SCENE_EXPANSION_BATCH_01_PACK,
-  MEAL_SCENE_EXPANSION_BATCH_02_PACK,
-  MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
-  MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
   registryEntryFor,
   selectBundledMeaningGloss,
   validateExperimentPromotion,
   MEAL_LEGACY_EXPERIMENT_BASELINE,
 } from "@/contextual-learning/candidate-v0/content";
 import type { CommittedPromotionArtifacts } from "@/contextual-learning/candidate-v0/content";
-import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
+import type {
+  ContextualSceneContentPack,
+  ContextualSceneContentRegistryEntry,
+} from "@/contextual-learning/candidate-v0/content/types";
 import { sameLexemeSense } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
-import type { LexemeSenseRef } from "@/contextual-learning/candidate-v0/domain/types";
+import type { LexemeSenseRef, RuntimeCapability } from "@/contextual-learning/candidate-v0/domain/types";
 import { MEAL_SCENE_CLUSTER } from "@/contextual-learning/candidate-v0/memory-routing/scene-catalog";
 import {
   mealRuntimeContextIdForPack,
   resolveMealRuntimeContext,
 } from "@/contextual-learning/candidate-v0/planning/meal-runtime-context";
 import {
+  deriveHumanApprovalSources,
+  deriveLegacyApprovalSources,
+  findUniqueApprovalSource,
   fingerprintAuthoredPackSnapshot,
   fingerprintContextModel,
   fingerprintReleaseSnapshot,
   MEAL_MIGRATION_RELEASE_ID,
   MEAL_RELEASE_SCENE_ID,
+  resolveReleaseEligiblePack,
+  unusedApprovalSources,
+  validateCumulativePackLineage,
   validateHumanReviewedTargetAuthority,
   validateLegacyTargetAuthority,
   type ContextualContentReleaseManifest,
+  type ReleaseApprovalSource,
+  type ReleaseContextSnapshot,
   type ReleaseSnapshot,
   type ReleaseTargetEntry,
   type ReleaseValidationIssue,
@@ -48,15 +53,23 @@ import type { SceneLexemeLoader } from "@/contextual-learning/candidate-v0/conte
 import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import { RELEASE_ACTOR_ID } from "./types";
 
-const LEGACY_TARGETS: readonly {
-  lemma: "soup" | "bowl" | "spoon" | "fork";
-  reviewKey: string;
-}[] = [
-  { lemma: "soup", reviewKey: "legacy-meal-baseline-soup" },
-  { lemma: "bowl", reviewKey: "legacy-meal-baseline-bowl" },
-  { lemma: "spoon", reviewKey: "legacy-meal-baseline-spoon" },
-  { lemma: "fork", reviewKey: "legacy-meal-baseline-fork" },
-];
+export interface ReleaseAssemblyOptions {
+  reviewRepository?: ContentReviewRepository;
+  loadLexeme?: SceneLexemeLoader;
+  pack?: ContextualSceneContentPack;
+  registry?: readonly ContextualSceneContentRegistryEntry[];
+  extraApprovalSources?: readonly ReleaseApprovalSource[];
+  extraPacks?: readonly ContextualSceneContentPack[];
+  extraReviewTargets?: readonly {
+    reviewKey: string;
+    packId: string;
+    target: LexemeSenseRef;
+    sourceRefs: readonly string[];
+  }[];
+  context?: ReleaseContextSnapshot;
+  parentPackId?: string | null;
+  capabilities?: readonly RuntimeCapability[];
+}
 
 export interface ReleaseAuthority {
   snapshot: ReleaseSnapshot;
@@ -64,6 +77,8 @@ export interface ReleaseAuthority {
   targetEntries: ReleaseTargetEntry[];
   historicalApprovalBindings: HistoricalReleaseApprovalBinding[];
   issues: ReleaseValidationIssue[];
+  approvalSources: ReleaseApprovalSource[];
+  unusedSources: ReleaseApprovalSource[];
 }
 
 function issue(
@@ -72,6 +87,20 @@ function issue(
   detail: string,
 ): ReleaseValidationIssue {
   return { code, path: pathName, detail };
+}
+
+export function uniquePackTargets(pack: ContextualSceneContentPack): LexemeSenseRef[] {
+  const seen = new Set<string>();
+  const targets: LexemeSenseRef[] = [];
+  for (const lexeme of pack.lexemes) {
+    const key = `${lexeme.target.lexemeId}::${lexeme.target.senseId}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    targets.push(lexeme.target);
+  }
+  return targets;
 }
 
 function sceneOrder(pack: ContextualSceneContentPack, target: LexemeSenseRef): number {
@@ -122,29 +151,97 @@ function loadPromotionArtifacts(reviewKey: string): CommittedPromotionArtifacts 
   };
 }
 
+export function productionApprovalSources(input?: {
+  extraReviewTargets?: ReleaseAssemblyOptions["extraReviewTargets"];
+}): ReleaseApprovalSource[] {
+  return [
+    ...deriveLegacyApprovalSources({
+      sceneId: MEAL_RELEASE_SCENE_ID,
+      baselinePack: MEAL_SCENE_CONTENT_PACK,
+      baselinePackId: MEAL_LEGACY_EXPERIMENT_BASELINE.packId,
+    }),
+    ...deriveHumanApprovalSources({
+      sceneId: MEAL_RELEASE_SCENE_ID,
+      reviewTargets: [
+        ...CONTENT_REVIEW_TARGETS.map((item) => ({
+          reviewKey: item.reviewKey,
+          packId: item.packId,
+          target: item.target,
+          sourceRefs: item.sourceRefs,
+        })),
+        ...(input?.extraReviewTargets ?? []),
+      ],
+    }),
+  ];
+}
+
+function packById(
+  packId: string,
+  registry: readonly ContextualSceneContentRegistryEntry[],
+  extraPacks: readonly ContextualSceneContentPack[],
+): ContextualSceneContentPack | null {
+  const extras = extraPacks.filter((pack) => pack.id === packId);
+  if (extras.length === 1) {
+    return extras[0]!;
+  }
+  const fromRegistry = registry.filter((entry) => entry.packId === packId);
+  if (fromRegistry.length === 1) {
+    return fromRegistry[0]!.pack;
+  }
+  return null;
+}
+
+function resolveSnapshot(
+  pack: ContextualSceneContentPack,
+  context?: ReleaseContextSnapshot,
+): ReleaseSnapshot {
+  if (context) {
+    return {
+      pack: cloneFrozen(pack),
+      context: cloneFrozen(context),
+    };
+  }
+  const runtimeContextId = mealRuntimeContextIdForPack(pack.id);
+  const resolved = resolveMealRuntimeContext(runtimeContextId);
+  return {
+    pack: cloneFrozen(pack),
+    context: {
+      runtimeContextId: resolved.id,
+      frames: cloneFrozen(resolved.frames),
+      skeleton: cloneFrozen(resolved.skeleton),
+    },
+  };
+}
+
 function buildLegacyEntry(
   pack: ContextualSceneContentPack,
-  lemma: "soup" | "bowl" | "spoon" | "fork",
-  reviewKey: string,
+  source: ReleaseApprovalSource,
   loadLexeme: SceneLexemeLoader,
+  humanReviewKeys: readonly string[],
   issues: ReleaseValidationIssue[],
 ): ReleaseTargetEntry | null {
-  const baseline = MEAL_SCENE_CONTENT_PACK.lexemes.find(
-    (item) => item.canonicalKey === lemma || item.id === `meal-${lemma}`,
+  const baseline = MEAL_SCENE_CONTENT_PACK.lexemes.find((item) =>
+    sameLexemeSense(item.target, source.target),
   );
   if (!baseline) {
-    issues.push(issue("RELEASE_SENSE_UNRESOLVED", reviewKey, `Legacy ${lemma} is missing from the grandfathered baseline.`));
+    issues.push(
+      issue(
+        "RELEASE_SENSE_UNRESOLVED",
+        source.reviewKey,
+        "Legacy target is missing from the grandfathered baseline pack.",
+      ),
+    );
     return null;
   }
   const chain = validateLegacyTargetAuthority({
-    reviewKey,
-    lemma,
+    reviewKey: source.reviewKey,
+    lemma: baseline.canonicalKey,
     baselinePack: MEAL_SCENE_CONTENT_PACK,
     baselinePackId: MEAL_LEGACY_EXPERIMENT_BASELINE.packId,
     baselinePackFingerprint: MEAL_LEGACY_EXPERIMENT_BASELINE.contentFingerprint,
     currentPack: pack,
     target: baseline.target,
-    humanReviewKeys: CONTENT_REVIEW_TARGETS.map((item) => item.reviewKey),
+    humanReviewKeys,
   });
   issues.push(...chain.issues);
   if (!chain.ok || !chain.approvedFingerprint) {
@@ -156,11 +253,17 @@ function buildLegacyEntry(
   }
   const meaning = selectedMeaningFor(pack, snapshot.target, loadLexeme);
   if (!meaning) {
-    issues.push(issue("RELEASE_MEANING_INVALID", reviewKey, `Selected meaning for ${lemma} is not from bundled vocabulary.`));
+    issues.push(
+      issue(
+        "RELEASE_MEANING_INVALID",
+        source.reviewKey,
+        `Selected meaning for ${baseline.canonicalKey} is not from bundled vocabulary.`,
+      ),
+    );
     return null;
   }
   return {
-    reviewKey,
+    reviewKey: source.reviewKey,
     packId: pack.id,
     target: snapshot.target,
     displayLabel: snapshot.lexicalPresentation.displayLabel,
@@ -175,26 +278,22 @@ function buildLegacyEntry(
 
 async function buildHumanEntry(input: {
   pack: ContextualSceneContentPack;
-  reviewKey: string;
-  target: LexemeSenseRef;
+  source: ReleaseApprovalSource;
   reviewPack: ContextualSceneContentPack;
   reviewRepository: ContentReviewRepository;
   loadLexeme: SceneLexemeLoader;
   issues: ReleaseValidationIssue[];
 }): Promise<ReleaseTargetEntry | null> {
-  const spec = CONTENT_REVIEW_TARGETS.find((item) => item.reviewKey === input.reviewKey);
-  if (!spec) {
-    input.issues.push(issue("RELEASE_REVIEW_MISSING", input.reviewKey, "Review target is not registered."));
+  if (!sameLexemeSense(input.source.expectedTarget, input.source.target)) {
+    input.issues.push(
+      issue("RELEASE_REVIEW_INVALID", input.source.reviewKey, "Approval source target does not match its expected review identity."),
+    );
     return null;
   }
-  if (!sameLexemeSense(spec.target, input.target)) {
-    input.issues.push(issue("RELEASE_REVIEW_INVALID", input.reviewKey, "Registered review target does not match."));
-    return null;
-  }
-  const record = await input.reviewRepository.get(input.reviewKey);
+  const record = await input.reviewRepository.get(input.source.reviewKey);
   const chain = validateHumanReviewedTargetAuthority({
-    reviewKey: input.reviewKey,
-    expectedTarget: input.target,
+    reviewKey: input.source.reviewKey,
+    expectedTarget: input.source.expectedTarget,
     reviewPack: input.reviewPack,
     currentPack: input.pack,
     reviewRecord: record,
@@ -203,122 +302,170 @@ async function buildHumanEntry(input: {
   if (!chain.ok || !chain.approvedFingerprint || !record) {
     return null;
   }
-  const snapshotLexeme = input.pack.lexemes.find((item) => sameLexemeSense(item.target, input.target));
+  const snapshotLexeme = input.pack.lexemes.find((item) =>
+    sameLexemeSense(item.target, input.source.target),
+  );
   if (!snapshotLexeme) {
     return null;
   }
-  const meaning = selectedMeaningFor(input.pack, input.target, input.loadLexeme);
+  const meaning = selectedMeaningFor(input.pack, input.source.target, input.loadLexeme);
   if (!meaning) {
-    input.issues.push(issue("RELEASE_MEANING_INVALID", input.reviewKey, "Selected meaning is not from bundled vocabulary."));
+    input.issues.push(
+      issue("RELEASE_MEANING_INVALID", input.source.reviewKey, "Selected meaning is not from bundled vocabulary."),
+    );
     return null;
   }
   return {
-    reviewKey: input.reviewKey,
+    reviewKey: input.source.reviewKey,
     packId: input.pack.id,
-    target: input.target,
+    target: input.source.target,
     displayLabel: snapshotLexeme.lexicalPresentation.displayLabel,
     contentFingerprint: chain.approvedFingerprint,
     reviewRevision: record.revision,
     humanDecision: "APPROVED",
     selectedMeaning: meaning,
-    sourceRefs: [...input.reviewPack.provenance.sourceRefs],
+    sourceRefs: [...input.source.sourceRefs],
     approvalBasis: "HUMAN_REVIEW_PROMOTION",
   };
 }
 
-export async function buildMealMigrationAuthority(input: {
-  reviewRepository?: ContentReviewRepository;
-  loadLexeme?: SceneLexemeLoader;
-  pack?: ContextualSceneContentPack;
-} = {}): Promise<ReleaseAuthority> {
+export async function buildMealMigrationAuthority(
+  input: ReleaseAssemblyOptions = {},
+): Promise<ReleaseAuthority> {
   const issues: ReleaseValidationIssue[] = [];
   const loadLexeme = input.loadLexeme ?? bundledSceneLexemeLoader;
   const reviewRepository = input.reviewRepository ?? fileContentReviewRepository;
-  const livePack = input.pack ?? experimentalMealContextLabPack();
-  const runtimeContextId = mealRuntimeContextIdForPack(livePack.id);
-  const context = resolveMealRuntimeContext(runtimeContextId);
-  const snapshot: ReleaseSnapshot = {
-    pack: cloneFrozen(livePack),
-    context: {
-      runtimeContextId: context.id,
-      frames: cloneFrozen(context.frames),
-      skeleton: cloneFrozen(context.skeleton),
-    },
-  };
-  const entries: ReleaseTargetEntry[] = [];
-  const historicalApprovalBindings: HistoricalReleaseApprovalBinding[] = [];
-  for (const legacy of LEGACY_TARGETS) {
-    const entry = buildLegacyEntry(snapshot.pack, legacy.lemma, legacy.reviewKey, loadLexeme, issues);
-    if (entry) {
-      entries.push(entry);
-      historicalApprovalBindings.push(
-        bindingForEntry(entry, MEAL_LEGACY_EXPERIMENT_BASELINE.packId),
-      );
-    }
-  }
-  if (packHasTarget(snapshot.pack, MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET)) {
-    const cup = await buildHumanEntry({
-      pack: snapshot.pack,
-      reviewKey: "meal-expansion-batch-01-cup",
-      target: MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET,
-      reviewPack: MEAL_SCENE_EXPANSION_BATCH_01_PACK,
-      reviewRepository,
-      loadLexeme,
-      issues,
+  const registry = input.registry ?? listSceneContentRegistry();
+  const extraPacks = input.extraPacks ?? [];
+  let livePack = input.pack;
+  if (!livePack) {
+    const selected = resolveReleaseEligiblePack({
+      sceneClusterId: MEAL_SCENE_CLUSTER.id,
+      registry,
     });
-    if (cup) {
-      entries.push(cup);
-      historicalApprovalBindings.push(bindingForEntry(cup, MEAL_SCENE_EXPANSION_BATCH_01_PACK.id));
-    }
+    issues.push(...selected.issues);
+    livePack = selected.entry?.pack ?? experimentalMealContextLabPack();
   }
-  if (packHasTarget(snapshot.pack, MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET)) {
-    const plate = await buildHumanEntry({
-      pack: snapshot.pack,
-      reviewKey: "meal-expansion-batch-02-plate",
-      target: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_TARGET,
-      reviewPack: MEAL_SCENE_EXPANSION_BATCH_02_PACK,
-      reviewRepository,
-      loadLexeme,
-      issues,
-    });
-    if (plate) {
-      entries.push(plate);
-      historicalApprovalBindings.push(bindingForEntry(plate, MEAL_SCENE_EXPANSION_BATCH_02_PACK.id));
-    }
-  }
-  entries.sort((left, right) => {
+  const snapshot = resolveSnapshot(livePack, input.context);
+  const sources = [
+    ...productionApprovalSources({ extraReviewTargets: input.extraReviewTargets }),
+    ...(input.extraApprovalSources ?? []),
+  ];
+  const unusedSources = unusedApprovalSources({
+    sources,
+    pack: snapshot.pack,
+    sceneId: MEAL_RELEASE_SCENE_ID,
+  });
+  const registryEntry = registry.find((entry) => entry.packId === snapshot.pack.id);
+  const parentPackId =
+    input.parentPackId !== undefined ? input.parentPackId : registryEntry?.parentPackId ?? null;
+  const lineage = validateCumulativePackLineage({
+    pack: snapshot.pack,
+    parentPackId,
+    registry,
+    approvalSources: sources,
+    extraPacks,
+    sceneId: MEAL_RELEASE_SCENE_ID,
+  });
+  issues.push(...lineage.issues);
+
+  const humanReviewKeys = sources
+    .filter((source) => source.approvalBasis === "HUMAN_REVIEW_PROMOTION")
+    .map((source) => source.reviewKey);
+  const orderedLexemes = [...snapshot.pack.lexemes].sort((left, right) => {
     const order = sceneOrder(snapshot.pack, left.target) - sceneOrder(snapshot.pack, right.target);
     return order !== 0 ? order : left.target.senseId.localeCompare(right.target.senseId);
   });
-  historicalApprovalBindings.sort((left, right) => {
-    const leftIndex = entries.findIndex((entry) => entry.reviewKey === left.reviewKey);
-    const rightIndex = entries.findIndex((entry) => entry.reviewKey === right.reviewKey);
-    return leftIndex - rightIndex;
-  });
-  const fourWord = registryEntryFor(MEAL_SCENE_CONTENT_PACK.id);
-  if (!fourWord || fourWord.approvalBasis !== "LEGACY_EXPERIMENT_BASELINE") {
-    issues.push(issue("RELEASE_PROMOTION_INVALID", "legacy", "Four-word baseline approval basis is missing."));
+  const entries: ReleaseTargetEntry[] = [];
+  const historicalApprovalBindings: HistoricalReleaseApprovalBinding[] = [];
+  for (const lexeme of orderedLexemes) {
+    const found = findUniqueApprovalSource({
+      sources,
+      target: lexeme.target,
+      sceneId: MEAL_RELEASE_SCENE_ID,
+    });
+    if (!found.ok) {
+      issues.push(...found.issues);
+      continue;
+    }
+    const source = found.source;
+    if (!sameLexemeSense(source.expectedTarget, lexeme.target)) {
+      issues.push(
+        issue(
+          "RELEASE_REVIEW_INVALID",
+          source.reviewKey,
+          "Registered review target identity does not match the pack target.",
+        ),
+      );
+      continue;
+    }
+    if (source.approvalBasis === "LEGACY_EXPERIMENT_BASELINE") {
+      const entry = buildLegacyEntry(snapshot.pack, source, loadLexeme, humanReviewKeys, issues);
+      if (entry) {
+        entries.push(entry);
+        historicalApprovalBindings.push(bindingForEntry(entry, source.approvalPackId));
+      }
+      continue;
+    }
+    const reviewPack = packById(source.approvalPackId, registry, extraPacks);
+    if (!reviewPack) {
+      issues.push(
+        issue("RELEASE_PACK_MISMATCH", source.reviewKey, "Approval source pack cannot be resolved."),
+      );
+      continue;
+    }
+    const entry = await buildHumanEntry({
+      pack: snapshot.pack,
+      source,
+      reviewPack,
+      reviewRepository,
+      loadLexeme,
+      issues,
+    });
+    if (entry) {
+      entries.push(entry);
+      historicalApprovalBindings.push(bindingForEntry(entry, source.approvalPackId));
+    }
   }
-  const cupPromotion = validateExperimentPromotion({
-    entry: registryEntryFor(MEAL_SCENE_EXPANSION_BATCH_01_PACK.id)!,
-    expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
-    artifacts: loadPromotionArtifacts("meal-expansion-batch-01-cup"),
-  });
-  if (!cupPromotion.ok) {
-    issues.push(issue("RELEASE_PROMOTION_INVALID", "cup.promotion", "Cup promotion/approval basis is not valid."));
+
+  const reviewedPromotionKeys = new Set<string>();
+  for (const source of sources) {
+    if (source.approvalBasis !== "HUMAN_REVIEW_PROMOTION") {
+      continue;
+    }
+    if (reviewedPromotionKeys.has(source.reviewKey)) {
+      continue;
+    }
+    const entry = registryEntryFor(source.approvalPackId) ?? registry.find((item) => item.packId === source.approvalPackId) ?? null;
+    if (!entry?.promotion) {
+      continue;
+    }
+    reviewedPromotionKeys.add(source.reviewKey);
+    const promotion = validateExperimentPromotion({
+      entry,
+      expectedAttestation: entry.promotion,
+      artifacts: loadPromotionArtifacts(source.reviewKey),
+    });
+    if (!promotion.ok) {
+      issues.push(
+        issue(
+          "RELEASE_PROMOTION_INVALID",
+          `${source.reviewKey}.promotion`,
+          "Registered human-review promotion/approval basis is not valid.",
+        ),
+      );
+    }
   }
-  const platePromotion = validateExperimentPromotion({
-    entry: registryEntryFor(MEAL_SCENE_EXPANSION_BATCH_02_PACK.id)!,
-    expectedAttestation: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
-    artifacts: loadPromotionArtifacts("meal-expansion-batch-02-plate"),
-  });
-  if (!platePromotion.ok) {
-    issues.push(issue("RELEASE_PROMOTION_INVALID", "plate.promotion", "Plate promotion/approval basis is not valid."));
-  }
-  if (listSceneContentRegistry().length !== 3) {
-    issues.push(issue("RELEASE_PACK_MISMATCH", "registry", "Unexpected scene content registry size."));
-  }
-  return { snapshot, livePack, targetEntries: entries, historicalApprovalBindings, issues };
+
+  return {
+    snapshot,
+    livePack,
+    targetEntries: entries,
+    historicalApprovalBindings,
+    issues,
+    approvalSources: sources,
+    unusedSources,
+  };
 }
 
 export function manifestFromAuthority(input: {
@@ -376,10 +523,6 @@ function bindingForEntry(
     approvalPackId,
     approvalSourceRefs: [...entry.sourceRefs],
   };
-}
-
-function packHasTarget(pack: ContextualSceneContentPack, target: LexemeSenseRef): boolean {
-  return pack.lexemes.some((item) => sameLexemeSense(item.target, target));
 }
 
 export { MEAL_SCENE_CLUSTER };

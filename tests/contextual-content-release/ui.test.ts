@@ -22,7 +22,12 @@ describe("release debug UI", () => {
   });
 
   it("shows experimental Context Lab publish controls without /train", () => {
-    expect(workspace).toContain("六个 targets");
+    expect(workspace).toContain("当前 targets");
+    expect(workspace).toContain("当前可发布 Candidate");
+    expect(workspace).toContain("release-eligible-pack");
+    expect(workspace).toContain("!workspace.eligibility.canCreateDraft");
+    expect(workspace).not.toContain("绕过审核");
+    expect(workspace).not.toContain("bypass");
     expect(workspace).toContain("创建迁移 Draft");
     expect(workspace).toContain("运行 Preflight");
     expect(workspace).toContain("Publish");

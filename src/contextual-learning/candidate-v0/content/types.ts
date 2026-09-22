@@ -207,6 +207,8 @@ export type SceneContentRegistryStatus =
   | "CANDIDATE"
   | "APPROVED_FOR_EXPERIMENT";
 
+export type SceneContentReleaseEligibility = "NONE" | "RELEASE_ELIGIBLE";
+
 export type SceneContentApprovalBasis =
   | "LEGACY_EXPERIMENT_BASELINE"
   | "HUMAN_REVIEW_PROMOTION";
@@ -237,6 +239,8 @@ export interface ContextualSceneContentRegistryEntry {
   pack: ContextualSceneContentPack;
   approvalBasis?: SceneContentApprovalBasis;
   promotion?: CandidateV0ExperimentPromotionAttestation;
+  parentPackId?: string | null;
+  releaseEligibility?: SceneContentReleaseEligibility;
 }
 
 export interface SceneLexemeLoader {

@@ -138,7 +138,7 @@ describe("inherited content must stay bound to historical approval fingerprints"
       pack,
     });
     expect(created.ok).toBe(false);
-    expect(created.ok ? "" : created.message).toMatch(/soup|drift/i);
+    expect(created.ok ? "" : created.message).toMatch(/soup|drift|Inherited target content/i);
   });
 
   it("rejects bowl selector, contrast, or frame-binding drift", async () => {

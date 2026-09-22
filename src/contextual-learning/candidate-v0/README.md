@@ -175,7 +175,7 @@ Current coverage is Meal BUILD on `home-breakfast-v0` only. School Challenge and
 
 ## Content Release Pipeline Candidate V0
 
-`release/` is a dry-run / validation domain. Phase 1 only allows `DRAFT → PREFLIGHT_VALIDATED`. It does not publish, activate a pointer, or change the code-defined six-word Context Lab. See `docs/CONTEXTUAL_CONTENT_RELEASE_CANDIDATE_V0.md`.
+`release/` is a Candidate validation/publish domain. Phase 3 assembles a release from the unique `RELEASE_ELIGIBLE` Meal pack and a data-driven approval-source registry. Target count is not hardcoded. It is still Experimental, not Standard, and not wired to `/train`. See `docs/CONTEXTUAL_CONTENT_RELEASE_CANDIDATE_V0.md`.
 
 The server is authoritative for the current step:
 

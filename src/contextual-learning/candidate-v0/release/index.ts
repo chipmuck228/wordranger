@@ -46,3 +46,13 @@ export {
   requiredCapabilityIdsForReleaseTargets,
   validateMealReleaseCapabilities,
 } from "./validate-release-capabilities";
+export {
+  deriveHumanApprovalSources,
+  deriveLegacyApprovalSources,
+  findUniqueApprovalSource,
+  unusedApprovalSources,
+} from "./approval-source-registry";
+export type { ReleaseApprovalSource } from "./approval-source-registry";
+export { validateCumulativePackLineage } from "./validate-pack-lineage";
+export { resolveReleaseEligiblePack } from "./resolve-release-eligible-pack";
+export type { ReleaseEligiblePackSelection } from "./resolve-release-eligible-pack";

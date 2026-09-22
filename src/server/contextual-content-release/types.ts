@@ -100,6 +100,21 @@ export interface ReleaseWorkspaceCard {
   supersededByReleaseId: string | null;
 }
 
+export interface ReleaseEligibilityCard {
+  packId: string | null;
+  parentPackId: string | null;
+  targetCount: number;
+  legacyCount: number;
+  humanApprovedCount: number;
+  unresolvedCount: number;
+  staleReviewCount: number;
+  unusedSourceCount: number;
+  lineageOk: boolean;
+  eligibilityOk: boolean;
+  canCreateDraft: boolean;
+  issues: ReleaseValidationIssue[];
+}
+
 export interface ReleaseWorkspace {
   currentRuntime: {
     driver: "CODE_DEFINED_BATCH_02" | "ACTIVE_RELEASE";
@@ -112,7 +127,10 @@ export interface ReleaseWorkspace {
     packId: string;
     status: string;
     approvalBasis: string | null;
+    parentPackId: string | null;
+    releaseEligibility: string;
   }>;
+  eligibility: ReleaseEligibilityCard;
   liveTargets: ReleaseWorkspaceTarget[];
   draft: ContextualContentReleaseManifest | null;
   releases: ReleaseWorkspaceCard[];

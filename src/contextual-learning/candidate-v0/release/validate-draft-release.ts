@@ -44,6 +44,21 @@ export function validateDraftRelease(
   }
   const seenKeys = new Set<string>();
   const seenSenses = new Set<string>();
+  const uniquePackSenses = new Set(
+    manifest.packSnapshot.lexemes.map((lexeme) => lexemeSenseKey(lexeme.target)),
+  );
+  if (manifest.targetEntries.length < 1) {
+    issues.push(issue("RELEASE_PACK_MISMATCH", "targetEntries", "A release must contain at least one target."));
+  }
+  if (manifest.targetEntries.length !== uniquePackSenses.size) {
+    issues.push(
+      issue(
+        "RELEASE_PACK_MISMATCH",
+        "targetEntries",
+        "targetEntries count must equal the unique target count in the source pack.",
+      ),
+    );
+  }
   for (const [index, entry] of manifest.targetEntries.entries()) {
     const keyPath = `targetEntries.${index}`;
     if (seenKeys.has(entry.reviewKey)) {

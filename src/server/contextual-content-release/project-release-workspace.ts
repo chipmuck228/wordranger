@@ -5,6 +5,7 @@ import {
 import { MEAL_MIGRATION_RELEASE_ID } from "@/contextual-learning/candidate-v0/release";
 import { resolveContextLabContentSourceMode } from "@/server/context-lab/context-lab-content-source";
 import { buildMealMigrationAuthority } from "./authority";
+import { inspectMealReleaseEligibility } from "./inspect-release-eligibility";
 import { createContextualReleaseRepository } from "./create-release-runtime";
 import { isContextualContentReleaseWriteEnabled } from "./gates";
 import type { ContextualContentReleaseRepository } from "./release-repository";
@@ -53,6 +54,9 @@ export async function projectReleaseWorkspace(input: {
 } = {}): Promise<ReleaseWorkspace> {
   const env = input.env ?? process.env;
   const authority = await buildMealMigrationAuthority({
+    reviewRepository: input.reviewRepository,
+  });
+  const eligibility = await inspectMealReleaseEligibility({
     reviewRepository: input.reviewRepository,
   });
   const repository = input.repository ?? createContextualReleaseRepository(env);
@@ -108,7 +112,10 @@ export async function projectReleaseWorkspace(input: {
       packId: entry.packId,
       status: entry.status,
       approvalBasis: entry.approvalBasis ?? null,
+      parentPackId: entry.parentPackId ?? null,
+      releaseEligibility: entry.releaseEligibility ?? "NONE",
     })),
+    eligibility,
     liveTargets: authority.targetEntries.map(toWorkspaceTarget),
     draft,
     releases,

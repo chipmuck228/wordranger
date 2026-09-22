@@ -67,6 +67,8 @@ const ENTRIES = compileRegistry([
     status: "APPROVED_FOR_EXPERIMENT",
     approvalBasis: "LEGACY_EXPERIMENT_BASELINE",
     pack: MEAL_SCENE_CONTENT_PACK,
+    parentPackId: null,
+    releaseEligibility: "NONE",
   },
   {
     packId: MEAL_SCENE_EXPANSION_BATCH_01_PACK.id,
@@ -74,6 +76,8 @@ const ENTRIES = compileRegistry([
     approvalBasis: "HUMAN_REVIEW_PROMOTION",
     pack: MEAL_SCENE_EXPANSION_BATCH_01_PACK,
     promotion: MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION,
+    parentPackId: MEAL_SCENE_CONTENT_PACK.id,
+    releaseEligibility: "NONE",
   },
   {
     packId: MEAL_SCENE_EXPANSION_BATCH_02_PACK.id,
@@ -81,6 +85,8 @@ const ENTRIES = compileRegistry([
     approvalBasis: "HUMAN_REVIEW_PROMOTION",
     pack: MEAL_SCENE_EXPANSION_BATCH_02_PACK,
     promotion: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
+    parentPackId: MEAL_SCENE_EXPANSION_BATCH_01_PACK.id,
+    releaseEligibility: "RELEASE_ELIGIBLE",
   },
 ]);
 

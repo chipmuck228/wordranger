@@ -95,9 +95,69 @@ export function ReleaseWorkspace({
         </ul>
       </section>
 
+      <section className="space-y-2" aria-labelledby="eligibility-heading">
+        <h2 id="eligibility-heading" className="text-lg font-medium">
+          当前可发布 Candidate
+        </h2>
+        <dl className="grid gap-2 text-sm md:grid-cols-2" data-testid="release-eligibility">
+          <div>
+            <dt className="text-muted-foreground">pack id</dt>
+            <dd data-testid="release-eligible-pack">{workspace.eligibility.packId ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">parent pack id</dt>
+            <dd data-testid="release-eligible-parent">{workspace.eligibility.parentPackId ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">target count</dt>
+            <dd data-testid="release-eligible-target-count">{workspace.eligibility.targetCount}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">legacy count</dt>
+            <dd data-testid="release-eligible-legacy-count">{workspace.eligibility.legacyCount}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">human-approved count</dt>
+            <dd data-testid="release-eligible-human-count">{workspace.eligibility.humanApprovedCount}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">unresolved count</dt>
+            <dd data-testid="release-eligible-unresolved-count">{workspace.eligibility.unresolvedCount}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">stale-review count</dt>
+            <dd data-testid="release-eligible-stale-count">{workspace.eligibility.staleReviewCount}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">lineage</dt>
+            <dd data-testid="release-eligible-lineage">
+              {workspace.eligibility.lineageOk ? "PASS" : "FAIL"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">eligibility</dt>
+            <dd data-testid="release-eligible-result">
+              {workspace.eligibility.eligibilityOk ? "RELEASE_ELIGIBLE" : "NOT_ELIGIBLE"}
+            </dd>
+          </div>
+        </dl>
+        {!workspace.eligibility.canCreateDraft ? (
+          <div data-testid="release-create-blocked" className="space-y-1 text-sm">
+            <p>当前不能创建 Draft。存在未审核、过期审核或资格不唯一的问题。</p>
+            <ul data-testid="release-eligibility-issues">
+              {workspace.eligibility.issues.map((item, index) => (
+                <li key={`${item.code}-${index}`}>
+                  {item.code}: {item.detail}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
+
       <section className="space-y-2" aria-labelledby="targets-heading">
         <h2 id="targets-heading" className="text-lg font-medium">
-          六个 targets
+          当前 targets
         </h2>
         <ol data-testid="release-live-targets" className="space-y-3">
           {workspace.liveTargets.map((target, index) => (
@@ -365,7 +425,7 @@ export function ReleaseWorkspace({
         <div className="flex min-w-0 flex-wrap gap-2">
           <Button
             type="button"
-            disabled={!workspace.writeEnabled || busy}
+            disabled={!workspace.writeEnabled || busy || !workspace.eligibility.canCreateDraft}
             onClick={() => run(() => createMigrationDraftAction())}
           >
             创建迁移 Draft

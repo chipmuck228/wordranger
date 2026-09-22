@@ -50,6 +50,7 @@ export type {
   ResolvedContextualSceneLexeme,
   SceneContentApprovalBasis,
   SceneContentRegistryStatus,
+  SceneContentReleaseEligibility,
   SceneLexemeLoader,
 } from "./types";
 export {

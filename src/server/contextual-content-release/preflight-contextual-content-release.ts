@@ -6,9 +6,8 @@ import {
   type ContextualContentReleaseManifest,
   type ReleaseValidationIssue,
 } from "@/contextual-learning/candidate-v0/release";
-import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
-import type { ContentReviewRepository } from "@/server/contextual-content-review/content-review-repository";
 import { fileContentReviewRepository } from "@/server/contextual-content-review/file-content-review-repository";
+import type { ReleaseAssemblyOptions } from "./authority";
 import { createContextualReleaseRepository } from "./create-release-runtime";
 import { evaluatePublishReadiness } from "./evaluate-release-readiness";
 import { isContextualContentReleaseWriteEnabled } from "./gates";
@@ -24,15 +23,15 @@ function issue(
   return { code, path: pathName, detail };
 }
 
-export async function preflightContextualContentRelease(input: {
-  releaseId: string;
-  revision: number;
-  env?: Record<string, string | undefined>;
-  now?: string;
-  repository?: ContextualContentReleaseRepository;
-  reviewRepository?: ContentReviewRepository;
-  pack?: ContextualSceneContentPack;
-}): Promise<ReleasePreflightResult> {
+export async function preflightContextualContentRelease(
+  input: ReleaseAssemblyOptions & {
+    releaseId: string;
+    revision: number;
+    env?: Record<string, string | undefined>;
+    now?: string;
+    repository?: ContextualContentReleaseRepository;
+  },
+): Promise<ReleasePreflightResult> {
   if (!isContextualContentReleaseWriteEnabled(input.env)) {
     return {
       ok: false,
@@ -89,7 +88,15 @@ export async function preflightContextualContentRelease(input: {
     ...(await evaluatePublishReadiness({
       existing,
       reviewRepository: input.reviewRepository ?? fileContentReviewRepository,
+      loadLexeme: input.loadLexeme,
       pack: input.pack,
+      registry: input.registry,
+      extraApprovalSources: input.extraApprovalSources,
+      extraPacks: input.extraPacks,
+      extraReviewTargets: input.extraReviewTargets,
+      context: input.context,
+      parentPackId: input.parentPackId,
+      capabilities: input.capabilities,
     })),
   );
   if (issues.length > 0) {
