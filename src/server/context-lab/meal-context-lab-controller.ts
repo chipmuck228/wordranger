@@ -1082,21 +1082,21 @@ export class MealContextLabController {
       });
     }
     const target = probe.targets[next.targetIndex];
-    const siblingLemmas = probe.targets
-      .filter((item) => item.target.lexemeId !== target.target.lexemeId)
-      .map((item) => displayFormForTarget(item.target));
     let content: ContextLabContentSnapshot;
     try {
       content = await this.resolveContent(record);
     } catch (error) {
       return this.contentErrorScreen(error);
     }
+    const siblingLemmas = probe.targets
+      .filter((item) => item.target.lexemeId !== target.target.lexemeId)
+      .map((item) => displayFormForTarget(item.target, content.pack));
     const generated = await generateMealProbeTask({
       runId: record.id,
       target,
       skill: next.skill,
       siblingLemmas,
-      targetLemma: displayFormForTarget(target.target),
+      targetLemma: displayFormForTarget(target.target, content.pack),
       now: this.now(),
       pack: content.pack,
     });
@@ -1421,20 +1421,24 @@ export class MealContextLabController {
         recoverable: true,
       });
     }
-    const profile = mealProfileForTarget(current.target);
-    if (!profile) {
-      return errorScreen(CONTEXT_LAB_ERROR_CODES.PLANNER_FAILURE, {
-        detail: "MEAL_TARGET_PROFILE_UNRESOLVED",
-      });
-    }
     let content: ContextLabContentSnapshot;
     try {
       content = await this.resolveContent(record);
     } catch (error) {
       return this.contentErrorScreen(error);
     }
+    const profile = mealProfileForTarget(current.target, content.pack);
+    if (!profile) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.PLANNER_FAILURE, {
+        detail: "MEAL_TARGET_PROFILE_UNRESOLVED",
+      });
+    }
     const prepared = this.createIssuedRun({
-      planningInput: mealStrengthenPlanningInput(profile),
+      planningInput: mealStrengthenPlanningInput(
+        profile,
+        typingCapabilities(),
+        content.context.runtimeContextId,
+      ),
       runId: record.id,
       content,
     });
@@ -1531,20 +1535,24 @@ export class MealContextLabController {
         recoverable: true,
       });
     }
-    const profile = mealBuildProfileForTarget(current.target);
-    if (!profile) {
-      return errorScreen(CONTEXT_LAB_ERROR_CODES.PLANNER_FAILURE, {
-        detail: "MEAL_TARGET_PROFILE_UNRESOLVED",
-      });
-    }
     let content: ContextLabContentSnapshot;
     try {
       content = await this.resolveContent(record);
     } catch (error) {
       return this.contentErrorScreen(error);
     }
+    const profile = mealBuildProfileForTarget(current.target, content.pack);
+    if (!profile) {
+      return errorScreen(CONTEXT_LAB_ERROR_CODES.PLANNER_FAILURE, {
+        detail: "MEAL_TARGET_PROFILE_UNRESOLVED",
+      });
+    }
     const prepared = this.createIssuedRun({
-      planningInput: mealBuildPlanningInput(profile),
+      planningInput: mealBuildPlanningInput(
+        profile,
+        typingCapabilities(),
+        content.context.runtimeContextId,
+      ),
       runId: record.id,
       content,
     });
@@ -1717,6 +1725,7 @@ export function mealBuildPlanningInput(
 export function mealStrengthenPlanningInput(
   profileOrCapabilities?: MealLexicalStrengthenProfile | RuntimeCapability[],
   capabilities: RuntimeCapability[] = typingCapabilities(),
+  runtimeContextId: ReturnType<typeof experimentalMealRuntimeContextId> = experimentalMealRuntimeContextId(),
 ): ExperiencePlanningInput {
   const profile = Array.isArray(profileOrCapabilities)
     ? null
@@ -1734,7 +1743,7 @@ export function mealStrengthenPlanningInput(
       allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
       runtimeCapabilities: runtime,
       loadLexeme: bundledSceneLexemeLoader,
-      runtimeContextId: experimentalMealRuntimeContextId(),
+      runtimeContextId,
     };
   }
   return {
@@ -1750,7 +1759,7 @@ export function mealStrengthenPlanningInput(
     allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
     runtimeCapabilities: runtime,
     loadLexeme: bundledSceneLexemeLoader,
-    runtimeContextId: experimentalMealRuntimeContextId(),
+    runtimeContextId,
   };
 }
 
@@ -2159,8 +2168,11 @@ function rejectMalformedContinue(input: {
   return null;
 }
 
-function displayFormForTarget(target: { lexemeId: string; senseId: string }): string {
-  return mealProfileForTarget(target)?.displayForm ?? "";
+function displayFormForTarget(
+  target: { lexemeId: string; senseId: string },
+  pack?: Parameters<typeof mealProfileForTarget>[1],
+): string {
+  return mealProfileForTarget(target, pack)?.displayForm ?? "";
 }
 
 function defaultMealPlanningIdentity() {

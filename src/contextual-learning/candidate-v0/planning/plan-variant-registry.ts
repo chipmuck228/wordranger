@@ -20,6 +20,7 @@ import {
   restaurantMealFrame,
 } from "../fixtures/meal/contexts";
 import { homeBreakfastBatch02Frame } from "../fixtures/meal/meal-batch-02-contexts";
+import { homeBreakfastBatch03Frame } from "../fixtures/meal/meal-batch-03-contexts";
 import { MEAL_PROFILES, MEAL_SENSE } from "../fixtures/meal/knowledge";
 import {
   createMealBuildPlan,
@@ -65,6 +66,12 @@ const MEAL_PROBE_LEXICAL: readonly LexemeSenseRef[] = [
 const MEAL_BATCH_02_PROBE_LEXICAL: readonly LexemeSenseRef[] = [
   ...MEAL_PROBE_LEXICAL,
   MEAL_SENSE.plate,
+];
+const MEAL_BATCH_03_PROBE_LEXICAL: readonly LexemeSenseRef[] = [
+  ...MEAL_BATCH_02_PROBE_LEXICAL,
+  MEAL_SENSE.knife,
+  MEAL_SENSE.bread,
+  MEAL_SENSE.water,
 ];
 const SCHOOL_ABSTRACT: readonly LexemeSenseRef[] = [
   SCHOOL_SENSE.ability,
@@ -281,6 +288,12 @@ const MEAL_BATCH_02_HOME_OPTIONS = {
   idSuffix: "meal-batch-02",
 };
 
+const MEAL_BATCH_03_HOME_OPTIONS = {
+  runtimeContextId: "MEAL_BATCH_03" as const,
+  supportedSenses: MEAL_BATCH_03_PROBE_LEXICAL,
+  idSuffix: "meal-batch-03",
+};
+
 const PLAN_VARIANTS: readonly ExperiencePlanVariant[] = [
   ...MEAL_FRAMES.flatMap((frame) => [
     mealVariant("retrieve", frame),
@@ -293,6 +306,12 @@ const PLAN_VARIANTS: readonly ExperiencePlanVariant[] = [
     "strengthen-recall",
     homeBreakfastBatch02Frame,
     MEAL_BATCH_02_HOME_OPTIONS,
+  ),
+  mealVariant("build", homeBreakfastBatch03Frame, MEAL_BATCH_03_HOME_OPTIONS),
+  mealVariant(
+    "strengthen-recall",
+    homeBreakfastBatch03Frame,
+    MEAL_BATCH_03_HOME_OPTIONS,
   ),
   ...SCHOOL_FRAMES.flatMap((frame) => [
     schoolVariant("guided", frame),
@@ -341,7 +360,7 @@ export function findPlannerFrame(
   contextFrameId: string,
   runtimeContextId: MealRuntimeContextId = "MEAL_BASE",
 ) {
-  if (runtimeContextId === "MEAL_BATCH_02") {
+  if (runtimeContextId !== "MEAL_BASE") {
     return frameForMealRuntime(contextFrameId, runtimeContextId);
   }
   return FRAME_BY_ID[contextFrameId];
@@ -351,8 +370,11 @@ export function findPlannerSkeleton(
   skeletonId: string,
   runtimeContextId: MealRuntimeContextId = "MEAL_BASE",
 ) {
-  if (runtimeContextId === "MEAL_BATCH_02" && skeletonId === mealSkeleton.id) {
-    return skeletonForMealRuntime(runtimeContextId);
+  if (runtimeContextId !== "MEAL_BASE") {
+    const resolved = skeletonForMealRuntime(runtimeContextId);
+    return skeletonId === mealSkeleton.id || skeletonId === resolved.id
+      ? resolved
+      : undefined;
   }
   return SKELETON_BY_ID[skeletonId];
 }

@@ -7,6 +7,11 @@ import {
   resolveMealLexicalBuildProfiles,
 } from "@/contextual-learning/candidate-v0/build/meal-lexical-build-profiles";
 import type { MealLexicalBuildProfile } from "@/contextual-learning/candidate-v0/build/types";
+import { experimentalMealContextLabPack } from "@/contextual-learning/candidate-v0/content/experimental-meal-runtime-pack";
+import { MEAL_SCENE_EXPANSION_BATCH_03_PACK } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-expansion-batch-03";
+import { HOME_BREAKFAST_FRAME_ID } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-content";
+import { snapshotSceneContentFromPack } from "@/contextual-learning/candidate-v0/content/snapshot-from-pack";
+import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
 import {
   profileForBundledTarget,
   profileForFixtureSense,
@@ -19,48 +24,81 @@ import {
   mappedMealEntity,
 } from "./meal-presentation-map";
 
-export function loadMealLexicalStrengthenProfiles():
+function packsForLookup(
+  pack?: ContextualSceneContentPack,
+): ContextualSceneContentPack[] {
+  return pack
+    ? [pack]
+    : [experimentalMealContextLabPack(), MEAL_SCENE_EXPANSION_BATCH_03_PACK];
+}
+
+function resolveInputForPack(pack: ContextualSceneContentPack) {
+  const snapshot = snapshotSceneContentFromPack(pack, HOME_BREAKFAST_FRAME_ID);
+  return {
+    loadLexeme: bundledSceneLexemeLoader,
+    displayLabelForEntity: (entityId: string) =>
+      snapshot?.lexemes.find((item) => item.entityId === entityId)?.displayLabel ??
+      mappedMealEntity(entityId)?.label ??
+      null,
+    allowedEntityIds: snapshot?.frame.entityIds ?? HOME_BREAKFAST_FRAME_ENTITY_IDS,
+    pack,
+  };
+}
+
+export function loadMealLexicalStrengthenProfiles(
+  pack?: ContextualSceneContentPack,
+):
   | { ok: true; profiles: MealLexicalStrengthenProfile[] }
   | { ok: false; reason: "MEAL_TARGET_PROFILE_UNRESOLVED" } {
-  return resolveMealLexicalStrengthenProfiles({
-    loadLexeme: bundledSceneLexemeLoader,
-    displayLabelForEntity: (entityId) => mappedMealEntity(entityId)?.label ?? null,
-    allowedEntityIds: HOME_BREAKFAST_FRAME_ENTITY_IDS,
-  });
+  return resolveMealLexicalStrengthenProfiles(
+    resolveInputForPack(pack ?? experimentalMealContextLabPack()),
+  );
 }
 
 export function mealProfileForTarget(
   target: LexemeSenseRef,
+  pack?: ContextualSceneContentPack,
 ): MealLexicalStrengthenProfile | null {
-  const resolved = loadMealLexicalStrengthenProfiles();
-  if (!resolved.ok) {
-    return null;
+  for (const candidate of packsForLookup(pack)) {
+    const resolved = loadMealLexicalStrengthenProfiles(candidate);
+    if (!resolved.ok) {
+      continue;
+    }
+    const found =
+      profileForBundledTarget(resolved.profiles, target) ??
+      profileForFixtureSense(resolved.profiles, target);
+    if (found) {
+      return found;
+    }
   }
-  return (
-    profileForBundledTarget(resolved.profiles, target) ??
-    profileForFixtureSense(resolved.profiles, target)
-  );
+  return null;
 }
 
-export function loadMealLexicalBuildProfiles():
+export function loadMealLexicalBuildProfiles(
+  pack?: ContextualSceneContentPack,
+):
   | { ok: true; profiles: MealLexicalBuildProfile[] }
   | { ok: false; reason: "MEAL_TARGET_PROFILE_UNRESOLVED" } {
-  return resolveMealLexicalBuildProfiles({
-    loadLexeme: bundledSceneLexemeLoader,
-    displayLabelForEntity: (entityId) => mappedMealEntity(entityId)?.label ?? null,
-    allowedEntityIds: HOME_BREAKFAST_FRAME_ENTITY_IDS,
-  });
+  return resolveMealLexicalBuildProfiles(
+    resolveInputForPack(pack ?? experimentalMealContextLabPack()),
+  );
 }
 
 export function mealBuildProfileForTarget(
   target: LexemeSenseRef,
+  pack?: ContextualSceneContentPack,
 ): MealLexicalBuildProfile | null {
-  const resolved = loadMealLexicalBuildProfiles();
-  if (!resolved.ok) {
-    return null;
+  for (const candidate of packsForLookup(pack)) {
+    const resolved = loadMealLexicalBuildProfiles(candidate);
+    if (!resolved.ok) {
+      continue;
+    }
+    const found =
+      buildProfileForBundledTarget(resolved.profiles, target) ??
+      buildProfileForFixtureSense(resolved.profiles, target);
+    if (found) {
+      return found;
+    }
   }
-  return (
-    buildProfileForBundledTarget(resolved.profiles, target) ??
-    buildProfileForFixtureSense(resolved.profiles, target)
-  );
+  return null;
 }

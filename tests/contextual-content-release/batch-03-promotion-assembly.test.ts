@@ -81,7 +81,7 @@ describe("batch-03 promotion release assembly", () => {
     const withoutWater = await createMealMigrationDraft({
       env: WRITE_ENV,
       repository: new InMemoryContextualContentReleaseRepository(),
-      reviewRepository: withFallbackReviews(missingSeed),
+      reviewRepository: missingSeed,
       promotionRepository: promotions,
       pack: MEAL_SCENE_EXPANSION_BATCH_03_PACK,
     });

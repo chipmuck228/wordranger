@@ -19,7 +19,12 @@ function walk(dir: string): string[] {
 
 describe("Candidate V0 planner import boundary", () => {
   const root = join(process.cwd(), "src/contextual-learning/candidate-v0/planning");
-  const files = walk(root);
+  const extra = [
+    join(process.cwd(), "src/contextual-learning/candidate-v0/strengthen/meal-lexical-profiles.ts"),
+    join(process.cwd(), "src/contextual-learning/candidate-v0/build/meal-lexical-build-profiles.ts"),
+    join(process.cwd(), "src/contextual-learning/candidate-v0/fixtures/meal/plans.ts"),
+  ];
+  const files = [...walk(root), ...extra];
   const texts = files.map((file) => ({ file, text: readFileSync(file, "utf8") }));
 
   it("does not import Scheduler, learner engine, Evidence, or StudentLexemeModel", () => {
@@ -33,6 +38,8 @@ describe("Candidate V0 planner import boundary", () => {
       "submit-task-action",
       "default-task-evaluator",
       "domain/scheduler",
+      "submitTaskAction",
+      "/train",
       "UNSEEN",
       "RANGER_TRIAL",
       "WORD_BUBBLE",

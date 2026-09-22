@@ -17,6 +17,7 @@ export {
 export {
   experimentalMealRuntimeContextId,
   mealRuntimeContextIdForPack,
+  packForMealRuntime,
 } from "./meal-runtime-context";
 export type { MealRuntimeContextId } from "./meal-runtime-context";
 export type { ExperiencePlanningError } from "./errors";

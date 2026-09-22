@@ -55,7 +55,7 @@ export async function generateMealProbeTask(input: {
   const prepared =
     input.skill === "ACTIVE_RECALL"
       ? sceneSafeRecallTask(stamped)
-      : sceneSafeRecognitionTask(stamped, input.target);
+      : sceneSafeRecognitionTask(stamped, input.target, input.pack);
   if (!matchesFrozenProbeContract(prepared, input.skill, lexemeId, input.targetLemma)) {
     return { ok: false, reason: "PROBE_TASK_SEMANTIC_MISMATCH" };
   }

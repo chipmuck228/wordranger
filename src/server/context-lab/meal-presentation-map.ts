@@ -11,6 +11,7 @@ import type {
 import { snapshotSceneContentFromPack } from "@/contextual-learning/candidate-v0/content/snapshot-from-pack";
 import { HOME_BREAKFAST_FRAME_ID } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-content";
 import { experimentalMealContextLabPack } from "@/contextual-learning/candidate-v0/content/experimental-meal-runtime-pack";
+import { MEAL_SCENE_EXPANSION_BATCH_03_PACK } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-expansion-batch-03";
 
 export { HOME_BREAKFAST_FRAME_ID };
 
@@ -21,11 +22,18 @@ function mealPresentationRole(role: string): ContextEntityRole | undefined {
   if (role === "SUPPORT") {
     return "CONTAINER";
   }
+  if (role === "DRINK") {
+    return "FOOD";
+  }
   return undefined;
 }
 
 const snapshot = snapshotSceneContentFromPack(
   experimentalMealContextLabPack(),
+  HOME_BREAKFAST_FRAME_ID,
+);
+const batch03Snapshot = snapshotSceneContentFromPack(
+  MEAL_SCENE_EXPANSION_BATCH_03_PACK,
   HOME_BREAKFAST_FRAME_ID,
 );
 
@@ -35,22 +43,33 @@ export const HOME_BREAKFAST_SCENE_ENTITY_IDS = (snapshot?.frame.presentationOrde
 export const HOME_BREAKFAST_FRAME_ENTITY_IDS = (snapshot?.frame.entityIds ??
   []) as readonly string[];
 
+export const MEAL_BATCH_03_SCENE_ENTITY_IDS = (
+  batch03Snapshot?.frame.presentationOrder ?? []
+) as readonly string[];
+
+function entityEntriesFromSnapshot(
+  resolved: NonNullable<typeof snapshot>,
+): Array<[string, { label: string; role: ContextEntityRole }]> {
+  return resolved.lexemes.flatMap((lexeme) => {
+    const role = mealPresentationRole(lexeme.presentationRole);
+    return role ? [[lexeme.entityId, { label: lexeme.displayLabel, role }]] : [];
+  });
+}
+
 const HOME_BREAKFAST_ENTITIES: Record<
   string,
   { label: string; role: ContextEntityRole }
 > = {
+  ...Object.fromEntries(snapshot ? entityEntriesFromSnapshot(snapshot) : []),
   ...Object.fromEntries(
-    (snapshot?.lexemes ?? []).flatMap((lexeme) => {
-      const role = mealPresentationRole(lexeme.presentationRole);
-      return role
-        ? [[lexeme.entityId, { label: lexeme.displayLabel, role }]]
-        : [];
-    }),
+    batch03Snapshot ? entityEntriesFromSnapshot(batch03Snapshot) : [],
   ),
   // Frame-only beverage entity for cup contains(); not a Probe target.
   "home-drink": { label: "饮料", role: "FOOD" },
   // Frame-only supported food for plate supports(); not a Probe target.
   "home-served-food": { label: "盘中食物", role: "FOOD" },
+  // Frame-only vessel for water contains(); not a Probe target.
+  "home-water-vessel": { label: "水壶", role: "CONTAINER" },
 };
 
 const HOME_BREAKFAST_COPY = {
@@ -77,8 +96,10 @@ function relationCaptionKey(predicate: string, entityIds: readonly string[]): st
   return `${predicate}|${entityIds.join("|")}`;
 }
 
-const RELATION_CAPTIONS: Record<string, string> = Object.fromEntries(
-  (snapshot?.lexemes ?? []).flatMap((lexeme) =>
+function relationEntriesFromSnapshot(
+  resolved: NonNullable<typeof snapshot>,
+): Array<[string, string]> {
+  return resolved.lexemes.flatMap((lexeme) =>
     lexeme.groundingFacts
       .filter((fact) => fact.caption)
       .map((fact) => [
@@ -87,15 +108,30 @@ const RELATION_CAPTIONS: Record<string, string> = Object.fromEntries(
           fact.args.flatMap((arg) => (arg.kind === "ENTITY" ? [arg.entityId] : [])),
         ),
         fact.caption as string,
-      ]),
-  ),
-);
+      ] as [string, string]),
+  );
+}
 
-const CONTRAST_CAPTIONS: Record<string, string> = Object.fromEntries(
-  (snapshot?.lexemes ?? [])
+const RELATION_CAPTIONS: Record<string, string> = Object.fromEntries([
+  ...(snapshot ? relationEntriesFromSnapshot(snapshot) : []),
+  ...(batch03Snapshot ? relationEntriesFromSnapshot(batch03Snapshot) : []),
+]);
+
+function contrastEntriesFromSnapshot(
+  resolved: NonNullable<typeof snapshot>,
+): Array<[string, string]> {
+  return resolved.lexemes
     .filter((lexeme) => lexeme.contrasts[0]?.caption)
-    .map((lexeme) => [lexeme.entityId, lexeme.contrasts[0]!.caption as string]),
-);
+    .map(
+      (lexeme) =>
+        [lexeme.entityId, lexeme.contrasts[0]!.caption as string] as [string, string],
+    );
+}
+
+const CONTRAST_CAPTIONS: Record<string, string> = Object.fromEntries([
+  ...(snapshot ? contrastEntriesFromSnapshot(snapshot) : []),
+  ...(batch03Snapshot ? contrastEntriesFromSnapshot(batch03Snapshot) : []),
+]);
 
 export function homeBreakfastFrameCopy(): {
   title: string;
@@ -154,4 +190,15 @@ export function relationCaptionFor(
 
 export function contrastCaptionFor(entityId: string): string | undefined {
   return CONTRAST_CAPTIONS[entityId];
+}
+
+export function sceneEntityIdsForResolvedContext(
+  boundEntityIds: ReadonlySet<string>,
+): readonly string[] {
+  const extras = MEAL_BATCH_03_SCENE_ENTITY_IDS.filter(
+    (entityId) =>
+      boundEntityIds.has(entityId) &&
+      !HOME_BREAKFAST_SCENE_ENTITY_IDS.includes(entityId),
+  );
+  return [...HOME_BREAKFAST_SCENE_ENTITY_IDS, ...extras];
 }

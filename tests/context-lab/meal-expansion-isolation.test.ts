@@ -49,6 +49,16 @@ describe("Context Lab uses the fingerprint-bound six-word Meal experiment pack",
     expect(findPlannerSkeleton("meal-setting-v0")?.roleDefinitions.map((item) => item.id)).not.toContain(
       "FOOD_SUPPORT",
     );
+    expect(
+      findPlannerFrame("home-breakfast-v0", "MEAL_BATCH_03")?.entityBindings.some(
+        (item) => item.entityId === "home-knife",
+      ),
+    ).toBe(true);
+    expect(
+      findPlannerSkeleton("meal-setting-v0", "MEAL_BATCH_03")?.roleDefinitions.map(
+        (item) => item.id,
+      ),
+    ).toContain("SOLID_FOOD");
     expect(MEAL_FRAMES[0]).toBe(baseFrame);
     expect(mealSkeleton.roleDefinitions.map((item) => item.id)).not.toContain("FOOD_SUPPORT");
     const batch02Frame = findPlannerFrame("home-breakfast-v0", "MEAL_BATCH_02");

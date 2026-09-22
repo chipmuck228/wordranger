@@ -39,6 +39,7 @@ import {
   homeBreakfastFrameCopy,
   mappedMealEntity,
   relationCaptionFor,
+  sceneEntityIdsForResolvedContext,
   strengthenReconnectInstruction,
   strengthenTitleFor,
   strengthenVerifyInstruction,
@@ -521,7 +522,7 @@ function sceneEntities(
     resolvedContext.entityBindings.map((binding) => binding.entityId),
   );
   const entities = [];
-  for (const entityId of HOME_BREAKFAST_SCENE_ENTITY_IDS) {
+  for (const entityId of sceneEntityIdsForResolvedContext(bound)) {
     if (!bound.has(entityId)) {
       return { error: CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION };
     }

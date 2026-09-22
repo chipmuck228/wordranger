@@ -7,6 +7,8 @@
 import { snapshotSceneContentFromPack } from "../content/snapshot-from-pack";
 import { HOME_BREAKFAST_FRAME_ID } from "../content/packs/meal/meal-scene-content";
 import { experimentalMealContextLabPack } from "../content/experimental-meal-runtime-pack";
+import { MEAL_SCENE_EXPANSION_BATCH_03_PACK } from "../content/packs/meal/meal-scene-expansion-batch-03";
+import type { ContextualSceneContentPack } from "../content/types";
 import { projectBuildProfile } from "../content/project-from-resolved";
 import {
   MEAL_PROBE_STRENGTHEN_ENTITY_BINDINGS,
@@ -20,11 +22,8 @@ import {
 import type { LexemeSenseRef } from "../domain/types";
 import type { MealLexicalBuildProfile, MealBuildSceneBinding } from "./types";
 
-function mealSnapshot() {
-  return snapshotSceneContentFromPack(
-    experimentalMealContextLabPack(),
-    HOME_BREAKFAST_FRAME_ID,
-  );
+function mealSnapshot(pack: ContextualSceneContentPack = experimentalMealContextLabPack()) {
+  return snapshotSceneContentFromPack(pack, HOME_BREAKFAST_FRAME_ID);
 }
 
 function projectedBindings(): Record<string, MealBuildSceneBinding> {
@@ -57,26 +56,47 @@ export const MEAL_BUILD_SCENE_BINDINGS: Record<
   MealBuildSceneBinding
 > = projectedBindings();
 
-export function mealLexicalQueueCatalog():
+export function mealLexicalQueueCatalog(
+  pack?: ContextualSceneContentPack,
+):
   | { ok: true; catalog: { target: LexemeSenseRef; entityId: string }[] }
   | { ok: false; reason: "MEAL_TARGET_PROFILE_UNRESOLVED" } {
-  const identities = listMealStrengthenIdentities();
-  if (!identities.ok) {
-    return identities;
+  const packs = pack
+    ? [pack]
+    : [experimentalMealContextLabPack(), MEAL_SCENE_EXPANSION_BATCH_03_PACK];
+  const catalog: { target: LexemeSenseRef; entityId: string }[] = [];
+  const seen = new Set<string>();
+  for (const candidate of packs) {
+    const identities = listMealStrengthenIdentities(candidate);
+    if (!identities.ok) {
+      if (pack) {
+        return identities;
+      }
+      continue;
+    }
+    for (const identity of identities.identities) {
+      const key = `${identity.target.lexemeId}::${identity.target.senseId}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      catalog.push({
+        target: { ...identity.target },
+        entityId: identity.entityId,
+      });
+    }
   }
-  return {
-    ok: true,
-    catalog: identities.identities.map((identity) => ({
-      target: { ...identity.target },
-      entityId: identity.entityId,
-    })),
-  };
+  if (catalog.length === 0) {
+    return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
+  }
+  return { ok: true, catalog };
 }
 
 export function resolveMealLexicalBuildProfiles(input: {
   loadLexeme: MealLexemeLoader;
   displayLabelForEntity: (entityId: string) => string | null;
   allowedEntityIds: readonly string[];
+  pack?: ContextualSceneContentPack;
 }):
   | { ok: true; profiles: MealLexicalBuildProfile[] }
   | { ok: false; reason: "MEAL_TARGET_PROFILE_UNRESOLVED" } {
@@ -84,7 +104,7 @@ export function resolveMealLexicalBuildProfiles(input: {
   if (!resolved.ok) {
     return resolved;
   }
-  const snapshot = mealSnapshot();
+  const snapshot = mealSnapshot(input.pack);
   if (!snapshot) {
     return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
   }

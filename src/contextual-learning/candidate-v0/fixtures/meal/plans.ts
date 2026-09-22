@@ -12,6 +12,7 @@ import { experimentalMealContextLabPack } from "../../content/experimental-meal-
 import { MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET } from "../../content/packs/meal/meal-scene-expansion-batch-01";
 import { MEAL_SCENE_EXPANSION_BATCH_01_PACK } from "../../content/packs/meal/meal-scene-expansion-batch-01";
 import { MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID } from "../../content/packs/meal/meal-scene-expansion-batch-02";
+import { MEAL_SCENE_EXPANSION_BATCH_03_PACK } from "../../content/packs/meal/meal-scene-expansion-batch-03";
 import { resolveSceneContent } from "../../content/resolve-scene-content";
 import { snapshotSceneContentFromPack } from "../../content/snapshot-from-pack";
 import type { SceneLexemeLoader } from "../../content/types";
@@ -178,6 +179,9 @@ function packForMealPlan(
   runtimeContextId: MealRuntimeContextId,
   target?: LexemeSenseRef,
 ) {
+  if (runtimeContextId === "MEAL_BATCH_03") {
+    return MEAL_SCENE_EXPANSION_BATCH_03_PACK;
+  }
   if (runtimeContextId === "MEAL_BATCH_02") {
     const pack = experimentalMealContextLabPack();
     return pack.id === MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID ? pack : null;
@@ -186,6 +190,12 @@ function packForMealPlan(
     return MEAL_SCENE_EXPANSION_BATCH_01_PACK;
   }
   return MEAL_SCENE_CONTENT_PACK;
+}
+
+function packForMealIdentities(runtimeContextId?: MealRuntimeContextId) {
+  return runtimeContextId === "MEAL_BATCH_03"
+    ? MEAL_SCENE_EXPANSION_BATCH_03_PACK
+    : experimentalMealContextLabPack();
 }
 
 function mealContentForFrame(
@@ -273,9 +283,11 @@ export function createMealBuildPlan(
   },
 ): LearningExperiencePlan {
   const requested = request?.targets?.[0]?.sense;
+  const identityPack = packForMealIdentities(request?.runtimeContextId);
   const identity = requested
-    ? identityForFixtureSense(requested) ?? identityForBundledTarget(requested)
-    : identityForFixtureSense(MEAL_SENSE.spoon);
+    ? identityForFixtureSense(requested, identityPack) ??
+      identityForBundledTarget(requested, identityPack)
+    : identityForFixtureSense(MEAL_SENSE.spoon, identityPack);
   if (!identity || (request && request.targets && request.targets.length !== 1)) {
     return emptyMealBuildPlan(frame);
   }
@@ -331,8 +343,10 @@ export function createMealRecallStrengthenPlan(
   },
 ): LearningExperiencePlan {
   const requested = request?.targets?.[0]?.sense;
+  const identityPack = packForMealIdentities(request?.runtimeContextId);
   const identity = requested
-    ? identityForFixtureSense(requested) ?? identityForBundledTarget(requested)
+    ? identityForFixtureSense(requested, identityPack) ??
+      identityForBundledTarget(requested, identityPack)
     : null;
   if (!identity || (request?.targets?.length ?? 0) !== 1) {
     return {

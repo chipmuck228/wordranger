@@ -8,6 +8,7 @@ import { selectBundledMeaningGloss } from "../content/select-bundled-meaning-glo
 import { HOME_BREAKFAST_FRAME_ID } from "../content/packs/meal/meal-scene-content";
 import { experimentalMealContextLabPack } from "../content/experimental-meal-runtime-pack";
 import { snapshotSceneContentFromPack } from "../content/snapshot-from-pack";
+import type { ContextualSceneContentPack } from "../content/types";
 import {
   findResolvedLexeme,
   projectStrengthenIdentity,
@@ -43,11 +44,8 @@ export type MealLexemeLoader = (canonicalKey: string) => {
   ipa: readonly string[];
 } | null;
 
-function mealSnapshot() {
-  return snapshotSceneContentFromPack(
-    experimentalMealContextLabPack(),
-    HOME_BREAKFAST_FRAME_ID,
-  );
+function mealSnapshot(pack: ContextualSceneContentPack = experimentalMealContextLabPack()) {
+  return snapshotSceneContentFromPack(pack, HOME_BREAKFAST_FRAME_ID);
 }
 
 /** @deprecated Candidate compatibility projection. Prefer Scene Content pack. */
@@ -70,10 +68,12 @@ export const MEAL_PROBE_STRENGTHEN_ENTITY_BINDINGS = experimentalMealContextLabP
   .filter((item): item is NonNullable<typeof item> => item !== null)
   .sort((left, right) => left.sceneOrder - right.sceneOrder);
 
-export function listMealStrengthenIdentities():
+export function listMealStrengthenIdentities(
+  pack: ContextualSceneContentPack = experimentalMealContextLabPack(),
+):
   | { ok: true; identities: MealLexicalStrengthenIdentity[] }
   | { ok: false; reason: "MEAL_TARGET_PROFILE_UNRESOLVED" } {
-  const snapshot = mealSnapshot();
+  const snapshot = mealSnapshot(pack);
   if (!snapshot) {
     return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
   }
@@ -105,14 +105,16 @@ export function resolveMealLexicalStrengthenProfiles(input: {
   loadLexeme: MealLexemeLoader;
   displayLabelForEntity: (entityId: string) => string | null;
   allowedEntityIds: readonly string[];
+  pack?: ContextualSceneContentPack;
 }):
   | { ok: true; profiles: MealLexicalStrengthenProfile[] }
   | { ok: false; reason: "MEAL_TARGET_PROFILE_UNRESOLVED" } {
-  const identities = listMealStrengthenIdentities();
+  const pack = input.pack ?? experimentalMealContextLabPack();
+  const identities = listMealStrengthenIdentities(pack);
   if (!identities.ok) {
     return identities;
   }
-  const snapshot = mealSnapshot();
+  const snapshot = mealSnapshot(pack);
   if (!snapshot) {
     return { ok: false, reason: "MEAL_TARGET_PROFILE_UNRESOLVED" };
   }
@@ -127,7 +129,7 @@ export function resolveMealLexicalStrengthenProfiles(input: {
       findResolvedLexeme(snapshot, identity.target)?.displayLabel ??
       "";
     const displayForm = lexeme?.display.trim() || lexeme?.lemma.trim() || "";
-    const authored = experimentalMealContextLabPack().lexemes.find((item) =>
+    const authored = pack.lexemes.find((item) =>
       sameLexemeSense(item.target, identity.target),
     );
     const meaningGloss =
@@ -169,8 +171,9 @@ export function resolveMealLexicalStrengthenProfiles(input: {
 
 export function identityForFixtureSense(
   sense: LexemeSenseRef,
+  pack: ContextualSceneContentPack = experimentalMealContextLabPack(),
 ): MealLexicalStrengthenIdentity | null {
-  const listed = listMealStrengthenIdentities();
+  const listed = listMealStrengthenIdentities(pack);
   if (!listed.ok) {
     return null;
   }
@@ -182,8 +185,9 @@ export function identityForFixtureSense(
 
 export function identityForBundledTarget(
   target: LexemeSenseRef,
+  pack: ContextualSceneContentPack = experimentalMealContextLabPack(),
 ): MealLexicalStrengthenIdentity | null {
-  const listed = listMealStrengthenIdentities();
+  const listed = listMealStrengthenIdentities(pack);
   if (!listed.ok) {
     return null;
   }

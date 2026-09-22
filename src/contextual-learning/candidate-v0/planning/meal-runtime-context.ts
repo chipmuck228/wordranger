@@ -4,8 +4,13 @@
  */
 
 import { experimentalMealContextLabPack } from "../content/experimental-meal-runtime-pack";
+import { MEAL_SCENE_CONTENT_PACK } from "../content/packs/meal/meal-scene-content";
 import { MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID } from "../content/packs/meal/meal-scene-expansion-batch-02";
-import { MEAL_SCENE_EXPANSION_BATCH_03_PACK_ID } from "../content/packs/meal/meal-scene-expansion-batch-03";
+import {
+  MEAL_SCENE_EXPANSION_BATCH_03_PACK,
+  MEAL_SCENE_EXPANSION_BATCH_03_PACK_ID,
+} from "../content/packs/meal/meal-scene-expansion-batch-03";
+import type { ContextualSceneContentPack } from "../content/types";
 import type { ContextFrame, SemanticSkeleton } from "../domain/types";
 import { MEAL_FRAMES } from "../fixtures/meal/contexts";
 import { MEAL_BATCH_02_FRAMES } from "../fixtures/meal/meal-batch-02-contexts";
@@ -64,4 +69,16 @@ export function resolveMealRuntimeContext(runtimeContextId: MealRuntimeContextId
     frames: framesForMealRuntime(runtimeContextId),
     skeleton: skeletonForMealRuntime(runtimeContextId),
   };
+}
+
+export function packForMealRuntime(
+  runtimeContextId: MealRuntimeContextId,
+): ContextualSceneContentPack {
+  if (runtimeContextId === "MEAL_BATCH_03") {
+    return MEAL_SCENE_EXPANSION_BATCH_03_PACK;
+  }
+  if (runtimeContextId === "MEAL_BATCH_02") {
+    return experimentalMealContextLabPack();
+  }
+  return MEAL_SCENE_CONTENT_PACK;
 }
