@@ -4,6 +4,7 @@
  */
 
 import type { ContextFrame, LexemeSenseRef } from "../domain/types";
+import type { PlanVariantRequest } from "./types";
 import { classroomRulerFrame, libraryBookFrame } from "../fixtures/borrowing-sharing/contexts";
 import { BORROW_PROFILES, BORROW_SENSE } from "../fixtures/borrowing-sharing/knowledge";
 import {
@@ -114,11 +115,14 @@ function mealVariant(
       containsGuidedSteps: true,
       containsAssessableSteps: true,
       reviewStatus: "REVIEWED",
-      createPlan: (request) =>
-        createMealBuildPlan(frame, {
+      createPlan: (request) => {
+        const resolved = materializeMealFrame(frame, request);
+        return createMealBuildPlan(resolved ?? frame, {
           ...request,
           runtimeContextId,
-        }),
+          targets: resolved ? request?.targets : [],
+        });
+      },
     };
   }
   if (kind === "strengthen-recall") {
@@ -135,11 +139,14 @@ function mealVariant(
       containsGuidedSteps: true,
       containsAssessableSteps: true,
       reviewStatus: "REVIEWED",
-      createPlan: (request) =>
-        createMealRecallStrengthenPlan(frame, {
+      createPlan: (request) => {
+        const resolved = materializeMealFrame(frame, request);
+        return createMealRecallStrengthenPlan(resolved ?? frame, {
           ...request,
           runtimeContextId,
-        }),
+          targets: resolved ? request?.targets : [],
+        });
+      },
     };
   }
   if (kind === "strengthen") {
@@ -351,6 +358,16 @@ export const PLANNER_SUPPORT_BLOCKS = new Map(
     block,
   ]),
 );
+
+function materializeMealFrame(
+  registryFrame: ContextFrame,
+  request?: PlanVariantRequest,
+): ContextFrame | null {
+  if (!request?.authoredRuntime) {
+    return registryFrame;
+  }
+  return request.authoredRuntime.frames.find((item) => item.id === registryFrame.id) ?? null;
+}
 
 export function listPlanVariants(): readonly ExperiencePlanVariant[] {
   return PLAN_VARIANTS;

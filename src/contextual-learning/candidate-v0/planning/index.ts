@@ -28,5 +28,6 @@ export type {
   ExperiencePlanningResult,
   ExperiencePlanningTrace,
   PlanExecutability,
+  PlannerAuthoredRuntime,
   RejectedTargetRequirement,
 } from "./types";

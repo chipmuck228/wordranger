@@ -46,7 +46,9 @@ import { TaskProtocolError } from "@/domain/tasks/task-evaluator";
 import {
   planExperience,
   type ExperiencePlanningInput,
+  type PlannerAuthoredRuntime,
 } from "@/contextual-learning/candidate-v0/planning";
+import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
 import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import { experimentalMealRuntimeContextId } from "@/contextual-learning/candidate-v0/planning/meal-runtime-context";
 import {
@@ -228,7 +230,7 @@ export class MealContextLabController {
         createdAt,
         updatedAt: createdAt,
       });
-      return this.toPublicScreen(prepared.run, 0, prepared.issued);
+      return this.toPublicScreen(prepared.run, 0, prepared.issued, content.pack);
     } catch (error) {
       return this.contentErrorScreen(error);
     }
@@ -340,10 +342,21 @@ export class MealContextLabController {
         ? staleRunScreen()
         : notFoundRunScreen();
     }
-    return this.toPublicScreen(issued.run, saved.revision, {
-      issuedActivity: issued.issuedActivity,
-      issuedTask,
-    });
+    let pack: ContextualSceneContentPack | undefined;
+    try {
+      pack = (await this.resolveContent(record)).pack;
+    } catch (error) {
+      return this.contentErrorScreen(error);
+    }
+    return this.toPublicScreen(
+      issued.run,
+      saved.revision,
+      {
+        issuedActivity: issued.issuedActivity,
+        issuedTask,
+      },
+      pack,
+    );
   }
 
   async submitFrozenTask(
@@ -427,7 +440,13 @@ export class MealContextLabController {
     }
 
     const occurredAt = this.now();
-    const hintCount = frozenHintCountForRecord(record);
+    let pack: ContextualSceneContentPack | undefined;
+    try {
+      pack = (await this.resolveContent(record)).pack;
+    } catch (error) {
+      return this.contentErrorScreen(error);
+    }
+    const hintCount = frozenHintCountForRecord(record, pack);
     if (hintCount === null) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
         message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
@@ -630,9 +649,16 @@ export class MealContextLabController {
       });
     }
 
+    let content: ContextLabContentSnapshot;
+    try {
+      content = await this.resolveContent(input.record);
+    } catch (error) {
+      return this.contentErrorScreen(error);
+    }
     const nextProbe = completeExperienceAfterEvidence({
       probe: input.record.probe,
       experienceRun: input.record.experienceRun,
+      pack: content.pack,
     });
     if (nextProbe && "screen" in nextProbe) {
       return nextProbe.screen;
@@ -667,7 +693,11 @@ export class MealContextLabController {
       feedback: input.feedback,
       progress: progressForIssuedRun(recorded.run),
       planMode: planModeOf(recorded.run),
-      ...experienceRecordedCopy(nextProbe ?? input.record.probe, recorded.run),
+      ...experienceRecordedCopy(
+        nextProbe ?? input.record.probe,
+        recorded.run,
+        content.pack,
+      ),
     });
   }
 
@@ -688,7 +718,11 @@ export class MealContextLabController {
         feedback: contextLabFeedbackFromEvidence(evidence),
         progress: progressForIssuedRun(record.experienceRun),
         planMode: planModeOf(record.experienceRun),
-        ...experienceRecordedCopy(record.probe, record.experienceRun),
+        ...experienceRecordedCopy(
+          record.probe,
+          record.experienceRun,
+          (await this.resolveContent(record).catch(() => null))?.pack,
+        ),
       });
     }
     return this.completeAfterEvidence({
@@ -723,7 +757,11 @@ export class MealContextLabController {
       feedback: contextLabFeedbackFromEvidence(evidence),
       progress: progressForIssuedRun(record.experienceRun),
       planMode: planModeOf(record.experienceRun),
-      ...experienceRecordedCopy(record.probe, record.experienceRun),
+      ...experienceRecordedCopy(
+        record.probe,
+        record.experienceRun,
+        (await this.resolveContent(record).catch(() => null))?.pack,
+      ),
     });
   }
 
@@ -756,11 +794,20 @@ export class MealContextLabController {
   }):
     | { run: ExperienceRun; issued: IssuedPayload }
     | { screen: ContextLabCurrentScreen } {
-    const planned = planExperience(
+    const authoredRuntime = authoredRuntimeFromContent(options?.content);
+    const planningInput =
       options?.planningInput ??
-        this.planningInput ??
-        mealBuildPlanningInput(undefined, undefined, options?.content?.context.runtimeContextId),
-    );
+      this.planningInput ??
+      mealBuildPlanningInput(
+        undefined,
+        undefined,
+        options?.content?.context.runtimeContextId,
+        authoredRuntime,
+      );
+    const planned = planExperience({
+      ...planningInput,
+      authoredRuntime: planningInput.authoredRuntime ?? authoredRuntime,
+    });
     if (!planned.ok) {
       return {
         screen: errorScreen(CONTEXT_LAB_ERROR_CODES.PLANNER_FAILURE, {
@@ -771,8 +818,16 @@ export class MealContextLabController {
 
     const runtimeContextId =
       options?.content?.context.runtimeContextId ?? experimentalMealRuntimeContextId();
-    const frame = findPlannerFrame(planned.plan.contextFrameId, runtimeContextId);
-    const skeleton = findPlannerSkeleton(planned.plan.skeletonId, runtimeContextId);
+    const frame = options?.content
+      ? options.content.context.frames.find(
+          (item) => item.id === planned.plan.contextFrameId,
+        )
+      : findPlannerFrame(planned.plan.contextFrameId, runtimeContextId);
+    const skeleton = options?.content
+      ? options.content.context.skeleton.id === planned.plan.skeletonId
+        ? options.content.context.skeleton
+        : undefined
+      : findPlannerSkeleton(planned.plan.skeletonId, runtimeContextId);
     if (
       !frame ||
       !skeleton ||
@@ -849,6 +904,12 @@ export class MealContextLabController {
   private async presentStoredRun(
     record: ContextLabRunRecord,
   ): Promise<ContextLabCurrentScreen> {
+    let content: ContextLabContentSnapshot;
+    try {
+      content = await this.resolveContent(record);
+    } catch (error) {
+      return this.contentErrorScreen(error);
+    }
     const aligned = rejectInvalidExperienceQueue(record);
     if (aligned) {
       return aligned;
@@ -863,9 +924,9 @@ export class MealContextLabController {
       record.probe.phase !== "STRENGTHEN_QUEUE_COMPLETED"
     ) {
       if (record.probe.phase === "PROBE_TASK_ISSUED") {
-        return this.presentIssuedProbeTask(record);
+        return this.presentIssuedProbeTask(record, content.pack);
       }
-      return this.presentProbe(record);
+      return this.presentProbe(record, content.pack);
     }
     const run = record.experienceRun;
     const current = run.stepRuns[run.currentStepIndex];
@@ -887,8 +948,9 @@ export class MealContextLabController {
         resolvedContext: run.planSnapshot.resolvedContext,
         progress,
         planMode: planModeOf(run),
-        strengthenProfile: strengthenProfileForRun(run),
-        buildProfile: buildProfileForRun(run),
+        strengthenProfile: strengthenProfileForRun(run, content.pack),
+        buildProfile: buildProfileForRun(run, content.pack),
+        pack: content.pack,
       });
     }
     if (run.status === "FROZEN_TASK_ISSUED" && current?.taskId) {
@@ -904,8 +966,9 @@ export class MealContextLabController {
         resolvedContext: run.planSnapshot.resolvedContext,
         progress,
         planMode: planModeOf(run),
-        strengthenProfile: strengthenProfileForRun(run),
-        buildProfile: buildProfileForRun(run),
+        strengthenProfile: strengthenProfileForRun(run, content.pack),
+        buildProfile: buildProfileForRun(run, content.pack),
+        pack: content.pack,
       });
     }
     if (run.status === "COMPLETED" && current?.taskId) {
@@ -918,6 +981,7 @@ export class MealContextLabController {
     run: ExperienceRun,
     revision: number,
     issued: IssuedPayload,
+    pack?: ContextualSceneContentPack,
   ): ContextLabCurrentScreen {
     const handle = { runId: run.id, revision };
     const progress = progressForIssuedRun(run);
@@ -928,8 +992,9 @@ export class MealContextLabController {
         resolvedContext: run.planSnapshot.resolvedContext,
         progress,
         planMode: planModeOf(run),
-        strengthenProfile: strengthenProfileForRun(run),
-        buildProfile: buildProfileForRun(run),
+        strengthenProfile: strengthenProfileForRun(run, pack),
+        buildProfile: buildProfileForRun(run, pack),
+        pack,
       });
     }
     if (issued.issuedTask) {
@@ -939,8 +1004,9 @@ export class MealContextLabController {
         resolvedContext: run.planSnapshot.resolvedContext,
         progress,
         planMode: planModeOf(run),
-        strengthenProfile: strengthenProfileForRun(run),
-        buildProfile: buildProfileForRun(run),
+        strengthenProfile: strengthenProfileForRun(run, pack),
+        buildProfile: buildProfileForRun(run, pack),
+        pack,
       });
     }
     return errorScreen(CONTEXT_LAB_ERROR_CODES.FROZEN_COMPILATION_FAILURE);
@@ -970,6 +1036,7 @@ export class MealContextLabController {
     return presentProbeIntroScreen({
       handle: this.handleFor(prepared.run.id, 0, content.releaseId),
       progress: { current: 0, total: probe.targets.length },
+      pack: content.pack,
     });
   }
 
@@ -983,7 +1050,10 @@ export class MealContextLabController {
     return { run: resetIssuedRun(issued.run) };
   }
 
-  private presentProbe(record: ContextLabRunRecord): ContextLabCurrentScreen {
+  private presentProbe(
+    record: ContextLabRunRecord,
+    pack?: ContextualSceneContentPack,
+  ): ContextLabCurrentScreen {
     const probe = record.probe;
     if (!probe) {
       return notFoundRunScreen();
@@ -995,13 +1065,18 @@ export class MealContextLabController {
       unit: "个物品",
     };
     if (probe.phase === "PROBE_INTRO") {
-      return presentProbeIntroScreen({ handle, progress: { current: 0, total: probe.targets.length } });
+      return presentProbeIntroScreen({
+        handle,
+        progress: { current: 0, total: probe.targets.length },
+        pack,
+      });
     }
     if (probe.phase === "ROUTING_SUMMARY" || probe.phase === "PROBE_COMPLETED") {
       const results = routingResultsForProbe(probe);
       return presentProbeSummaryScreen({
         handle,
         progress: { current: probe.targets.length, total: probe.targets.length },
+        pack,
         items: results.map((result, index) => ({
           entityId: probe.targets[index].entityId,
           label: probe.targets[index].displayLabel,
@@ -1023,6 +1098,7 @@ export class MealContextLabController {
 
   private async presentIssuedProbeTask(
     record: ContextLabRunRecord,
+    pack?: ContextualSceneContentPack,
   ): Promise<ContextLabCurrentScreen> {
     const probe = record.probe;
     if (!probe?.issued) {
@@ -1044,6 +1120,7 @@ export class MealContextLabController {
         current: probe.currentTargetIndex + 1,
         total: probe.targets.length,
       },
+      pack,
     });
   }
 
@@ -1075,11 +1152,20 @@ export class MealContextLabController {
           ? staleRunScreen()
           : notFoundRunScreen();
       }
-      return this.presentProbe({
-        ...record,
-        probe: completed,
-        revision: saved.revision,
-      });
+      let pack: ContextualSceneContentPack | undefined;
+      try {
+        pack = (await this.resolveContent(record)).pack;
+      } catch (error) {
+        return this.contentErrorScreen(error);
+      }
+      return this.presentProbe(
+        {
+          ...record,
+          probe: completed,
+          revision: saved.revision,
+        },
+        pack,
+      );
     }
     const target = probe.targets[next.targetIndex];
     let content: ContextLabContentSnapshot;
@@ -1151,7 +1237,7 @@ export class MealContextLabController {
         : notFoundRunScreen();
     }
     return presentProbeFrozenTaskScreen({
-      handle: { runId: record.id, revision: saved.revision },
+      handle: this.handleFor(record.id, saved.revision, record.releaseId),
       task: bound.task.publicTask,
       skill: next.skill,
       entityId: target.entityId,
@@ -1159,6 +1245,7 @@ export class MealContextLabController {
         current: next.targetIndex + 1,
         total: probe.targets.length,
       },
+      pack: content.pack,
     });
   }
 
@@ -1178,7 +1265,10 @@ export class MealContextLabController {
     }
     if (probe.phase === "PROBE_FEEDBACK_RECORDED") {
       if (probe.observations.some((item) => item.taskId === input.taskId)) {
-        return this.presentProbe(record);
+        return this.presentProbe(
+          record,
+          (await this.resolveContent(record).catch(() => null))?.pack,
+        );
       }
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
         message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
@@ -1294,7 +1384,10 @@ export class MealContextLabController {
       return notFoundRunScreen();
     }
     if (probe.observations.some((item) => item.taskId === taskId)) {
-      return this.presentProbe(latest);
+      return this.presentProbe(
+        latest,
+        (await this.resolveContent(latest).catch(() => null))?.pack,
+      );
     }
     const evidence = await this.findTaskEvidence(latest, taskId);
     if (!evidence || !probe.issued || probe.issued.taskId !== taskId) {
@@ -1438,6 +1531,7 @@ export class MealContextLabController {
         profile,
         typingCapabilities(),
         content.context.runtimeContextId,
+        authoredRuntimeFromContent(content),
       ),
       runId: record.id,
       content,
@@ -1468,7 +1562,12 @@ export class MealContextLabController {
         ? staleRunScreen()
         : notFoundRunScreen();
     }
-    return this.toPublicScreen(prepared.run, saved.revision, prepared.issued);
+    return this.toPublicScreen(
+      prepared.run,
+      saved.revision,
+      prepared.issued,
+      content.pack,
+    );
   }
 
   private async handoffToBuild(
@@ -1552,6 +1651,7 @@ export class MealContextLabController {
         profile,
         typingCapabilities(),
         content.context.runtimeContextId,
+        authoredRuntimeFromContent(content),
       ),
       runId: record.id,
       content,
@@ -1582,7 +1682,12 @@ export class MealContextLabController {
         ? staleRunScreen()
         : notFoundRunScreen();
     }
-    return this.toPublicScreen(prepared.run, saved.revision, prepared.issued);
+    return this.toPublicScreen(
+      prepared.run,
+      saved.revision,
+      prepared.issued,
+      content.pack,
+    );
   }
 
   private async returnToSummary(
@@ -1613,11 +1718,20 @@ export class MealContextLabController {
         ? staleRunScreen()
         : notFoundRunScreen();
     }
-    return this.presentProbe({
-      ...record,
-      probe: nextProbe,
-      revision: saved.revision,
-    });
+    let pack: ContextualSceneContentPack | undefined;
+    try {
+      pack = (await this.resolveContent(record)).pack;
+    } catch (error) {
+      return this.contentErrorScreen(error);
+    }
+    return this.presentProbe(
+      {
+        ...record,
+        probe: nextProbe,
+        revision: saved.revision,
+      },
+      pack,
+    );
   }
 
   private async resolveContent(
@@ -1685,6 +1799,7 @@ export function mealBuildPlanningInput(
   profileOrCapabilities?: MealLexicalBuildProfile | RuntimeCapability[],
   capabilities: RuntimeCapability[] = typingCapabilities(),
   runtimeContextId: ReturnType<typeof experimentalMealRuntimeContextId> = experimentalMealRuntimeContextId(),
+  authoredRuntime?: PlannerAuthoredRuntime,
 ): ExperiencePlanningInput {
   const profile = Array.isArray(profileOrCapabilities)
     ? null
@@ -1703,6 +1818,7 @@ export function mealBuildPlanningInput(
       runtimeCapabilities: runtime,
       loadLexeme: bundledSceneLexemeLoader,
       runtimeContextId,
+      authoredRuntime,
     };
   }
   return {
@@ -1719,6 +1835,7 @@ export function mealBuildPlanningInput(
     runtimeCapabilities: runtime,
     loadLexeme: bundledSceneLexemeLoader,
     runtimeContextId,
+    authoredRuntime,
   };
 }
 
@@ -1726,6 +1843,7 @@ export function mealStrengthenPlanningInput(
   profileOrCapabilities?: MealLexicalStrengthenProfile | RuntimeCapability[],
   capabilities: RuntimeCapability[] = typingCapabilities(),
   runtimeContextId: ReturnType<typeof experimentalMealRuntimeContextId> = experimentalMealRuntimeContextId(),
+  authoredRuntime?: PlannerAuthoredRuntime,
 ): ExperiencePlanningInput {
   const profile = Array.isArray(profileOrCapabilities)
     ? null
@@ -1744,6 +1862,7 @@ export function mealStrengthenPlanningInput(
       runtimeCapabilities: runtime,
       loadLexeme: bundledSceneLexemeLoader,
       runtimeContextId,
+      authoredRuntime,
     };
   }
   return {
@@ -1760,6 +1879,7 @@ export function mealStrengthenPlanningInput(
     runtimeCapabilities: runtime,
     loadLexeme: bundledSceneLexemeLoader,
     runtimeContextId,
+    authoredRuntime,
   };
 }
 
@@ -1898,21 +2018,41 @@ function planModeOf(run: ExperienceRun): "BUILD" | "STRENGTHEN" | undefined {
 
 function strengthenProfileForRun(
   run: ExperienceRun,
+  pack?: ContextualSceneContentPack,
 ): MealLexicalStrengthenProfile | null {
   const sense = run.planSnapshot.plan.targets[0]?.sense;
-  return sense ? mealProfileForTarget(sense) : null;
+  return sense ? mealProfileForTarget(sense, pack) : null;
 }
 
-function buildProfileForRun(run: ExperienceRun): MealLexicalBuildProfile | null {
+function buildProfileForRun(
+  run: ExperienceRun,
+  pack?: ContextualSceneContentPack,
+): MealLexicalBuildProfile | null {
   const sense = run.planSnapshot.plan.targets[0]?.sense;
-  return sense ? mealBuildProfileForTarget(sense) : null;
+  return sense ? mealBuildProfileForTarget(sense, pack) : null;
 }
 
-function frozenHintCountForRecord(record: ContextLabRunRecord): number | null {
+function authoredRuntimeFromContent(
+  content?: ContextLabContentSnapshot,
+): PlannerAuthoredRuntime | undefined {
+  if (!content) {
+    return undefined;
+  }
+  return {
+    pack: content.pack,
+    frames: content.context.frames,
+    skeleton: content.context.skeleton,
+  };
+}
+
+function frozenHintCountForRecord(
+  record: ContextLabRunRecord,
+  pack?: ContextualSceneContentPack,
+): number | null {
   if (record.experienceRun.planSnapshot.plan.mode !== "STRENGTHEN") {
     return 0;
   }
-  const profile = strengthenProfileForRun(record.experienceRun);
+  const profile = strengthenProfileForRun(record.experienceRun, pack);
   const current = record.experienceRun.planSnapshot.plan.steps[
     record.experienceRun.currentStepIndex
   ];
@@ -1960,6 +2100,7 @@ function recordSupportExposureOnProbe(input: {
 function completeExperienceAfterEvidence(input: {
   probe: MealProbeOrchestration | null;
   experienceRun: ExperienceRun;
+  pack?: ContextualSceneContentPack;
 }): MealProbeOrchestration | { screen: ContextLabCurrentScreen } | null {
   const misaligned = rejectInvalidExperienceQueue({
     probe: input.probe,
@@ -1975,6 +2116,7 @@ function completeExperienceAfterEvidence(input: {
     return completeBuildAfterEvidence({
       probe: input.probe,
       plan: input.experienceRun.planSnapshot.plan,
+      pack: input.pack,
     });
   }
   if (input.probe.experienceMode !== "STRENGTHEN") {
@@ -1994,6 +2136,7 @@ function completeExperienceAfterEvidence(input: {
       lexemeId: "",
       senseId: "",
     },
+    input.pack,
   );
   if (!profile) {
     return {
@@ -2022,6 +2165,7 @@ function completeExperienceAfterEvidence(input: {
 function completeBuildAfterEvidence(input: {
   probe: MealProbeOrchestration;
   plan: LearningExperiencePlan;
+  pack?: ContextualSceneContentPack;
 }): MealProbeOrchestration | { screen: ContextLabCurrentScreen } {
   const queue = requireBuildQueue(input.probe);
   if (!queue.ok) {
@@ -2034,6 +2178,7 @@ function completeBuildAfterEvidence(input: {
   }
   const profile = mealBuildProfileForTarget(
     input.plan.targets[0]?.sense ?? { lexemeId: "", senseId: "" },
+    input.pack,
   );
   if (!profile) {
     return {
@@ -2062,6 +2207,7 @@ function completeBuildAfterEvidence(input: {
 function experienceRecordedCopy(
   probe: MealProbeOrchestration | null,
   run: ExperienceRun,
+  pack?: ContextualSceneContentPack,
 ): {
   recordedMessage?: string;
   continueAvailable?: boolean;
@@ -2074,8 +2220,8 @@ function experienceRecordedCopy(
   if (probe.experienceMode === "BUILD") {
     const completed = probe.buildQueue?.completed.at(-1);
     const profile = completed
-      ? mealBuildProfileForTarget(completed)
-      : buildProfileForRun(run);
+      ? mealBuildProfileForTarget(completed, pack)
+      : buildProfileForRun(run, pack);
     const remaining = probe.buildQueue
       ? currentBuildQueueItem(probe.buildQueue)
       : null;
@@ -2100,8 +2246,8 @@ function experienceRecordedCopy(
   }
   const completed = probe.strengthenQueue?.completed.at(-1);
   const profile = completed
-    ? mealProfileForTarget(completed)
-    : strengthenProfileForRun(run);
+    ? mealProfileForTarget(completed, pack)
+    : strengthenProfileForRun(run, pack);
   const remaining = probe.strengthenQueue
     ? currentStrengthenQueueItem(probe.strengthenQueue)
     : null;

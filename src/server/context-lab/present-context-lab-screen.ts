@@ -27,6 +27,7 @@ import {
 import type { ContextualProbeSkill } from "@/contextual-learning/candidate-v0/probe/types";
 import type { MealLexicalBuildProfile } from "@/contextual-learning/candidate-v0/build/types";
 import type { MealLexicalStrengthenProfile } from "@/contextual-learning/candidate-v0/strengthen/types";
+import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
 import { spellingCueFromDisplayForm } from "@/contextual-learning/candidate-v0/strengthen/spelling-cue";
 import { errorScreen } from "./context-lab-errors";
 import {
@@ -35,8 +36,8 @@ import {
   contrastCaptionFor,
   frozenPreviewInstruction,
   guidedInstructionFor,
-  HOME_BREAKFAST_SCENE_ENTITY_IDS,
   homeBreakfastFrameCopy,
+  projectMealPresentation,
   mappedMealEntity,
   relationCaptionFor,
   sceneEntityIdsForResolvedContext,
@@ -54,8 +55,13 @@ export function presentGuidedScreen(input: {
   supportReveal?: PublicContextPresentation["supportReveal"];
   strengthenProfile?: MealLexicalStrengthenProfile | null;
   buildProfile?: MealLexicalBuildProfile | null;
+  pack?: ContextualSceneContentPack;
 }): ContextLabCurrentScreen {
-  const context = presentGuidedContext(input.activity, input.resolvedContext);
+  const context = presentGuidedContext(
+    input.activity,
+    input.resolvedContext,
+    input.pack,
+  );
   if ("error" in context) {
     return errorScreen(context.error);
   }
@@ -149,10 +155,12 @@ export function presentFrozenTaskScreen(input: {
   planMode?: "BUILD" | "STRENGTHEN";
   strengthenProfile?: MealLexicalStrengthenProfile | null;
   buildProfile?: MealLexicalBuildProfile | null;
+  pack?: ContextualSceneContentPack;
 }): ContextLabCurrentScreen {
   const context = presentFrozenContext(
     input.resolvedContext,
     input.strengthenProfile ?? input.buildProfile,
+    input.pack,
   );
   if ("error" in context) {
     return errorScreen(context.error);
@@ -245,8 +253,9 @@ export function presentRecordedScreen(input: {
 export function presentProbeIntroScreen(input: {
   handle: ContextLabRunHandle;
   progress: ContextLabProgress;
+  pack?: ContextualSceneContentPack;
 }): ContextLabCurrentScreen {
-  const frameCopy = homeBreakfastFrameCopy();
+  const frameCopy = homeBreakfastFrameCopy(input.pack);
   return {
     kind: "PROBE_INTRO",
     handle: input.handle,
@@ -254,7 +263,7 @@ export function presentProbeIntroScreen(input: {
       title: frameCopy.title,
       settingLabel: "先看看你已经会了哪些词",
       instruction: "桌上有几件早餐物品。先检查，教学还没开始。",
-      entities: probeSceneEntities(),
+      entities: probeSceneEntities(input.pack),
       highlightedEntityIds: [],
     },
     progress: withProbeUnit(input.progress),
@@ -279,6 +288,7 @@ export function presentProbeFrozenTaskScreen(input: {
   skill: ContextualProbeSkill;
   entityId: string;
   progress: ContextLabProgress;
+  pack?: ContextualSceneContentPack;
 }): ContextLabCurrentScreen {
   const presentationMode: ContextLabTaskPresentationMode =
     input.skill === "ACTIVE_RECALL" ? "SCENE_TARGET" : "TASK_ONLY";
@@ -288,8 +298,8 @@ export function presentProbeFrozenTaskScreen(input: {
     task: input.task,
     context:
       presentationMode === "SCENE_TARGET"
-        ? presentProbeRecallContext(input.entityId)
-        : presentProbeRecognitionContext(),
+        ? presentProbeRecallContext(input.entityId, input.pack)
+        : presentProbeRecognitionContext(input.pack),
     progress: withProbeUnit(input.progress),
     presentationMode,
   };
@@ -297,19 +307,22 @@ export function presentProbeFrozenTaskScreen(input: {
 
 export function presentProbeRecallContext(
   highlightedEntityId: string,
+  pack?: ContextualSceneContentPack,
 ): PublicContextPresentation {
-  const frameCopy = homeBreakfastFrameCopy();
+  const frameCopy = homeBreakfastFrameCopy(pack);
   return {
     title: frameCopy.title,
     settingLabel: "先看看你已经会了哪些词",
     instruction: "写出当前物品的英文单词。还没有开始教学。",
-    entities: probeSceneEntities(),
+    entities: probeSceneEntities(pack),
     highlightedEntityIds: [highlightedEntityId],
   };
 }
 
-export function presentProbeRecognitionContext(): PublicContextPresentation {
-  const frameCopy = homeBreakfastFrameCopy();
+export function presentProbeRecognitionContext(
+  pack?: ContextualSceneContentPack,
+): PublicContextPresentation {
+  const frameCopy = homeBreakfastFrameCopy(pack);
   return {
     title: frameCopy.title,
     settingLabel: "看看这个英文词表示什么",
@@ -335,8 +348,9 @@ export function presentProbeSummaryScreen(input: {
   strengthenButtonLabel?: string;
   buildButtonLabel?: string;
   pendingMessage: string | null;
+  pack?: ContextualSceneContentPack;
 }): ContextLabCurrentScreen {
-  const frameCopy = homeBreakfastFrameCopy();
+  const frameCopy = homeBreakfastFrameCopy(input.pack);
   return {
     kind: "PROBE_SUMMARY",
     handle: input.handle,
@@ -344,7 +358,7 @@ export function presentProbeSummaryScreen(input: {
       title: frameCopy.title,
       settingLabel: "先看看你已经会了哪些词",
       instruction: "这是这次检查的下一步建议，不是永久掌握程度。",
-      entities: probeSceneEntities(),
+      entities: probeSceneEntities(input.pack),
       highlightedEntityIds: [],
     },
     progress: withProbeUnit(input.progress),
@@ -357,8 +371,14 @@ export function presentProbeSummaryScreen(input: {
   };
 }
 
-function probeSceneEntities(): PublicContextPresentation["entities"] {
-  return HOME_BREAKFAST_SCENE_ENTITY_IDS.map((entityId) => mappedMealEntity(entityId)!);
+function probeSceneEntities(
+  pack?: ContextualSceneContentPack,
+): PublicContextPresentation["entities"] {
+  const ids = projectMealPresentation(pack).sceneEntityIds;
+  return ids.flatMap((entityId) => {
+    const mapped = mappedMealEntity(entityId, pack);
+    return mapped ? [mapped] : [];
+  });
 }
 
 function withProbeUnit(progress: ContextLabProgress): ContextLabProgress {
@@ -402,21 +422,22 @@ export function progressForIssuedRun(run: ExperienceRun): ContextLabProgress {
 export function presentGuidedContext(
   activity: PublicGuidedActivity,
   resolvedContext: ResolvedContextSnapshot,
+  pack?: ContextualSceneContentPack,
 ): PublicContextPresentation | { error: ContextLabErrorCode } {
-  const scene = sceneEntities(resolvedContext);
+  const scene = sceneEntities(resolvedContext, pack);
   if ("error" in scene) {
     return scene;
   }
   const presentedEntityIds = activity.presentedEntityIds ?? [];
   for (const entityId of presentedEntityIds) {
-    if (!mappedMealEntity(entityId)) {
+    if (!mappedMealEntity(entityId, pack)) {
       return { error: CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION };
     }
   }
   const highlightedEntityIds =
     activity.kind === "PRESENT_CONTEXT" ? [] : presentedEntityIds;
 
-  const frameCopy = homeBreakfastFrameCopy();
+  const frameCopy = homeBreakfastFrameCopy(pack);
   const context: PublicContextPresentation = {
     title: frameCopy.title,
     settingLabel: frameCopy.settingLabel,
@@ -426,7 +447,7 @@ export function presentGuidedContext(
   };
 
   if (activity.kind === "OBSERVE_RELATION") {
-    const caption = groundedRelationCaption(activity, resolvedContext);
+    const caption = groundedRelationCaption(activity, resolvedContext, pack);
     if (!caption) {
       return { error: CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION };
     }
@@ -436,7 +457,7 @@ export function presentGuidedContext(
   if (activity.kind === "SHOW_CONTRAST") {
     const captions = [];
     for (const entityId of highlightedEntityIds) {
-      const caption = contrastCaptionFor(entityId);
+      const caption = contrastCaptionFor(entityId, pack);
       if (!caption) {
         return { error: CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION };
       }
@@ -451,12 +472,13 @@ export function presentGuidedContext(
 export function presentFrozenContext(
   resolvedContext: ResolvedContextSnapshot,
   strengthenProfile?: MealLexicalStrengthenProfile | null,
+  pack?: ContextualSceneContentPack,
 ): PublicContextPresentation | { error: ContextLabErrorCode } {
-  const scene = sceneEntities(resolvedContext);
+  const scene = sceneEntities(resolvedContext, pack);
   if ("error" in scene) {
     return scene;
   }
-  const frameCopy = homeBreakfastFrameCopy();
+  const frameCopy = homeBreakfastFrameCopy(pack);
   return {
     title: frameCopy.title,
     settingLabel: frameCopy.settingLabel,
@@ -517,16 +539,17 @@ function buildSupportReveal(
 
 function sceneEntities(
   resolvedContext: ResolvedContextSnapshot,
+  pack?: ContextualSceneContentPack,
 ): PublicContextPresentation["entities"] | { error: ContextLabErrorCode } {
   const bound = new Set(
     resolvedContext.entityBindings.map((binding) => binding.entityId),
   );
   const entities = [];
-  for (const entityId of sceneEntityIdsForResolvedContext(bound)) {
+  for (const entityId of sceneEntityIdsForResolvedContext(bound, pack)) {
     if (!bound.has(entityId)) {
       return { error: CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION };
     }
-    const mapped = mappedMealEntity(entityId);
+    const mapped = mappedMealEntity(entityId, pack);
     if (!mapped) {
       return { error: CONTEXT_LAB_ERROR_CODES.MISSING_PUBLIC_PRESENTATION };
     }
@@ -538,6 +561,7 @@ function sceneEntities(
 function groundedRelationCaption(
   activity: PublicGuidedActivity,
   resolvedContext: ResolvedContextSnapshot,
+  pack?: ContextualSceneContentPack,
 ): string | undefined {
   const predicates = activity.presentedFactPredicates ?? [];
   const presented = new Set(activity.presentedEntityIds ?? []);
@@ -552,7 +576,7 @@ function groundedRelationCaption(
       if (entityIds.some((entityId) => !presented.has(entityId))) {
         continue;
       }
-      const caption = relationCaptionFor(predicate, entityIds);
+      const caption = relationCaptionFor(predicate, entityIds, pack);
       if (caption) {
         return caption;
       }

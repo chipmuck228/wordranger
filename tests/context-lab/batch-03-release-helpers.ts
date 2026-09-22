@@ -1,4 +1,10 @@
 import { MEAL_SCENE_EXPANSION_BATCH_03_PACK_ID } from "@/contextual-learning/candidate-v0/content";
+import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
+import {
+  fingerprintsForManifest,
+  MEAL_RELEASE_SCENE_ID,
+  type ContextualContentReleaseManifest,
+} from "@/contextual-learning/candidate-v0/release";
 import { InMemoryContextualContentBatchPromotionRepository } from "@/server/contextual-content-promotion/in-memory-promotion-repository";
 import { promoteContextualContentBatch } from "@/server/contextual-content-promotion/promote-contextual-content-batch";
 import { createMealMigrationDraft } from "@/server/contextual-content-release/create-migration-draft";
@@ -113,4 +119,108 @@ export function createNineWordLabHarness(
       }),
   });
   return { controller, repository, learningTasks, learning };
+}
+
+export const SNAPSHOT_A_LABELS = {
+  knife: "A版小刀标",
+  bread: "A版面包标",
+  water: "A版水标",
+} as const;
+
+export const SNAPSHOT_B_LABELS = {
+  knife: "B版小刀标",
+  bread: "B版面包标",
+  water: "B版水标",
+} as const;
+
+export const SNAPSHOT_A_CAPTIONS = {
+  knife: "A版小刀关系说明",
+  bread: "A版面包对比说明",
+  water: "A版水关系说明",
+} as const;
+
+export const SNAPSHOT_B_CAPTIONS = {
+  knife: "B版小刀关系说明",
+  bread: "B版面包对比说明",
+  water: "B版水关系说明",
+} as const;
+
+function relabelNineWordPack(
+  pack: ContextualSceneContentPack,
+  labels: { knife: string; bread: string; water: string },
+  captions: { knife: string; bread: string; water: string },
+): ContextualSceneContentPack {
+  const clone = structuredClone(pack);
+  for (const lexeme of clone.lexemes) {
+    const token = lexeme.membership.presentationToken;
+    if (token !== "knife" && token !== "bread" && token !== "water") {
+      continue;
+    }
+    lexeme.lexicalPresentation.displayLabel = labels[token];
+    for (const group of lexeme.grounding.frameFacts) {
+      for (const fact of group.facts) {
+        if (fact.caption) {
+          fact.caption = captions[token];
+        }
+      }
+    }
+    for (const contrast of lexeme.contrastBindings) {
+      if (contrast.caption) {
+        contrast.caption = captions[token];
+      }
+    }
+  }
+  return clone;
+}
+
+export function labeledReleaseFromPublished(
+  source: ContextualContentReleaseManifest,
+  input: {
+    releaseId: string;
+    labels: { knife: string; bread: string; water: string };
+    captions: { knife: string; bread: string; water: string };
+    status?: ContextualContentReleaseManifest["status"];
+    supersededByReleaseId?: string | null;
+  },
+): ContextualContentReleaseManifest {
+  const next = structuredClone(source);
+  next.releaseId = input.releaseId;
+  next.packSnapshot = relabelNineWordPack(source.packSnapshot, input.labels, input.captions);
+  next.targetEntries = next.targetEntries.map((entry) => {
+    const token = next.packSnapshot.lexemes.find(
+      (lexeme) =>
+        lexeme.target.lexemeId === entry.target.lexemeId &&
+        lexeme.target.senseId === entry.target.senseId,
+    )?.membership.presentationToken;
+    if (token !== "knife" && token !== "bread" && token !== "water") {
+      return entry;
+    }
+    return { ...entry, displayLabel: input.labels[token] };
+  });
+  next.status = input.status ?? "PUBLISHED";
+  next.supersededByReleaseId = input.supersededByReleaseId ?? null;
+  next.supersededAt = input.status === "SUPERSEDED" ? "2026-09-22T09:00:00.000Z" : null;
+  const prints = fingerprintsForManifest(next);
+  next.packFingerprint = prints.packFingerprint;
+  next.contextModelFingerprint = prints.contextModelFingerprint;
+  next.releaseFingerprint = prints.releaseFingerprint;
+  return next;
+}
+
+export function installActiveRelease(
+  repository: InMemoryContextualContentReleaseRepository,
+  release: ContextualContentReleaseManifest,
+  pointerRevision = 1,
+) {
+  repository.replaceRaw(release);
+  repository.replacePointerRaw({
+    schemaVersion: release.schemaVersion,
+    kind: "CANDIDATE_V0_ACTIVE_RELEASE_POINTER",
+    sceneId: MEAL_RELEASE_SCENE_ID,
+    releaseId: release.releaseId,
+    releaseFingerprint: release.releaseFingerprint,
+    revision: pointerRevision,
+    activatedAt: "2026-09-22T08:30:00.000Z",
+    activatedBy: "test-actor",
+  });
 }

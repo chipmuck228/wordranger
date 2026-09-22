@@ -8,7 +8,6 @@ import {
 } from "@/contextual-learning/candidate-v0/build/meal-lexical-build-profiles";
 import type { MealLexicalBuildProfile } from "@/contextual-learning/candidate-v0/build/types";
 import { experimentalMealContextLabPack } from "@/contextual-learning/candidate-v0/content/experimental-meal-runtime-pack";
-import { MEAL_SCENE_EXPANSION_BATCH_03_PACK } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-expansion-batch-03";
 import { HOME_BREAKFAST_FRAME_ID } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-content";
 import { snapshotSceneContentFromPack } from "@/contextual-learning/candidate-v0/content/snapshot-from-pack";
 import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
@@ -27,9 +26,7 @@ import {
 function packsForLookup(
   pack?: ContextualSceneContentPack,
 ): ContextualSceneContentPack[] {
-  return pack
-    ? [pack]
-    : [experimentalMealContextLabPack(), MEAL_SCENE_EXPANSION_BATCH_03_PACK];
+  return [pack ?? experimentalMealContextLabPack()];
 }
 
 function resolveInputForPack(pack: ContextualSceneContentPack) {

@@ -3,19 +3,31 @@
  * Planner contracts. Mode is supplied; learner state is not read.
  */
 
-import type { SceneLexemeLoader } from "../content/types";
+import type { ContextualSceneContentPack, SceneLexemeLoader } from "../content/types";
 import type { ContextualMemoryRoutingDecision } from "../memory-routing/types";
 import type {
   CognitiveMode,
+  ContextFrame,
   ContextFrameId,
   ExperienceTarget,
   LearningExperiencePlan,
   LexemeSenseRef,
   RuntimeCapability,
+  SemanticSkeleton,
   SemanticSkeletonId,
 } from "../domain/types";
 import type { ExperiencePlanningError } from "./errors";
 import type { MealRuntimeContextId } from "./meal-runtime-context";
+
+/**
+ * Caller-injected authored Meal content. Already validated by the
+ * server Context Lab layer. Planner never loads a release repository.
+ */
+export interface PlannerAuthoredRuntime {
+  pack: ContextualSceneContentPack;
+  frames: readonly ContextFrame[];
+  skeleton: SemanticSkeleton;
+}
 
 /**
  * Candidate planner input. Intentionally omits learnerStateRef: this
@@ -44,12 +56,18 @@ export interface ExperiencePlanningInput {
    * baseline. Never inferred from a target lemma.
    */
   runtimeContextId?: MealRuntimeContextId;
+  /**
+   * Optional already-resolved authored snapshot. When present, frame,
+   * skeleton, and pack come from this value only. Missing IDs fail closed.
+   */
+  authoredRuntime?: PlannerAuthoredRuntime;
 }
 
 export interface PlanVariantRequest {
   targets?: readonly ExperienceTarget[];
   loadLexeme?: SceneLexemeLoader;
   runtimeContextId?: MealRuntimeContextId;
+  authoredRuntime?: PlannerAuthoredRuntime;
 }
 
 export type PlanExecutability =

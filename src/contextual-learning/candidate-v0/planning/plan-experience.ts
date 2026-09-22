@@ -432,8 +432,15 @@ function evaluateVariant(
     };
   }
   const runtimeContextId = runtimeContextOf(variant.runtimeContextId);
-  const frame = findPlannerFrame(variant.contextFrameId, runtimeContextId);
-  const skeleton = findPlannerSkeleton(variant.skeletonId, runtimeContextId);
+  const authored = input.authoredRuntime;
+  const frame = authored
+    ? authored.frames.find((item) => item.id === variant.contextFrameId)
+    : findPlannerFrame(variant.contextFrameId, runtimeContextId);
+  const skeleton = authored
+    ? authored.skeleton.id === variant.skeletonId
+      ? authored.skeleton
+      : undefined
+    : findPlannerSkeleton(variant.skeletonId, runtimeContextId);
   if (!frame || !skeleton || frame.reviewStatus !== "REVIEWED" || skeleton.reviewStatus !== "REVIEWED") {
     return {
       ok: false,
@@ -456,6 +463,7 @@ function evaluateVariant(
       targets: input.targets,
       loadLexeme: input.loadLexeme,
       runtimeContextId,
+      authoredRuntime: authored,
     }),
   );
   plan.sourceLearningNeedRef = input.learningNeedRef.trim();

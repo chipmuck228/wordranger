@@ -21,6 +21,8 @@ import {
   PLANNER_SENSE_PROFILES,
   PLANNER_SUPPORT_BLOCKS,
 } from "@/contextual-learning/candidate-v0/planning/plan-variant-registry";
+import { MEAL_SCENE_EXPANSION_BATCH_03_PACK } from "@/contextual-learning/candidate-v0/content/packs/meal/meal-scene-expansion-batch-03";
+import { MEAL_BATCH_03_FRAMES } from "@/contextual-learning/candidate-v0/fixtures/meal/meal-batch-03-contexts";
 import { mealInput, TYPING_CAPABILITY } from "./helpers";
 
 const TYPING = FROZEN_RUNTIME_CAPABILITIES.find(
@@ -277,5 +279,60 @@ describe("Candidate V0 planner — MEAL_BATCH_03", () => {
       throw new Error("PROBE must remain a planner gap");
     }
     expect(probe.error.code).toBe(PlanningErrorCode.PLAN_MODE_NOT_AVAILABLE);
+  });
+
+  it("materializes from caller-injected authored snapshot, not live batch-03 constants", () => {
+    const authoredPack = structuredClone(MEAL_SCENE_EXPANSION_BATCH_03_PACK);
+    const knife = authoredPack.lexemes.find(
+      (lexeme) => lexeme.membership.presentationToken === "knife",
+    );
+    expect(knife).toBeDefined();
+    knife!.lexicalPresentation.displayLabel = "A版小刀标";
+    knife!.build.groundInstruction = "A版小刀GROUND";
+    const planned = planExperience({
+      ...batch03Input("BUILD", MEAL_SENSE.knife),
+      authoredRuntime: {
+        pack: authoredPack,
+        frames: MEAL_BATCH_03_FRAMES,
+        skeleton: mealBatch03Skeleton,
+      },
+    });
+    expect(planned.ok).toBe(true);
+    if (!planned.ok) {
+      throw new Error(planned.error.message);
+    }
+    const json = JSON.stringify(planned.plan);
+    expect(json).toContain("A版小刀GROUND");
+    expect(json).not.toContain("桌上有一把较小的餐具。先看看它在场景里的位置。");
+  });
+
+  it("fail-closes when injected frames or skeleton ids do not match the variant", () => {
+    const missingFrame = planExperience({
+      ...batch03Input("BUILD", MEAL_SENSE.knife),
+      authoredRuntime: {
+        pack: MEAL_SCENE_EXPANSION_BATCH_03_PACK,
+        frames: [],
+        skeleton: mealBatch03Skeleton,
+      },
+    });
+    expect(missingFrame.ok).toBe(false);
+    if (missingFrame.ok) {
+      throw new Error("missing frame must fail closed");
+    }
+    expect(missingFrame.error.code).toBe(PlanningErrorCode.PLAN_VARIANT_INVALID);
+
+    const wrongSkeleton = planExperience({
+      ...batch03Input("BUILD", MEAL_SENSE.knife),
+      authoredRuntime: {
+        pack: MEAL_SCENE_EXPANSION_BATCH_03_PACK,
+        frames: MEAL_BATCH_03_FRAMES,
+        skeleton: { ...mealBatch03Skeleton, id: "not-meal-setting-v0" },
+      },
+    });
+    expect(wrongSkeleton.ok).toBe(false);
+    if (wrongSkeleton.ok) {
+      throw new Error("skeleton mismatch must fail closed");
+    }
+    expect(wrongSkeleton.error.code).toBe(PlanningErrorCode.PLAN_VARIANT_INVALID);
   });
 });
