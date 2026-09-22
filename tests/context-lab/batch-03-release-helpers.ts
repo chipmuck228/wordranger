@@ -98,6 +98,7 @@ export async function publishSyntheticNineWordRelease() {
 export function createNineWordLabHarness(
   releases: ContextualContentReleaseRepository,
   env: Record<string, string | undefined> = BATCH_03_LAB_ENV,
+  options: { beginAt?: "PROBE" | "BUILD" } = {},
 ) {
   const repository = new InMemoryContextLabRunRepository();
   const learningTasks = new InMemoryLearningTaskRepository();
@@ -108,7 +109,7 @@ export function createNineWordLabHarness(
     learningTasks,
     learning,
     userId: V1_PLACEHOLDER_USER_ID,
-    beginAt: "PROBE",
+    beginAt: options.beginAt ?? "PROBE",
     now: () => "2026-09-22T08:00:00.000Z",
     createId: () => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`,
     loadContent: (pin) =>

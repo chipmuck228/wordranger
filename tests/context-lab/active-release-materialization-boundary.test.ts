@@ -11,6 +11,16 @@ describe("active-release materialization source boundary", () => {
     "src/server/context-lab/context-lab-content-source.ts",
   ];
 
+  it("does not swallow pinned content failures into undefined pack", () => {
+    const text = readFileSync(
+      join(process.cwd(), "src/server/context-lab/meal-context-lab-controller.ts"),
+      "utf8",
+    );
+    expect(text).not.toContain(".catch(() => null)");
+    expect(text).not.toContain("catch(() => undefined)");
+    expect(text).not.toMatch(/resolveContent\([^)]*\)\.catch/);
+  });
+
   it("does not import live batch-03 pack, frames, or skeleton constants", () => {
     const forbidden = [
       "MEAL_SCENE_EXPANSION_BATCH_03_PACK",

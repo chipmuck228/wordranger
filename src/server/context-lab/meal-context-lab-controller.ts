@@ -342,11 +342,9 @@ export class MealContextLabController {
         ? staleRunScreen()
         : notFoundRunScreen();
     }
-    let pack: ContextualSceneContentPack | undefined;
-    try {
-      pack = (await this.resolveContent(record)).pack;
-    } catch (error) {
-      return this.contentErrorScreen(error);
+    const loaded = await this.resolvePinnedContentOrScreen(record);
+    if (!loaded.ok) {
+      return loaded.screen;
     }
     return this.toPublicScreen(
       issued.run,
@@ -355,7 +353,7 @@ export class MealContextLabController {
         issuedActivity: issued.issuedActivity,
         issuedTask,
       },
-      pack,
+      loaded.content.pack,
     );
   }
 
@@ -440,13 +438,11 @@ export class MealContextLabController {
     }
 
     const occurredAt = this.now();
-    let pack: ContextualSceneContentPack | undefined;
-    try {
-      pack = (await this.resolveContent(record)).pack;
-    } catch (error) {
-      return this.contentErrorScreen(error);
+    const loaded = await this.resolvePinnedContentOrScreen(record);
+    if (!loaded.ok) {
+      return loaded.screen;
     }
-    const hintCount = frozenHintCountForRecord(record, pack);
+    const hintCount = frozenHintCountForRecord(record, loaded.content.pack);
     if (hintCount === null) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
         message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
@@ -649,16 +645,14 @@ export class MealContextLabController {
       });
     }
 
-    let content: ContextLabContentSnapshot;
-    try {
-      content = await this.resolveContent(input.record);
-    } catch (error) {
-      return this.contentErrorScreen(error);
+    const loaded = await this.resolvePinnedContentOrScreen(input.record);
+    if (!loaded.ok) {
+      return loaded.screen;
     }
     const nextProbe = completeExperienceAfterEvidence({
       probe: input.record.probe,
       experienceRun: input.record.experienceRun,
-      pack: content.pack,
+      pack: loaded.content.pack,
     });
     if (nextProbe && "screen" in nextProbe) {
       return nextProbe.screen;
@@ -696,7 +690,7 @@ export class MealContextLabController {
       ...experienceRecordedCopy(
         nextProbe ?? input.record.probe,
         recorded.run,
-        content.pack,
+        loaded.content.pack,
       ),
     });
   }
@@ -713,6 +707,10 @@ export class MealContextLabController {
       });
     }
     if (record.experienceRun.status === "COMPLETED") {
+      const loaded = await this.resolvePinnedContentOrScreen(record);
+      if (!loaded.ok) {
+        return loaded.screen;
+      }
       return presentRecordedScreen({
         handle: { runId: record.id, revision: record.revision },
         feedback: contextLabFeedbackFromEvidence(evidence),
@@ -721,7 +719,7 @@ export class MealContextLabController {
         ...experienceRecordedCopy(
           record.probe,
           record.experienceRun,
-          (await this.resolveContent(record).catch(() => null))?.pack,
+          loaded.content.pack,
         ),
       });
     }
@@ -752,6 +750,10 @@ export class MealContextLabController {
         recoverable: true,
       });
     }
+    const loaded = await this.resolvePinnedContentOrScreen(record);
+    if (!loaded.ok) {
+      return loaded.screen;
+    }
     return presentRecordedScreen({
       handle: { runId: record.id, revision: record.revision },
       feedback: contextLabFeedbackFromEvidence(evidence),
@@ -760,7 +762,7 @@ export class MealContextLabController {
       ...experienceRecordedCopy(
         record.probe,
         record.experienceRun,
-        (await this.resolveContent(record).catch(() => null))?.pack,
+        loaded.content.pack,
       ),
     });
   }
@@ -904,12 +906,11 @@ export class MealContextLabController {
   private async presentStoredRun(
     record: ContextLabRunRecord,
   ): Promise<ContextLabCurrentScreen> {
-    let content: ContextLabContentSnapshot;
-    try {
-      content = await this.resolveContent(record);
-    } catch (error) {
-      return this.contentErrorScreen(error);
+    const loaded = await this.resolvePinnedContentOrScreen(record);
+    if (!loaded.ok) {
+      return loaded.screen;
     }
+    const content = loaded.content;
     const aligned = rejectInvalidExperienceQueue(record);
     if (aligned) {
       return aligned;
@@ -981,7 +982,7 @@ export class MealContextLabController {
     run: ExperienceRun,
     revision: number,
     issued: IssuedPayload,
-    pack?: ContextualSceneContentPack,
+    pack: ContextualSceneContentPack,
   ): ContextLabCurrentScreen {
     const handle = { runId: run.id, revision };
     const progress = progressForIssuedRun(run);
@@ -1052,7 +1053,7 @@ export class MealContextLabController {
 
   private presentProbe(
     record: ContextLabRunRecord,
-    pack?: ContextualSceneContentPack,
+    pack: ContextualSceneContentPack,
   ): ContextLabCurrentScreen {
     const probe = record.probe;
     if (!probe) {
@@ -1098,7 +1099,7 @@ export class MealContextLabController {
 
   private async presentIssuedProbeTask(
     record: ContextLabRunRecord,
-    pack?: ContextualSceneContentPack,
+    pack: ContextualSceneContentPack,
   ): Promise<ContextLabCurrentScreen> {
     const probe = record.probe;
     if (!probe?.issued) {
@@ -1152,11 +1153,9 @@ export class MealContextLabController {
           ? staleRunScreen()
           : notFoundRunScreen();
       }
-      let pack: ContextualSceneContentPack | undefined;
-      try {
-        pack = (await this.resolveContent(record)).pack;
-      } catch (error) {
-        return this.contentErrorScreen(error);
+      const loaded = await this.resolvePinnedContentOrScreen(record);
+      if (!loaded.ok) {
+        return loaded.screen;
       }
       return this.presentProbe(
         {
@@ -1164,16 +1163,15 @@ export class MealContextLabController {
           probe: completed,
           revision: saved.revision,
         },
-        pack,
+        loaded.content.pack,
       );
     }
     const target = probe.targets[next.targetIndex];
-    let content: ContextLabContentSnapshot;
-    try {
-      content = await this.resolveContent(record);
-    } catch (error) {
-      return this.contentErrorScreen(error);
+    const loaded = await this.resolvePinnedContentOrScreen(record);
+    if (!loaded.ok) {
+      return loaded.screen;
     }
+    const content = loaded.content;
     const siblingLemmas = probe.targets
       .filter((item) => item.target.lexemeId !== target.target.lexemeId)
       .map((item) => displayFormForTarget(item.target, content.pack));
@@ -1265,10 +1263,11 @@ export class MealContextLabController {
     }
     if (probe.phase === "PROBE_FEEDBACK_RECORDED") {
       if (probe.observations.some((item) => item.taskId === input.taskId)) {
-        return this.presentProbe(
-          record,
-          (await this.resolveContent(record).catch(() => null))?.pack,
-        );
+        const loaded = await this.resolvePinnedContentOrScreen(record);
+        if (!loaded.ok) {
+          return loaded.screen;
+        }
+        return this.presentProbe(record, loaded.content.pack);
       }
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_SUBMIT_REJECTED, {
         message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
@@ -1384,10 +1383,11 @@ export class MealContextLabController {
       return notFoundRunScreen();
     }
     if (probe.observations.some((item) => item.taskId === taskId)) {
-      return this.presentProbe(
-        latest,
-        (await this.resolveContent(latest).catch(() => null))?.pack,
-      );
+      const loaded = await this.resolvePinnedContentOrScreen(latest);
+      if (!loaded.ok) {
+        return loaded.screen;
+      }
+      return this.presentProbe(latest, loaded.content.pack);
     }
     const evidence = await this.findTaskEvidence(latest, taskId);
     if (!evidence || !probe.issued || probe.issued.taskId !== taskId) {
@@ -1514,12 +1514,11 @@ export class MealContextLabController {
         recoverable: true,
       });
     }
-    let content: ContextLabContentSnapshot;
-    try {
-      content = await this.resolveContent(record);
-    } catch (error) {
-      return this.contentErrorScreen(error);
+    const loaded = await this.resolvePinnedContentOrScreen(record);
+    if (!loaded.ok) {
+      return loaded.screen;
     }
+    const content = loaded.content;
     const profile = mealProfileForTarget(current.target, content.pack);
     if (!profile) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.PLANNER_FAILURE, {
@@ -1634,12 +1633,11 @@ export class MealContextLabController {
         recoverable: true,
       });
     }
-    let content: ContextLabContentSnapshot;
-    try {
-      content = await this.resolveContent(record);
-    } catch (error) {
-      return this.contentErrorScreen(error);
+    const loaded = await this.resolvePinnedContentOrScreen(record);
+    if (!loaded.ok) {
+      return loaded.screen;
     }
+    const content = loaded.content;
     const profile = mealBuildProfileForTarget(current.target, content.pack);
     if (!profile) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.PLANNER_FAILURE, {
@@ -1718,11 +1716,9 @@ export class MealContextLabController {
         ? staleRunScreen()
         : notFoundRunScreen();
     }
-    let pack: ContextualSceneContentPack | undefined;
-    try {
-      pack = (await this.resolveContent(record)).pack;
-    } catch (error) {
-      return this.contentErrorScreen(error);
+    const loaded = await this.resolvePinnedContentOrScreen(record);
+    if (!loaded.ok) {
+      return loaded.screen;
     }
     return this.presentProbe(
       {
@@ -1730,7 +1726,7 @@ export class MealContextLabController {
         probe: nextProbe,
         revision: saved.revision,
       },
-      pack,
+      loaded.content.pack,
     );
   }
 
@@ -1760,6 +1756,19 @@ export class MealContextLabController {
         "Experimental Context Lab content is unavailable.",
         false,
       );
+    }
+  }
+
+  private async resolvePinnedContentOrScreen(
+    record?: ContextLabRunRecord,
+  ): Promise<
+    | { ok: true; content: ContextLabContentSnapshot }
+    | { ok: false; screen: ContextLabCurrentScreen }
+  > {
+    try {
+      return { ok: true, content: await this.resolveContent(record) };
+    } catch (error) {
+      return { ok: false, screen: this.contentErrorScreen(error) };
     }
   }
 
