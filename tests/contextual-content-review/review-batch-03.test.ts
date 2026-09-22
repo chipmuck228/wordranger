@@ -44,7 +44,11 @@ describe("Meal expansion batch 03 review registration", () => {
     );
     expect(CONTENT_REVIEW_BLOCKED_CANDIDATES.map((item) => item.plannedLemma)).toEqual(["napkin"]);
     const listed = await listContentReviewTargets();
-    const batch = (await listContentReviewBatches()).find(
+    const batch = (
+      await listContentReviewBatches({
+        env: { CONTEXTUAL_CONTENT_PROMOTION_ENABLED: "0" },
+      })
+    ).find(
       (item) => item.batchId === "meal-expansion-batch-03",
     )!;
     expect(batch.totalAuthored).toBe(3);

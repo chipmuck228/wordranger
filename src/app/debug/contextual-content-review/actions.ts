@@ -1,7 +1,11 @@
 "use server";
 
-import { isContextualContentReviewWriteEnabled } from "@/server/contextual-content-review/gates";
+import {
+  isContextualContentPromotionEnabled,
+  isContextualContentPromotionWriteEnabled,
+} from "@/server/contextual-content-promotion/gates";
 import { promoteContextualContentBatch } from "@/server/contextual-content-promotion/promote-contextual-content-batch";
+import { isContextualContentReviewWriteEnabled } from "@/server/contextual-content-review/gates";
 import { saveContentReviewDecision } from "@/server/contextual-content-review/save-review-decision";
 import type { HumanContentReviewDecision, SaveContentReviewResult } from "@/server/contextual-content-review/types";
 
@@ -54,7 +58,10 @@ export async function promoteReviewedBatch(input: {
   message?: string;
   code?: string;
 }> {
-  if (!isContextualContentReviewWriteEnabled()) {
+  if (!isContextualContentPromotionEnabled()) {
+    return { ok: false, code: "PROMOTION_DISABLED", message: "Promotion is disabled." };
+  }
+  if (!isContextualContentPromotionWriteEnabled()) {
     return { ok: false, code: "PROMOTION_WRITE_DISABLED", message: "Promotion writes are disabled." };
   }
   if (

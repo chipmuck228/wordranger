@@ -16,6 +16,12 @@ makes scene content a single authored pack.
 Passing schema validation means the pack is structurally consistent. It
 does **not** mean the teaching is pedagogically correct.
 
+Batch promotion, when used, is a separate persisted projection with its
+own `CONTEXTUAL_CONTENT_PROMOTION_*` gates and
+`CONTEXTUAL_PROMOTION_RUNTIME`. Review write does not authorize
+promotion. Feature-off uses the authored registry; a broken runtime
+fails closed.
+
 ## 2. Authored content vs runtime engine
 
 Scene Content owns:

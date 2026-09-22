@@ -3,7 +3,11 @@ import type { ContextualContentBatchPromotionRecord } from "@/contextual-learnin
 export const PROMOTION_ACTOR_ID = "LOCAL_INTERNAL_PROMOTER";
 
 export type PromotionFailureCode =
+  | "PROMOTION_DISABLED"
   | "PROMOTION_WRITE_DISABLED"
+  | "PROMOTION_RUNTIME_MISSING"
+  | "PROMOTION_RUNTIME_INVALID"
+  | "PROMOTION_RUNTIME_FORBIDDEN"
   | "PROMOTION_NOT_READY"
   | "PROMOTION_CONFLICT"
   | "PROMOTION_STALE"

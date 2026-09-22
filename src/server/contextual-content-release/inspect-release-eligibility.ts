@@ -4,7 +4,10 @@ import {
   resolveReleaseEligiblePack,
   type ReleaseValidationIssue,
 } from "@/contextual-learning/candidate-v0/release";
-import { loadEffectiveSceneContentRegistry } from "@/server/contextual-content-promotion/load-effective-registry";
+import {
+  loadEffectiveSceneContentRegistry,
+  type LoadEffectiveRegistryResult,
+} from "@/server/contextual-content-promotion/load-effective-registry";
 import {
   buildMealMigrationAuthority,
   uniquePackTargets,
@@ -55,13 +58,17 @@ export function draftCreationBlocked(issues: readonly ReleaseValidationIssue[]):
 export async function inspectMealReleaseEligibility(
   input: ReleaseAssemblyOptions = {},
 ): Promise<ReleaseEligibilityInspection> {
-  const loaded = input.registry
-    ? { ok: true, registry: [...input.registry] }
+  const loaded: LoadEffectiveRegistryResult = input.registry
+    ? { ok: true, registry: [...input.registry], activatedPackId: null }
     : await loadEffectiveSceneContentRegistry({
+        env: input.env,
         reviewRepository: input.reviewRepository,
         promotionRepository: input.promotionRepository,
       });
   if (!input.registry && !loaded.ok) {
+    const detail = loaded.code
+      ? `${loaded.code}: ${loaded.message ?? "Effective promotion registry is unavailable."}`
+      : "Effective registry projection is fail-closed.";
     return {
       packId: null,
       parentPackId: null,
@@ -78,13 +85,13 @@ export async function inspectMealReleaseEligibility(
         .filter((entry) => entry.status === "CANDIDATE")
         .map((entry) => ({
           packId: entry.packId,
-          reason: `${entry.packId} remains CANDIDATE; effective projection is fail-closed.`,
+          reason: `${entry.packId} remains CANDIDATE; ${detail}`,
         })),
       issues: [
         {
-          code: "RELEASE_ELIGIBILITY_AMBIGUOUS",
+          code: "RELEASE_PROMOTION_INVALID",
           path: "registry",
-          detail: "Effective registry projection is fail-closed.",
+          detail,
         },
       ],
     };

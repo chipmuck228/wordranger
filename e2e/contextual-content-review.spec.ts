@@ -158,6 +158,9 @@ test.describe("readonly review host", () => {
     await expect(page.getByTestId("promote-reviewed-batch")).toHaveCount(0);
     await expect(page.getByTestId("meal-expansion-batch-03-promotion-blocked")).toBeVisible();
     await expect(page.getByText("PROMOTION_REVIEW_PENDING").first()).toBeVisible();
+    await expect(
+      page.getByTestId("review-batch-meal-expansion-batch-03").getByText("Promotion: NONE"),
+    ).toBeVisible();
 
     await page.goto(REVIEW_URL);
     await expect(page.getByText("Candidate V0 / 已进入实验 Context Lab")).toBeVisible();
@@ -269,6 +272,21 @@ test.describe("readonly review host", () => {
       await page.keyboard.press("Tab");
     }
   });
+
+  test("hides promotion writes while review pages stay independently readable", async ({
+    page,
+  }) => {
+    seedApprovedBatch03Reviews();
+    await page.goto("/debug/contextual-content-review");
+    await expect(page.getByTestId("review-batch-meal-expansion-batch-03")).toBeVisible();
+    await expect(page.getByTestId("meal-expansion-batch-03-approved")).toHaveText("3");
+    await expect(page.getByTestId("promote-reviewed-batch")).toBeDisabled();
+    await expect(page.getByText("CONTEXTUAL_CONTENT_PROMOTION_WRITE_ENABLED=1")).toBeVisible();
+    await page.goto("/debug/contextual-content-review/meal-expansion-batch-03/knife");
+    await expect(page.getByTestId("review-human-status")).toHaveText("APPROVED");
+    await expect(page.getByRole("button", { name: "通过审核" })).toBeDisabled();
+    expect(existsSync(BATCH_03_PROMOTION_PATH)).toBe(false);
+  });
 });
 
 test.describe("writable review host", () => {
@@ -362,38 +380,6 @@ test.describe("writable review host", () => {
     page,
   }) => {
     seedApprovedBatch03Reviews();
-    await page.goto("/debug/contextual-content-review");
-    await expect(page.getByTestId("meal-expansion-batch-03-approved")).toHaveText("3");
-    await expect(page.getByTestId("meal-expansion-batch-03-pending")).toHaveText("0");
-    await expect(page.getByTestId("review-blocked-napkin")).toContainText("BLOCKED");
-    await expect(page.getByTestId("promote-reviewed-batch")).toBeVisible();
-    await page.getByTestId("promote-reviewed-batch").click();
-    await expect(page.getByTestId("promote-confirm")).toBeVisible();
-    await expect(page.getByText("不会立即发布到 Context Lab")).toBeVisible();
-    await expect(page.getByText("不会进入 /train")).toBeVisible();
-    await page.getByTestId("promote-confirm").dblclick();
-    await expect(page.getByTestId("promote-save-message")).toContainText("Batch promotion 已保存");
-    await expect(page.getByTestId("promote-confirm")).toHaveCount(0);
-    expect(existsSync(BATCH_03_PROMOTION_PATH)).toBe(true);
-    const stored = JSON.parse(readFileSync(BATCH_03_PROMOTION_PATH, "utf8")) as { revision: number };
-    expect(stored.revision).toBe(1);
-
-    await page.goto("/debug/contextual-content-release");
-    await expect(page.getByTestId("release-eligible-pack")).toHaveText("meal-scene-expansion-batch-03");
-    await expect(page.getByTestId("release-eligible-target-count")).toHaveText("9");
-    await expect(page.getByTestId("release-live-targets").locator("li")).toHaveCount(9);
-    await expect(page.getByTestId("release-unpromoted-candidates")).toHaveCount(0);
-
-    await page.goto("/play/context-lab");
-    await expect(page.getByText("meal-scene-expansion-batch-03")).toHaveCount(0);
-    await expect(page.getByText("knife(pl.knives)", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("napkin", { exact: true })).toHaveCount(0);
-  });
-
-  test("rejects a stale promotion write after another record appears", async ({ page }) => {
-    seedApprovedBatch03Reviews();
-    await page.goto("/debug/contextual-content-review");
-    await expect(page.getByTestId("promote-reviewed-batch")).toBeVisible();
     mkdirSync(path.dirname(BATCH_03_PROMOTION_PATH), { recursive: true });
     writeFileSync(
       BATCH_03_PROMOTION_PATH,
@@ -416,9 +402,34 @@ test.describe("writable review host", () => {
         2,
       )}\n`,
     );
+    await page.goto("/debug/contextual-content-review");
+    await expect(page.getByTestId("meal-expansion-batch-03-approved")).toHaveText("3");
+    await expect(page.getByTestId("meal-expansion-batch-03-pending")).toHaveText("0");
+    await expect(page.getByTestId("review-blocked-napkin")).toContainText("BLOCKED");
+    await expect(page.getByTestId("promote-reviewed-batch")).toBeVisible();
     await page.getByTestId("promote-reviewed-batch").click();
-    await page.getByTestId("promote-confirm").click();
-    await expect(page.getByTestId("promote-save-message")).toContainText("Another promotion write happened first.");
+    await expect(page.getByTestId("promote-confirm")).toBeVisible();
+    await expect(page.getByText("不会立即发布到 Context Lab")).toBeVisible();
+    await expect(page.getByText("不会进入 /train")).toBeVisible();
+    await page.getByTestId("promote-confirm").dblclick();
+    await expect(page.getByTestId("promote-save-message")).toContainText("Batch promotion 已保存");
+    await expect(page.getByTestId("promote-confirm")).toHaveCount(0);
+    await expect(page.getByText("Promotion: PROMOTED")).toBeVisible();
+    const leftover = JSON.parse(readFileSync(BATCH_03_PROMOTION_PATH, "utf8")) as {
+      packFingerprint: string;
+    };
+    expect(leftover.packFingerprint).toBe("stale-pack");
+
+    await page.goto("/debug/contextual-content-release");
+    await expect(page.getByTestId("release-eligible-pack")).toHaveText("meal-scene-expansion-batch-03");
+    await expect(page.getByTestId("release-eligible-target-count")).toHaveText("9");
+    await expect(page.getByTestId("release-live-targets").locator("li")).toHaveCount(9);
+    await expect(page.getByTestId("release-unpromoted-candidates")).toHaveCount(0);
+
+    await page.goto("/play/context-lab");
+    await expect(page.getByText("meal-scene-expansion-batch-03")).toHaveCount(0);
+    await expect(page.getByText("knife(pl.knives)", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("napkin", { exact: true })).toHaveCount(0);
   });
 
   test("marks a stale batch-03 review after the stored fingerprint drifts", async ({ page }) => {

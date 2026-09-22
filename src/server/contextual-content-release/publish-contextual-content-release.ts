@@ -114,6 +114,7 @@ export async function publishContextualContentRelease(
     parentPackId: input.parentPackId,
     capabilities: input.capabilities,
     promotionRepository: input.promotionRepository,
+    env: input.env,
   });
   if (issues.length > 0) {
     return {

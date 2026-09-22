@@ -105,5 +105,8 @@ senses.
 - bread / water extra glosses exist but are not selected
 - no new frozen task types; uncompilable response kinds stay gaps
 - pack is CANDIDATE / `releaseEligibility=NONE` / unpromoted
+- promotion uses independent `CONTEXTUAL_CONTENT_PROMOTION_*` gates and `CONTEXTUAL_PROMOTION_RUNTIME`; review write does not authorize promotion
+- `file` / `memory` runtimes are local only; Vercel production/preview must use `supabase` after the promotion migration is applied
+- this document does not apply a remote migration and does not record a live promotion
 
 This remains Candidate V0 / Experimental.

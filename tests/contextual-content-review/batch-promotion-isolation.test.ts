@@ -45,5 +45,10 @@ describe("batch promotion isolation", () => {
     expect(promote).not.toContain("processEvidence");
     expect(promote).not.toContain("LearningEvidence");
     expect(promote).not.toContain("publishContextualContentRelease");
+    expect(promote).not.toContain("isContextualContentReviewWriteEnabled");
+    const factory = readFileSync("src/server/contextual-content-promotion/create-promotion-runtime.ts", "utf8");
+    expect(factory).toContain('mode === "supabase"');
+    expect(factory).toContain("SupabaseContextualContentBatchPromotionRepository");
+    expect(factory).toContain("createSupabaseServiceRoleClient");
   });
 });

@@ -5,7 +5,12 @@ import { promotionRecordIsCurrent } from "@/contextual-learning/candidate-v0/con
 import { MEAL_MIGRATION_RELEASE_ID, MEAL_RELEASE_SCENE_ID, validateMealReleaseCapabilities } from "@/contextual-learning/candidate-v0/release";
 import { evaluateRegisteredPackPromotionReadiness } from "@/server/contextual-content-promotion/evaluate-pack-readiness";
 import { createContextualPromotionRepository } from "@/server/contextual-content-promotion/create-promotion-runtime";
-import { loadEffectiveSceneContentRegistry } from "@/server/contextual-content-promotion/load-effective-registry";
+import { isContextualContentPromotionEnabled } from "@/server/contextual-content-promotion/gates";
+import {
+  loadEffectiveSceneContentRegistry,
+  type LoadEffectiveRegistryResult,
+} from "@/server/contextual-content-promotion/load-effective-registry";
+import { ContextualPromotionRuntimeError } from "@/server/contextual-content-promotion/runtime-mode";
 import { isContextualContentReleaseWriteEnabled } from "./gates";
 import {
   buildMealMigrationAuthority,
@@ -33,8 +38,8 @@ export async function createMealMigrationDraft(
       message: "Release writes are disabled.",
     };
   }
-  const loaded = input.registry
-    ? { ok: true, registry: [...input.registry] }
+  const loaded: LoadEffectiveRegistryResult = input.registry
+    ? { ok: true, registry: [...input.registry], activatedPackId: null }
     : await loadEffectiveSceneContentRegistry({
         env: input.env,
         reviewRepository: input.reviewRepository,
@@ -44,7 +49,9 @@ export async function createMealMigrationDraft(
     return {
       ok: false,
       code: "RELEASE_INVALID",
-      message: "Effective registry projection is fail-closed.",
+      message: loaded.code
+        ? `${loaded.code}: ${loaded.message ?? "Effective promotion registry is unavailable."}`
+        : "Effective registry projection is fail-closed.",
     };
   }
   const registry = input.registry ?? loaded.registry;
@@ -55,8 +62,24 @@ export async function createMealMigrationDraft(
     const authored = listSceneContentRegistry().find((entry) => entry.packId === livePackId);
     const projected = registry.find((entry) => entry.packId === livePackId);
     if (authored?.status === "CANDIDATE") {
-      const promotionRepository =
-        input.promotionRepository ?? createContextualPromotionRepository(input.env);
+      let promotionRepository = input.promotionRepository;
+      if (!promotionRepository) {
+        if (!isContextualContentPromotionEnabled(input.env)) {
+          return {
+            ok: false,
+            code: "RELEASE_INVALID",
+            message: "Candidate pack requires a current fingerprint-bound batch promotion.",
+          };
+        }
+        try {
+          promotionRepository = createContextualPromotionRepository(input.env);
+        } catch (error) {
+          if (error instanceof ContextualPromotionRuntimeError) {
+            return { ok: false, code: "RELEASE_INVALID", message: `${error.code}: ${error.message}` };
+          }
+          throw error;
+        }
+      }
       const stored = await promotionRepository.get({
         sceneId: MEAL_RELEASE_SCENE_ID,
         packId: livePackId,

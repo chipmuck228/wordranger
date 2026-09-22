@@ -7,11 +7,15 @@ import {
 } from "@/contextual-learning/candidate-v0/content";
 import { registryEntryFor } from "@/contextual-learning/candidate-v0/content";
 import { MEAL_RELEASE_SCENE_ID } from "@/contextual-learning/candidate-v0/release";
-import { isContextualContentReviewWriteEnabled } from "@/server/contextual-content-review/gates";
 import type { ContentReviewRepository } from "@/server/contextual-content-review/content-review-repository";
 import { createContextualPromotionRepository } from "./create-promotion-runtime";
 import { evaluateRegisteredPackPromotionReadiness } from "./evaluate-pack-readiness";
+import {
+  isContextualContentPromotionEnabled,
+  isContextualContentPromotionWriteEnabled,
+} from "./gates";
 import type { ContextualContentBatchPromotionRepository } from "./promotion-repository";
+import { ContextualPromotionRuntimeError } from "./runtime-mode";
 import { PROMOTION_ACTOR_ID, type PromotionSaveResult } from "./types";
 
 export async function promoteContextualContentBatch(input: {
@@ -22,7 +26,14 @@ export async function promoteContextualContentBatch(input: {
   reviewRepository?: ContentReviewRepository;
   promotionRepository?: ContextualContentBatchPromotionRepository;
 }): Promise<PromotionSaveResult> {
-  if (!isContextualContentReviewWriteEnabled(input.env)) {
+  if (!isContextualContentPromotionEnabled(input.env)) {
+    return {
+      ok: false,
+      code: "PROMOTION_DISABLED",
+      message: "Promotion is disabled.",
+    };
+  }
+  if (!isContextualContentPromotionWriteEnabled(input.env)) {
     return {
       ok: false,
       code: "PROMOTION_WRITE_DISABLED",
@@ -39,8 +50,17 @@ export async function promoteContextualContentBatch(input: {
   if (!entry) {
     return { ok: false, code: "PROMOTION_INVALID", message: "Unknown Candidate pack." };
   }
-  const promotionRepository =
-    input.promotionRepository ?? createContextualPromotionRepository(input.env);
+  let promotionRepository = input.promotionRepository;
+  if (!promotionRepository) {
+    try {
+      promotionRepository = createContextualPromotionRepository(input.env);
+    } catch (error) {
+      if (error instanceof ContextualPromotionRuntimeError) {
+        return { ok: false, code: error.code, message: error.message };
+      }
+      throw error;
+    }
+  }
   const readiness = await evaluateRegisteredPackPromotionReadiness({
     packId: entry.packId,
     reviewRepository: input.reviewRepository,

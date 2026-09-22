@@ -73,9 +73,11 @@ export async function projectReleaseWorkspace(input: {
     eligibility.canCreateDraft = false;
     eligibility.issues = [
       {
-        code: "RELEASE_ELIGIBILITY_AMBIGUOUS",
+        code: "RELEASE_PROMOTION_INVALID",
         path: "registry",
-        detail: "Effective registry projection is fail-closed.",
+        detail: loaded.code
+          ? `${loaded.code}: ${loaded.message ?? "Effective promotion registry is unavailable."}`
+          : "Effective registry projection is fail-closed.",
       },
       ...eligibility.issues,
     ];

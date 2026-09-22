@@ -71,6 +71,7 @@ export interface ReleaseAssemblyOptions {
   parentPackId?: string | null;
   capabilities?: readonly RuntimeCapability[];
   promotionRepository?: ContextualContentBatchPromotionRepository;
+  env?: Record<string, string | undefined>;
 }
 
 export interface ReleaseAuthority {

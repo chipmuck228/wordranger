@@ -178,6 +178,9 @@ export interface ContentReviewBatchSummary {
   promotedBy: string | null;
   effectiveReleaseEligibility: "NONE" | "RELEASE_ELIGIBLE";
   writeEnabled: boolean;
+  promotionEnabled: boolean;
+  promotionWriteEnabled: boolean;
+  promotionConfigError: { code: string; message: string } | null;
   expectedPromotionRevision: number;
   targets: ContentReviewListItem[];
   blockedCandidates: ContentReviewBlockedCandidate[];

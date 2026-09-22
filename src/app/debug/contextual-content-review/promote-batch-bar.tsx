@@ -55,7 +55,9 @@ export function PromoteBatchBar({
   return (
     <section aria-label="Batch promotion" className="space-y-3">
       {!writeEnabled ? (
-        <p className="text-muted-foreground text-sm">只读模式。Promotion 需要本地写入开关。</p>
+        <p className="text-muted-foreground text-sm">
+          只读模式。Promotion 需要本地 CONTEXTUAL_CONTENT_PROMOTION_WRITE_ENABLED=1。
+        </p>
       ) : null}
       <Button
         type="button"

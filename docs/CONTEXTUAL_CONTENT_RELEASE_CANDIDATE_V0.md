@@ -184,3 +184,28 @@ Release authority iterates the selected source pack's targets and looks up exact
 - Multiple `RELEASE_ELIGIBLE` packs without a unique selection rule fail closed.
 
 This remains Candidate V0 / Experimental. It is not Standard and is not wired to `/train`.
+
+## 8. Batch promotion runtime and gates
+
+Promotion is a separate projection layer from review and release.
+
+Flags:
+
+- `CONTEXTUAL_CONTENT_PROMOTION_ENABLED=1` — effective-registry projection, Review Debug promotion area, and promotion server operations
+- `CONTEXTUAL_CONTENT_PROMOTION_WRITE_ENABLED=1` — Promote reviewed batch. Requires promotion enabled. Does not inherit review write. Closed on Vercel production/preview.
+- `CONTEXTUAL_PROMOTION_RUNTIME=memory|file|supabase` — required when promotion is enabled. Missing or invalid fails closed with `PROMOTION_RUNTIME_MISSING` / `PROMOTION_RUNTIME_INVALID`. No silent file fallback. Do not reuse `CONTEXTUAL_RELEASE_RUNTIME`, `CONTEXT_LAB_RUNTIME`, or review flags.
+
+Runtime:
+
+| Value | Allowed | Notes |
+| --- | --- | --- |
+| `memory` | local development, unit tests, gated Playwright | process-shared singleton. Forbidden on Vercel production/preview (`PROMOTION_RUNTIME_FORBIDDEN`). |
+| `file` | local development and local human review | artifact root `docs/contextual-content-promotions`. Not a production fallback. Forbidden on Vercel production/preview. |
+| `supabase` | local or deployed, after the promotion migration is applied | constructs `SupabaseContextualContentBatchPromotionRepository` with the existing service-role client (`NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`). Missing config or missing table/RPC fails closed. Does not fall back to file or memory. This pipeline does not apply the remote migration. |
+
+Feature disabled vs runtime broken:
+
+- Promotion feature off → release assembly uses the authored registry (current six-word `RELEASE_ELIGIBLE` pack).
+- Promotion feature on and runtime missing/invalid/forbidden → fail closed. Do not pretend there are no promotions and continue batch-02.
+
+Promotion write does not grant release publish. Release write does not grant promotion. Review write can be on while promotion write is off.
