@@ -12,6 +12,8 @@ export interface ContextLabRunRecord {
   experienceId: string;
   experienceRun: ExperienceRun;
   probe: MealProbeOrchestration | null;
+  releaseId: string | null;
+  releaseFingerprint: string | null;
   revision: number;
   createdAt: string;
   updatedAt: string;
@@ -37,4 +39,9 @@ export interface ContextLabRunRepository {
     nextProbe?: MealProbeOrchestration | null;
     updatedAt: string;
   }): Promise<ContextLabSaveIfRevisionResult>;
+}
+
+export interface ContextLabContentPin {
+  releaseId: string;
+  releaseFingerprint: string;
 }

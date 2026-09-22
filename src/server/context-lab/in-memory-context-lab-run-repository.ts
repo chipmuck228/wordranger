@@ -41,6 +41,9 @@ export class InMemoryContextLabRunRepository implements ContextLabRunRepository 
     const stored = cloneRecord({
       ...record,
       probe: record.probe ?? null,
+      releaseId: record.releaseId ?? record.experienceRun.releaseId ?? null,
+      releaseFingerprint:
+        record.releaseFingerprint ?? record.experienceRun.releaseFingerprint ?? null,
     });
     serializeContextLabRunState({
       experienceRun: stored.experienceRun,
@@ -95,11 +98,18 @@ export class InMemoryContextLabRunRepository implements ContextLabRunRepository 
         false,
       );
     }
+    const pinnedRun = {
+      ...input.nextRun,
+      releaseId: stored.releaseId ?? input.nextRun.releaseId,
+      releaseFingerprint: stored.releaseFingerprint ?? input.nextRun.releaseFingerprint,
+    };
     const next: ContextLabRunRecord = {
       ...stored,
-      experienceId: input.nextRun.experienceId,
-      experienceRun: input.nextRun,
+      experienceId: pinnedRun.experienceId,
+      experienceRun: pinnedRun,
       probe: input.nextProbe !== undefined ? input.nextProbe : stored.probe ?? null,
+      releaseId: stored.releaseId,
+      releaseFingerprint: stored.releaseFingerprint,
       revision: input.expectedRevision + 1,
       updatedAt: input.updatedAt,
       schemaVersion: CONTEXT_LAB_RUN_SCHEMA_VERSION,

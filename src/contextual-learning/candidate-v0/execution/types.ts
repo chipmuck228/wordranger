@@ -64,6 +64,8 @@ export interface ExperienceRun {
   createdAt: string;
   updatedAt: string;
   abortReason?: string;
+  releaseId?: string;
+  releaseFingerprint?: string;
 }
 
 /**

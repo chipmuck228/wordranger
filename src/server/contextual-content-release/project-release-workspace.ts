@@ -3,11 +3,16 @@ import {
   listSceneContentRegistry,
 } from "@/contextual-learning/candidate-v0/content";
 import { MEAL_MIGRATION_RELEASE_ID } from "@/contextual-learning/candidate-v0/release";
+import { resolveContextLabContentSourceMode } from "@/server/context-lab/context-lab-content-source";
 import { buildMealMigrationAuthority } from "./authority";
 import { createContextualReleaseRepository } from "./create-release-runtime";
 import { isContextualContentReleaseWriteEnabled } from "./gates";
 import type { ContextualContentReleaseRepository } from "./release-repository";
-import type { ReleaseWorkspace, ReleaseWorkspaceTarget } from "./types";
+import type {
+  ReleaseWorkspace,
+  ReleaseWorkspaceCard,
+  ReleaseWorkspaceTarget,
+} from "./types";
 import type { ContentReviewRepository } from "@/server/contextual-content-review/content-review-repository";
 
 function toWorkspaceTarget(
@@ -46,19 +51,56 @@ export async function projectReleaseWorkspace(input: {
   repository?: ContextualContentReleaseRepository;
   reviewRepository?: ContentReviewRepository;
 } = {}): Promise<ReleaseWorkspace> {
+  const env = input.env ?? process.env;
   const authority = await buildMealMigrationAuthority({
     reviewRepository: input.reviewRepository,
   });
-  const repository = input.repository ?? createContextualReleaseRepository(input.env);
-  const draft = await repository.get(MEAL_MIGRATION_RELEASE_ID);
+  const repository = input.repository ?? createContextualReleaseRepository(env);
+  const listed = await repository.list();
+  const draft =
+    listed.find((item) => item.status === "DRAFT" || item.status === "PREFLIGHT_VALIDATED") ??
+    (await repository.get(MEAL_MIGRATION_RELEASE_ID));
   const pack = experimentalMealContextLabPack();
+  const pointer = listed[0]
+    ? await repository.getActivePointer(listed[0].sceneId)
+    : await repository.getActivePointer("meal-scene-v0");
+  const contentSource = resolveContextLabContentSourceMode(env);
+  const activeLoaded = pointer ? await repository.loadActiveRelease(pointer.sceneId) : null;
+  const releases: ReleaseWorkspaceCard[] = listed.map((item) => ({
+    releaseId: item.releaseId,
+    sceneId: item.sceneId,
+    status: item.status,
+    revision: item.revision,
+    packFingerprint: item.packFingerprint,
+    releaseFingerprint: item.releaseFingerprint,
+    targetCount: item.targetEntries.length,
+    approvalSummary: item.targetEntries
+      .map((entry) => `${entry.displayLabel}:${entry.approvalBasis}`)
+      .join(" · "),
+    preflightOk:
+      item.status === "PREFLIGHT_VALIDATED" || item.status === "PUBLISHED" || item.status === "SUPERSEDED"
+        ? true
+        : item.validationSummary
+          ? item.validationSummary.ok
+          : null,
+    isActive: pointer?.releaseId === item.releaseId,
+    publishedAt: item.publishedAt,
+    supersededAt: item.supersededAt,
+    supersededByReleaseId: item.supersededByReleaseId,
+  }));
   return {
     currentRuntime: {
-      driver: "CODE_DEFINED_BATCH_02",
-      packId: pack.id,
-      publishedByReleasePipeline: false,
+      driver: contentSource === "active-release" ? "ACTIVE_RELEASE" : "CODE_DEFINED_BATCH_02",
+      packId:
+        contentSource === "active-release" && activeLoaded?.ok
+          ? activeLoaded.release.packSnapshot.id
+          : pack.id,
+      publishedByReleasePipeline: contentSource === "active-release",
+      contentSource,
       notice:
-        "当前仍由 code-defined batch 02 驱动。尚未由 Release Pipeline 发布。本阶段只验证发布快照，不会切换 Context Lab。",
+        contentSource === "active-release"
+          ? "Context Lab 当前从服务端 active release 加载实验内容。这不会发布到 /train，不代表学习完成，也不修改 Evidence 或掌握度。"
+          : "Context Lab 当前仍使用 static 六词实验 pack。发布只影响 active-release 模式。这不会发布到 /train。",
     },
     registry: listSceneContentRegistry().map((entry) => ({
       packId: entry.packId,
@@ -67,15 +109,17 @@ export async function projectReleaseWorkspace(input: {
     })),
     liveTargets: authority.targetEntries.map(toWorkspaceTarget),
     draft,
-    writeEnabled: isContextualContentReleaseWriteEnabled(input.env),
+    releases,
+    activePointer: pointer,
+    writeEnabled: isContextualContentReleaseWriteEnabled(env),
     preflight: {
-      ok: draft?.status === "PREFLIGHT_VALIDATED" ? true : draft ? null : null,
+      ok: draft?.status === "PREFLIGHT_VALIDATED" || draft?.status === "PUBLISHED" ? true : draft ? null : null,
       issues: draft?.validationSummary?.issues ? [...draft.validationSummary.issues] : [],
     },
     fingerprints: {
-      packFingerprint: draft?.packFingerprint ?? null,
+      packFingerprint: draft?.packFingerprint ?? pointer?.releaseFingerprint ?? null,
       contextModelFingerprint: draft?.contextModelFingerprint ?? null,
-      releaseFingerprint: draft?.releaseFingerprint ?? null,
+      releaseFingerprint: draft?.releaseFingerprint ?? pointer?.releaseFingerprint ?? null,
     },
   };
 }

@@ -131,7 +131,12 @@ export function parseReleaseManifest(
     typeof value.releaseFingerprint !== "string" ||
     typeof value.createdAt !== "string" ||
     typeof value.createdBy !== "string" ||
-    (value.validatedAt !== null && typeof value.validatedAt !== "string")
+    (value.validatedAt !== null && typeof value.validatedAt !== "string") ||
+    (value.publishedAt != null && typeof value.publishedAt !== "string") ||
+    (value.publishedBy != null && typeof value.publishedBy !== "string") ||
+    (value.supersededAt != null && typeof value.supersededAt !== "string") ||
+    (value.supersededByReleaseId != null &&
+      typeof value.supersededByReleaseId !== "string")
   ) {
     return null;
   }
@@ -152,6 +157,11 @@ export function parseReleaseManifest(
     createdAt: value.createdAt,
     createdBy: value.createdBy,
     validatedAt: value.validatedAt,
+    publishedAt: typeof value.publishedAt === "string" ? value.publishedAt : null,
+    publishedBy: typeof value.publishedBy === "string" ? value.publishedBy : null,
+    supersededAt: typeof value.supersededAt === "string" ? value.supersededAt : null,
+    supersededByReleaseId:
+      typeof value.supersededByReleaseId === "string" ? value.supersededByReleaseId : null,
     validationSummary:
       value.validationSummary && isRecord(value.validationSummary)
         ? {

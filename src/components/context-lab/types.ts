@@ -46,6 +46,7 @@ export interface ContextLabProgress {
 export interface ContextLabRunHandle {
   runId: string;
   revision: number;
+  contentReleaseId?: string;
 }
 
 export interface PublicProbeRoutingItem {
@@ -145,6 +146,7 @@ export const CONTEXT_LAB_ERROR_CODES = {
   CONTEXT_LAB_ACK_REJECTED: "CONTEXT_LAB_ACK_REJECTED",
   CONTEXT_LAB_SUBMIT_REJECTED: "CONTEXT_LAB_SUBMIT_REJECTED",
   CONTEXT_LAB_TASK_CONFLICT: "CONTEXT_LAB_TASK_CONFLICT",
+  CONTEXT_LAB_CONTENT_UNAVAILABLE: "CONTEXT_LAB_CONTENT_UNAVAILABLE",
   NETWORK_ERROR: "NETWORK_ERROR",
 } as const;
 

@@ -94,6 +94,8 @@ export function parseContextLabRunRecord(input: {
     );
   }
   assertNoAnswerKeyFields(parsed);
+  const releaseId = parsed.experienceRun.releaseId ?? null;
+  const releaseFingerprint = parsed.experienceRun.releaseFingerprint ?? null;
   return {
     id: input.id,
     userId: input.userId,
@@ -101,6 +103,8 @@ export function parseContextLabRunRecord(input: {
     experienceId: input.experienceId,
     experienceRun: structuredClone(parsed.experienceRun),
     probe: parsed.probe ? structuredClone(parsed.probe) : null,
+    releaseId,
+    releaseFingerprint,
     revision: input.revision,
     createdAt: input.createdAt,
     updatedAt: input.updatedAt,

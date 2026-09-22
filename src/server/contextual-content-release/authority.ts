@@ -309,6 +309,7 @@ export function manifestFromAuthority(input: {
   createdAt: string;
   createdBy?: string;
   status?: "DRAFT";
+  releaseId?: string;
 }): ContextualContentReleaseManifest {
   const packFingerprint = fingerprintAuthoredPackSnapshot(input.authority.snapshot.pack);
   const contextModelFingerprint = fingerprintContextModel(input.authority.snapshot.context);
@@ -321,7 +322,7 @@ export function manifestFromAuthority(input: {
   return cloneFrozen({
     schemaVersion: "candidate-v0",
     kind: CONTEXTUAL_CONTENT_RELEASE_KIND,
-    releaseId: MEAL_MIGRATION_RELEASE_ID,
+    releaseId: input.releaseId ?? MEAL_MIGRATION_RELEASE_ID,
     sceneId: MEAL_RELEASE_SCENE_ID,
     baseReleaseId: null,
     status: input.status ?? "DRAFT",
@@ -336,6 +337,10 @@ export function manifestFromAuthority(input: {
     createdBy: input.createdBy ?? RELEASE_ACTOR_ID,
     validatedAt: null,
     validationSummary: null,
+    publishedAt: null,
+    publishedBy: null,
+    supersededAt: null,
+    supersededByReleaseId: null,
   });
 }
 

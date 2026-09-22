@@ -404,6 +404,11 @@ export function ContextLabClient({
         <p className="sr-only" aria-live="polite" aria-atomic="true">
           {transitioning || busy ? "" : liveAnnouncement(screen)}
         </p>
+        {screen && "handle" in screen && screen.handle.contentReleaseId ? (
+          <p className="sr-only" data-testid="context-lab-content-pin">
+            {screen.handle.contentReleaseId}
+          </p>
+        ) : null}
         {actionError ? (
           <p role="alert" className="text-destructive text-sm leading-relaxed">
             {actionError}

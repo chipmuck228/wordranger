@@ -3,11 +3,23 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 import { cloneFrozen } from "@/contextual-learning/candidate-v0/content/immutable";
 import {
+  fingerprintsForManifest,
+  parseActiveReleasePointer,
   parseReleaseManifest,
+  type ContextualContentActiveReleasePointer,
   type ContextualContentReleaseManifest,
 } from "@/contextual-learning/candidate-v0/release";
-import { contextualReleaseRoot, safeReleaseRecordPath } from "./release-artifact-path";
-import type { ContextualContentReleaseRepository } from "./release-repository";
+import {
+  contextualReleaseRoot,
+  safeActivePointerPath,
+  safeReleaseRecordPath,
+} from "./release-artifact-path";
+import type {
+  ActiveReleaseLoadResult,
+  ContextualContentReleaseRepository,
+  PublishAtomicResult,
+  RollbackPointerResult,
+} from "./release-repository";
 import type { ReleaseSaveResult } from "./types";
 
 export class FileContextualContentReleaseRepository
@@ -32,7 +44,7 @@ export class FileContextualContentReleaseRepository
       const root = contextualReleaseRoot();
       try {
         return readdirSync(root)
-          .filter((name) => name.endsWith(".json"))
+          .filter((name) => name.endsWith(".json") && !name.startsWith("pointer-"))
           .sort()
           .flatMap((name) => {
             const releaseId = name.replace(/\.json$/, "");
@@ -53,6 +65,42 @@ export class FileContextualContentReleaseRepository
     expectedRevision: number;
   }): Promise<ReleaseSaveResult> {
     return this.enqueue(() => this.saveSync(input.record, input.expectedRevision));
+  }
+
+  async listByScene(sceneId: string): Promise<ContextualContentReleaseManifest[]> {
+    const listed = await this.list();
+    return listed.filter((item) => item.sceneId === sceneId);
+  }
+
+  async getActivePointer(
+    sceneId: string,
+  ): Promise<ContextualContentActiveReleasePointer | null> {
+    return this.enqueue(() => this.readPointer(sceneId));
+  }
+
+  async loadActiveRelease(sceneId: string): Promise<ActiveReleaseLoadResult> {
+    return this.enqueue(() => this.loadActiveSync(sceneId));
+  }
+
+  async publishAtomic(input: {
+    record: ContextualContentReleaseManifest;
+    expectedRevision: number;
+    pointer: ContextualContentActiveReleasePointer;
+    expectedPointerRevision: number | null;
+    superseded?: {
+      record: ContextualContentReleaseManifest;
+      expectedRevision: number;
+    };
+  }): Promise<PublishAtomicResult> {
+    return this.enqueue(() => this.publishSync(input));
+  }
+
+  async rollbackPointer(input: {
+    sceneId: string;
+    expectedPointerRevision: number;
+    pointer: ContextualContentActiveReleasePointer;
+  }): Promise<RollbackPointerResult> {
+    return this.enqueue(() => this.rollbackSync(input));
   }
 
   async discard(input: {
@@ -120,7 +168,9 @@ export class FileContextualContentReleaseRepository
       existing.releaseFingerprint === parsed.releaseFingerprint &&
       existing.status === parsed.status &&
       existing.revision === parsed.revision &&
-      existing.validatedAt === parsed.validatedAt
+      existing.validatedAt === parsed.validatedAt &&
+      existing.publishedAt === parsed.publishedAt &&
+      existing.supersededAt === parsed.supersededAt
     ) {
       return { ok: true, record: existing, idempotent: true };
     }
@@ -133,6 +183,156 @@ export class FileContextualContentReleaseRepository
     });
     this.write(stored);
     return { ok: true, record: cloneFrozen(stored), idempotent: false };
+  }
+
+  private publishSync(input: {
+    record: ContextualContentReleaseManifest;
+    expectedRevision: number;
+    pointer: ContextualContentActiveReleasePointer;
+    expectedPointerRevision: number | null;
+    superseded?: {
+      record: ContextualContentReleaseManifest;
+      expectedRevision: number;
+    };
+  }): PublishAtomicResult {
+    const parsed = parseReleaseManifest(input.record);
+    const pointer = parseActiveReleasePointer(input.pointer);
+    if (!parsed || !pointer || parsed.status !== "PUBLISHED") {
+      return { ok: false, code: "RELEASE_INVALID", message: "Published snapshot or pointer is invalid." };
+    }
+    const existing = this.read(parsed.releaseId);
+    if (!existing) {
+      return { ok: false, code: "RELEASE_NOT_FOUND", message: "Release was not found." };
+    }
+    const currentPointer = this.readPointer(pointer.sceneId);
+    if (
+      existing.status === "PUBLISHED" &&
+      currentPointer?.releaseId === parsed.releaseId &&
+      currentPointer.releaseFingerprint === parsed.releaseFingerprint
+    ) {
+      return {
+        ok: true,
+        record: existing,
+        pointer: currentPointer,
+        superseded: null,
+        idempotent: true,
+      };
+    }
+    if (existing.revision !== input.expectedRevision) {
+      return { ok: false, code: "RELEASE_CONFLICT", message: "Another release write happened first." };
+    }
+    if (existing.status !== "PREFLIGHT_VALIDATED") {
+      return { ok: false, code: "RELEASE_INVALID", message: "Only PREFLIGHT_VALIDATED releases can be published." };
+    }
+    if ((currentPointer?.revision ?? null) !== input.expectedPointerRevision) {
+      return { ok: false, code: "RELEASE_CONFLICT", message: "Active pointer changed before publish." };
+    }
+    const nextRelease = cloneFrozen({
+      ...parsed,
+      revision: input.expectedRevision + 1,
+    });
+    let nextSuperseded: ContextualContentReleaseManifest | null = null;
+    if (input.superseded) {
+      const superseded = parseReleaseManifest(input.superseded.record);
+      const currentSuperseded = this.read(input.superseded.record.releaseId);
+      if (
+        !superseded ||
+        !currentSuperseded ||
+        currentSuperseded.revision !== input.superseded.expectedRevision
+      ) {
+        return { ok: false, code: "RELEASE_CONFLICT", message: "Previous active release changed before publish." };
+      }
+      nextSuperseded = cloneFrozen({
+        ...superseded,
+        revision: input.superseded.expectedRevision + 1,
+      });
+    }
+    const nextPointer = cloneFrozen({
+      ...pointer,
+      revision:
+        input.expectedPointerRevision === null ? 0 : input.expectedPointerRevision + 1,
+    });
+    this.write(nextRelease);
+    if (nextSuperseded) {
+      this.write(nextSuperseded);
+    }
+    this.writePointer(nextPointer);
+    return {
+      ok: true,
+      record: cloneFrozen(nextRelease),
+      pointer: cloneFrozen(nextPointer),
+      superseded: nextSuperseded ? cloneFrozen(nextSuperseded) : null,
+      idempotent: false,
+    };
+  }
+
+  private rollbackSync(input: {
+    sceneId: string;
+    expectedPointerRevision: number;
+    pointer: ContextualContentActiveReleasePointer;
+  }): RollbackPointerResult {
+    const pointer = parseActiveReleasePointer(input.pointer);
+    if (!pointer || pointer.sceneId !== input.sceneId) {
+      return { ok: false, code: "RELEASE_INVALID", message: "Rollback pointer is invalid." };
+    }
+    const current = this.readPointer(input.sceneId);
+    const target = this.read(pointer.releaseId);
+    if (!target) {
+      return { ok: false, code: "RELEASE_NOT_FOUND", message: "Release was not found." };
+    }
+    if (
+      current &&
+      current.releaseId === pointer.releaseId &&
+      current.releaseFingerprint === pointer.releaseFingerprint
+    ) {
+      return { ok: true, pointer: current, target, idempotent: true };
+    }
+    if (!current || current.revision !== input.expectedPointerRevision) {
+      return { ok: false, code: "RELEASE_CONFLICT", message: "Active pointer changed before rollback." };
+    }
+    if (
+      (target.status !== "PUBLISHED" && target.status !== "SUPERSEDED") ||
+      target.publishedAt == null
+    ) {
+      return { ok: false, code: "RELEASE_NOT_PUBLISHED", message: "Only previously published releases can become active." };
+    }
+    const restored =
+      target.status === "SUPERSEDED"
+        ? cloneFrozen({
+            ...target,
+            status: "PUBLISHED" as const,
+            revision: target.revision + 1,
+          })
+        : target;
+    const nextPointer = cloneFrozen({
+      ...pointer,
+      revision: input.expectedPointerRevision + 1,
+    });
+    this.write(restored);
+    this.writePointer(nextPointer);
+    return { ok: true, pointer: cloneFrozen(nextPointer), target: cloneFrozen(restored), idempotent: false };
+  }
+
+  private loadActiveSync(sceneId: string): ActiveReleaseLoadResult {
+    const pointer = this.readPointer(sceneId);
+    if (!pointer) {
+      return { ok: false, code: "RELEASE_POINTER_INVALID", message: "No active release pointer." };
+    }
+    const release = this.read(pointer.releaseId);
+    if (!release) {
+      return { ok: false, code: "RELEASE_NOT_FOUND", message: "Active release is missing." };
+    }
+    if (release.status !== "PUBLISHED" || release.sceneId !== sceneId) {
+      return { ok: false, code: "RELEASE_POINTER_MISMATCH", message: "Active pointer is not bound to a published release." };
+    }
+    if (pointer.releaseFingerprint !== release.releaseFingerprint) {
+      return { ok: false, code: "RELEASE_POINTER_MISMATCH", message: "Active pointer fingerprint does not match the release." };
+    }
+    const computed = fingerprintsForManifest(release);
+    if (computed.releaseFingerprint !== release.releaseFingerprint) {
+      return { ok: false, code: "RELEASE_POINTER_MISMATCH", message: "Active release fingerprint cannot be recomputed." };
+    }
+    return { ok: true, pointer, release };
   }
 
   private read(releaseId: string): ContextualContentReleaseManifest | null {
@@ -149,6 +349,33 @@ export class FileContextualContentReleaseRepository
       }
       throw error;
     }
+  }
+
+  private readPointer(sceneId: string): ContextualContentActiveReleasePointer | null {
+    const filePath = safeActivePointerPath(sceneId);
+    if (!filePath) {
+      return null;
+    }
+    try {
+      const parsed = parseActiveReleasePointer(JSON.parse(readFileSync(filePath, "utf8")));
+      return parsed ? cloneFrozen(parsed) : null;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  private writePointer(pointer: ContextualContentActiveReleasePointer): void {
+    const filePath = safeActivePointerPath(pointer.sceneId);
+    if (!filePath) {
+      throw new Error("Unknown scene cannot control a pointer path.");
+    }
+    mkdirSync(path.dirname(filePath), { recursive: true });
+    const tempPath = `${filePath}.${process.pid}.tmp`;
+    writeFileSync(tempPath, `${JSON.stringify(pointer, null, 2)}\n`, "utf8");
+    renameSync(tempPath, filePath);
   }
 
   private write(record: ContextualContentReleaseManifest): void {

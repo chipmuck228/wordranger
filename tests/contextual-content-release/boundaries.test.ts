@@ -41,10 +41,12 @@ describe("release pipeline boundaries", () => {
     }
     const actions = readFileSync("src/app/debug/contextual-content-release/actions.ts", "utf8");
     expect(actions).not.toContain("userId");
+    expect(actions).not.toContain("publishedBy");
     expect(actions).not.toContain("processEvidence");
+    expect(actions).not.toContain('href="/train"');
   });
 
-  it("leaves Context Lab on code-defined six-word batch 02", () => {
+  it("keeps default Context Lab on the code-defined six-word pack unless active-release is selected", () => {
     expect(experimentalMealContextLabPack().id).toBe(MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID);
     expect(experimentalMealContextLabPack().lexemes).toHaveLength(6);
     const registry = listSceneContentRegistry();

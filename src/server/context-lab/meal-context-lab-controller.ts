@@ -61,6 +61,7 @@ import { V1_PLACEHOLDER_USER_ID } from "@/server/auth/v1-user";
 import { withPersistenceTimeout } from "@/lib/runtime/persistence-timeout";
 import { submitTaskAction } from "@/server/tasks/submit-task-action";
 import {
+  ContextLabError,
   errorScreen,
   notFoundRunScreen,
   staleRunScreen,
@@ -91,6 +92,10 @@ import {
 } from "./present-context-lab-screen";
 import { generateMealProbeTask } from "./generate-meal-probe-task";
 import { mealColdProbeTargets } from "./meal-probe-targets";
+import {
+  loadContextLabContent,
+  type ContextLabContentSnapshot,
+} from "./context-lab-content-source";
 import { validateActiveExperienceQueue } from "./validate-active-experience-queue";
 import {
   currentBuildQueueItem,
@@ -149,6 +154,11 @@ export interface MealContextLabControllerOptions {
   createId?: () => string;
   planningInput?: ExperiencePlanningInput;
   beginAt?: "PROBE" | "BUILD";
+  content?: ContextLabContentSnapshot;
+  loadContent?: (pin?: {
+    releaseId: string;
+    releaseFingerprint: string;
+  } | null) => Promise<ContextLabContentSnapshot>;
 }
 
 export interface SubmitContextLabFrozenTaskInput {
@@ -171,6 +181,11 @@ export class MealContextLabController {
   private readonly createId: () => string;
   private readonly planningInput?: ExperiencePlanningInput;
   private readonly beginAt: "PROBE" | "BUILD";
+  private readonly injectedContent?: ContextLabContentSnapshot;
+  private readonly loadContent: (pin?: {
+    releaseId: string;
+    releaseFingerprint: string;
+  } | null) => Promise<ContextLabContentSnapshot>;
 
   constructor(options: MealContextLabControllerOptions) {
     this.repository = options.repository;
@@ -182,32 +197,41 @@ export class MealContextLabController {
     this.createId = options.createId ?? (() => crypto.randomUUID());
     this.planningInput = options.planningInput;
     this.beginAt = options.beginAt ?? "PROBE";
+    this.injectedContent = options.content;
+    this.loadContent = options.loadContent ?? ((pin) => loadContextLabContent({ pin }));
   }
 
   async start(): Promise<ContextLabCurrentScreen> {
     if (!this.enabled) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.FEATURE_DISABLED);
     }
-    if (this.beginAt === "PROBE") {
-      return this.startProbe();
+    try {
+      if (this.beginAt === "PROBE") {
+        return await this.startProbe();
+      }
+      const content = await this.resolveContent();
+      const prepared = this.createIssuedRun({ content });
+      if ("screen" in prepared) {
+        return prepared.screen;
+      }
+      const createdAt = this.now();
+      await this.repository.create({
+        id: prepared.run.id,
+        userId: this.userId,
+        schemaVersion: CONTEXT_LAB_RUN_SCHEMA_VERSION,
+        experienceId: prepared.run.experienceId,
+        experienceRun: prepared.run,
+        probe: null,
+        releaseId: content.releaseId,
+        releaseFingerprint: content.releaseFingerprint,
+        revision: 0,
+        createdAt,
+        updatedAt: createdAt,
+      });
+      return this.toPublicScreen(prepared.run, 0, prepared.issued);
+    } catch (error) {
+      return this.contentErrorScreen(error);
     }
-    const prepared = this.createIssuedRun();
-    if ("screen" in prepared) {
-      return prepared.screen;
-    }
-    const createdAt = this.now();
-    await this.repository.create({
-      id: prepared.run.id,
-      userId: this.userId,
-      schemaVersion: CONTEXT_LAB_RUN_SCHEMA_VERSION,
-      experienceId: prepared.run.experienceId,
-      experienceRun: prepared.run,
-      probe: null,
-      revision: 0,
-      createdAt,
-      updatedAt: createdAt,
-    });
-    return this.toPublicScreen(prepared.run, 0, prepared.issued);
   }
 
   async acknowledge(input: {
@@ -728,11 +752,14 @@ export class MealContextLabController {
   private createIssuedRun(options?: {
     planningInput?: ExperiencePlanningInput;
     runId?: string;
+    content?: ContextLabContentSnapshot;
   }):
     | { run: ExperienceRun; issued: IssuedPayload }
     | { screen: ContextLabCurrentScreen } {
     const planned = planExperience(
-      options?.planningInput ?? this.planningInput ?? mealBuildPlanningInput(),
+      options?.planningInput ??
+        this.planningInput ??
+        mealBuildPlanningInput(undefined, undefined, options?.content?.context.runtimeContextId),
     );
     if (!planned.ok) {
       return {
@@ -742,7 +769,8 @@ export class MealContextLabController {
       };
     }
 
-    const runtimeContextId = experimentalMealRuntimeContextId();
+    const runtimeContextId =
+      options?.content?.context.runtimeContextId ?? experimentalMealRuntimeContextId();
     const frame = findPlannerFrame(planned.plan.contextFrameId, runtimeContextId);
     const skeleton = findPlannerSkeleton(planned.plan.skeletonId, runtimeContextId);
     if (
@@ -791,9 +819,14 @@ export class MealContextLabController {
         }),
       };
     }
+    const pinnedRun: ExperienceRun = {
+      ...created.run,
+      releaseId: options?.content?.releaseId,
+      releaseFingerprint: options?.content?.releaseFingerprint,
+    };
 
     const issued = issueCurrentStep({
-      run: created.run,
+      run: pinnedRun,
       now: createdAt,
       createId: frozenTaskCreateId(created.run),
     });
@@ -914,12 +947,13 @@ export class MealContextLabController {
   }
 
   private async startProbe(): Promise<ContextLabCurrentScreen> {
-    const prepared = this.createUnissuedRun();
+    const content = await this.resolveContent();
+    const prepared = this.createUnissuedRun(content);
     if ("screen" in prepared) {
       return prepared.screen;
     }
     const createdAt = this.now();
-    const probe = createMealProbeOrchestration(mealColdProbeTargets());
+    const probe = createMealProbeOrchestration(mealColdProbeTargets(content.pack));
     await this.repository.create({
       id: prepared.run.id,
       userId: this.userId,
@@ -927,20 +961,22 @@ export class MealContextLabController {
       experienceId: prepared.run.experienceId,
       experienceRun: prepared.run,
       probe,
+      releaseId: content.releaseId,
+      releaseFingerprint: content.releaseFingerprint,
       revision: 0,
       createdAt,
       updatedAt: createdAt,
     });
     return presentProbeIntroScreen({
-      handle: { runId: prepared.run.id, revision: 0 },
+      handle: this.handleFor(prepared.run.id, 0, content.releaseId),
       progress: { current: 0, total: probe.targets.length },
     });
   }
 
-  private createUnissuedRun():
+  private createUnissuedRun(content?: ContextLabContentSnapshot):
     | { run: ExperienceRun }
     | { screen: ContextLabCurrentScreen } {
-    const issued = this.createIssuedRun();
+    const issued = this.createIssuedRun({ content });
     if ("screen" in issued) {
       return issued;
     }
@@ -952,7 +988,7 @@ export class MealContextLabController {
     if (!probe) {
       return notFoundRunScreen();
     }
-    const handle = { runId: record.id, revision: record.revision };
+    const handle = this.handleFor(record.id, record.revision, record.releaseId);
     const progress = {
       current: Math.min(probe.currentTargetIndex + 1, probe.targets.length),
       total: probe.targets.length,
@@ -1000,7 +1036,7 @@ export class MealContextLabController {
       });
     }
     return presentProbeFrozenTaskScreen({
-      handle: { runId: record.id, revision: record.revision },
+      handle: this.handleFor(record.id, record.revision, record.releaseId),
       task: assigned.task.publicTask,
       skill: probe.issued.skill,
       entityId: probe.issued.entityId,
@@ -1049,6 +1085,12 @@ export class MealContextLabController {
     const siblingLemmas = probe.targets
       .filter((item) => item.target.lexemeId !== target.target.lexemeId)
       .map((item) => displayFormForTarget(item.target));
+    let content: ContextLabContentSnapshot;
+    try {
+      content = await this.resolveContent(record);
+    } catch (error) {
+      return this.contentErrorScreen(error);
+    }
     const generated = await generateMealProbeTask({
       runId: record.id,
       target,
@@ -1056,6 +1098,7 @@ export class MealContextLabController {
       siblingLemmas,
       targetLemma: displayFormForTarget(target.target),
       now: this.now(),
+      pack: content.pack,
     });
     if (!generated.ok) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
@@ -1384,9 +1427,16 @@ export class MealContextLabController {
         detail: "MEAL_TARGET_PROFILE_UNRESOLVED",
       });
     }
+    let content: ContextLabContentSnapshot;
+    try {
+      content = await this.resolveContent(record);
+    } catch (error) {
+      return this.contentErrorScreen(error);
+    }
     const prepared = this.createIssuedRun({
       planningInput: mealStrengthenPlanningInput(profile),
       runId: record.id,
+      content,
     });
     if ("screen" in prepared) {
       return prepared.screen;
@@ -1487,9 +1537,16 @@ export class MealContextLabController {
         detail: "MEAL_TARGET_PROFILE_UNRESOLVED",
       });
     }
+    let content: ContextLabContentSnapshot;
+    try {
+      content = await this.resolveContent(record);
+    } catch (error) {
+      return this.contentErrorScreen(error);
+    }
     const prepared = this.createIssuedRun({
       planningInput: mealBuildPlanningInput(profile),
       runId: record.id,
+      content,
     });
     if ("screen" in prepared) {
       return prepared.screen;
@@ -1554,6 +1611,61 @@ export class MealContextLabController {
       revision: saved.revision,
     });
   }
+
+  private async resolveContent(
+    record?: ContextLabRunRecord,
+  ): Promise<ContextLabContentSnapshot> {
+    try {
+      if (this.injectedContent) {
+        return this.injectedContent;
+      }
+      const pin =
+        record?.releaseId && record.releaseFingerprint
+          ? { releaseId: record.releaseId, releaseFingerprint: record.releaseFingerprint }
+          : record?.experienceRun.releaseId && record.experienceRun.releaseFingerprint
+            ? {
+                releaseId: record.experienceRun.releaseId,
+                releaseFingerprint: record.experienceRun.releaseFingerprint,
+              }
+            : null;
+      return await this.loadContent(pin);
+    } catch (error) {
+      if (error instanceof ContextLabError) {
+        throw error;
+      }
+      throw new ContextLabError(
+        CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_CONTENT_UNAVAILABLE,
+        "Experimental Context Lab content is unavailable.",
+        false,
+      );
+    }
+  }
+
+  private handleFor(
+    runId: string,
+    revision: number,
+    releaseId?: string | null,
+  ): { runId: string; revision: number; contentReleaseId?: string } {
+    return {
+      runId,
+      revision,
+      ...(releaseId ? { contentReleaseId: releaseId } : {}),
+    };
+  }
+
+  private contentErrorScreen(error: unknown): ContextLabCurrentScreen {
+    if (error instanceof ContextLabError) {
+      if (error.code === CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_CONTENT_UNAVAILABLE) {
+        return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_CONTENT_UNAVAILABLE, {
+          title: "实验内容暂时不可用",
+          message: "当前没有可用的已发布实验内容。这不会影响 /train。",
+          recoverable: false,
+        });
+      }
+      return errorScreen(error.code, { recoverable: error.recoverable });
+    }
+    throw error;
+  }
 }
 
 interface IssuedPayload {
@@ -1564,6 +1676,7 @@ interface IssuedPayload {
 export function mealBuildPlanningInput(
   profileOrCapabilities?: MealLexicalBuildProfile | RuntimeCapability[],
   capabilities: RuntimeCapability[] = typingCapabilities(),
+  runtimeContextId: ReturnType<typeof experimentalMealRuntimeContextId> = experimentalMealRuntimeContextId(),
 ): ExperiencePlanningInput {
   const profile = Array.isArray(profileOrCapabilities)
     ? null
@@ -1581,7 +1694,7 @@ export function mealBuildPlanningInput(
       allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
       runtimeCapabilities: runtime,
       loadLexeme: bundledSceneLexemeLoader,
-      runtimeContextId: experimentalMealRuntimeContextId(),
+      runtimeContextId,
     };
   }
   return {
@@ -1597,7 +1710,7 @@ export function mealBuildPlanningInput(
     allowedContextIds: [HOME_BREAKFAST_FRAME_ID],
     runtimeCapabilities: runtime,
     loadLexeme: bundledSceneLexemeLoader,
-    runtimeContextId: experimentalMealRuntimeContextId(),
+    runtimeContextId,
   };
 }
 

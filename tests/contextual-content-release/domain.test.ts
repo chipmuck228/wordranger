@@ -107,6 +107,13 @@ describe("release domain fingerprints and transitions", () => {
     });
     expect(illegal.ok).toBe(false);
     expect(illegal.issues.some((item) => item.code === "RELEASE_TRANSITION_ILLEGAL")).toBe(true);
+    const fromValidated = cloneFrozen({
+      ...validated,
+      status: "PUBLISHED" as const,
+      publishedAt: "2026-09-22T00:00:02.000Z",
+      publishedBy: "LOCAL_INTERNAL_RELEASER",
+    });
+    expect(validateReleaseTransition({ current: validated, next: fromValidated }).ok).toBe(true);
   });
 
   it("treats a PREFLIGHT_VALIDATED manifest as immutable", async () => {

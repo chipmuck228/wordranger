@@ -1,6 +1,7 @@
 /**
  * Contextual Content Release Candidate V0.
- * Experimental / Not a Standard. Dry-run validation only in Phase 1.
+ * Experimental / Not a Standard. Phase 2 publishes experimental Context Lab
+ * content only. It is not a Standard and is not wired to /train.
  */
 
 import type { ContextFrame, LexemeSenseRef, SemanticSkeleton } from "../domain/types";
@@ -110,8 +111,27 @@ export interface ContextualContentReleaseManifest {
   createdBy: string;
   validatedAt: string | null;
   validationSummary: ReleaseValidationSummary | null;
+  publishedAt: string | null;
+  publishedBy: string | null;
+  supersededAt: string | null;
+  supersededByReleaseId: string | null;
+}
+
+export const CONTEXTUAL_CONTENT_ACTIVE_POINTER_KIND =
+  "CANDIDATE_V0_ACTIVE_RELEASE_POINTER" as const;
+
+export interface ContextualContentActiveReleasePointer {
+  schemaVersion: typeof CONTEXTUAL_CONTENT_RELEASE_SCHEMA_VERSION;
+  kind: typeof CONTEXTUAL_CONTENT_ACTIVE_POINTER_KIND;
+  sceneId: string;
+  releaseId: string;
+  releaseFingerprint: string;
+  revision: number;
+  activatedAt: string;
+  activatedBy: string;
 }
 
 export const PHASE1_ALLOWED_STATUSES = ["DRAFT", "PREFLIGHT_VALIDATED"] as const;
+export const PUBLISHED_RELEASE_STATUSES = ["PUBLISHED", "SUPERSEDED"] as const;
 
 export const RELEASE_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

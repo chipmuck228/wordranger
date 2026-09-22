@@ -1,5 +1,6 @@
 import "server-only";
 
+import { MEAL_MIGRATION_RELEASE_ID } from "@/contextual-learning/candidate-v0/release";
 import { isContextualContentReleaseWriteEnabled } from "./gates";
 import { buildMealMigrationAuthority, manifestFromAuthority } from "./authority";
 import type { ContextualContentReleaseRepository } from "./release-repository";
@@ -48,11 +49,35 @@ export async function createMealMigrationDraft(input: {
       message: blocking[0]?.detail ?? "Migration draft requires an approval-bound six-word snapshot.",
     };
   }
+  const repository = input.repository ?? createContextualReleaseRepository(input.env);
+  const releaseId = await nextMealReleaseId(repository);
   const record = manifestFromAuthority({
     authority,
     createdAt: input.now ?? new Date().toISOString(),
     createdBy: RELEASE_ACTOR_ID,
+    releaseId,
   });
-  const repository = input.repository ?? createContextualReleaseRepository(input.env);
   return repository.create({ record });
+}
+
+async function nextMealReleaseId(
+  repository: ContextualContentReleaseRepository,
+): Promise<string> {
+  const listed = await repository.list();
+  if (!listed.some((item) => item.releaseId === MEAL_MIGRATION_RELEASE_ID)) {
+    return MEAL_MIGRATION_RELEASE_ID;
+  }
+  const open = listed.find(
+    (item) =>
+      item.releaseId === MEAL_MIGRATION_RELEASE_ID &&
+      (item.status === "DRAFT" || item.status === "PREFLIGHT_VALIDATED"),
+  );
+  if (open) {
+    return MEAL_MIGRATION_RELEASE_ID;
+  }
+  let index = 2;
+  while (listed.some((item) => item.releaseId === `meal-release-migration-v${index}`)) {
+    index += 1;
+  }
+  return `meal-release-migration-v${index}`;
 }

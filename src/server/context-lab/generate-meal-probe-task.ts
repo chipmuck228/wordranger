@@ -27,6 +27,7 @@ export async function generateMealProbeTask(input: {
   siblingLemmas: readonly string[];
   targetLemma: string;
   now: string;
+  pack?: ReturnType<typeof experimentalMealContextLabPack>;
 }): Promise<
   | { ok: true; task: GeneratedLearningTask }
   | { ok: false; reason: "PROBE_TASK_UNAVAILABLE" | "PROBE_TASK_SEMANTIC_MISMATCH" }
@@ -92,8 +93,9 @@ function probeNeed(
 function sceneSafeRecognitionTask(
   task: GeneratedLearningTask,
   target: ContextualProbeTarget,
+  pack = experimentalMealContextLabPack(),
 ): GeneratedLearningTask {
-  const authored = experimentalMealContextLabPack().lexemes.find((lexeme) =>
+  const authored = pack.lexemes.find((lexeme) =>
     sameLexemeSense(lexeme.target, target.target),
   );
   const selector = authored?.lexicalPresentation.meaningGlossSelector;

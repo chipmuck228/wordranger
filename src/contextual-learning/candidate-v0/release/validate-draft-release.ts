@@ -28,12 +28,17 @@ export function validateDraftRelease(
       issues: [issue("RELEASE_SCHEMA_INVALID", "manifest", "Release manifest schema is invalid.")],
     };
   }
-  if (manifest.status !== "DRAFT" && manifest.status !== "PREFLIGHT_VALIDATED") {
+  if (
+    manifest.status !== "DRAFT" &&
+    manifest.status !== "PREFLIGHT_VALIDATED" &&
+    manifest.status !== "PUBLISHED" &&
+    manifest.status !== "SUPERSEDED"
+  ) {
     issues.push(
       issue(
         "RELEASE_STATUS_ILLEGAL",
         "status",
-        "Phase 1 only allows DRAFT or PREFLIGHT_VALIDATED.",
+        "Release status must be DRAFT, PREFLIGHT_VALIDATED, PUBLISHED, or SUPERSEDED.",
       ),
     );
   }

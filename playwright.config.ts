@@ -37,6 +37,7 @@ export default defineConfig({
         CONTEXTUAL_CONTENT_REVIEW_WRITE_ENABLED: "0",
         CONTEXTUAL_CONTENT_RELEASE_ENABLED: "0",
         CONTEXTUAL_CONTENT_RELEASE_WRITE_ENABLED: "0",
+        CONTEXT_LAB_CONTENT_SOURCE: "static",
       },
     },
     {
@@ -60,6 +61,7 @@ export default defineConfig({
         CONTEXTUAL_CONTENT_RELEASE_ENABLED: "1",
         CONTEXTUAL_CONTENT_RELEASE_WRITE_ENABLED: "0",
         CONTEXTUAL_RELEASE_RUNTIME: "memory",
+        CONTEXT_LAB_CONTENT_SOURCE: "static",
       },
     },
     {
@@ -83,6 +85,7 @@ export default defineConfig({
         CONTEXTUAL_CONTENT_RELEASE_ENABLED: "1",
         CONTEXTUAL_CONTENT_RELEASE_WRITE_ENABLED: "1",
         CONTEXTUAL_RELEASE_RUNTIME: "memory",
+        CONTEXT_LAB_CONTENT_SOURCE: "active-release",
       },
     },
   ],

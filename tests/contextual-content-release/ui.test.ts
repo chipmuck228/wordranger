@@ -21,28 +21,26 @@ describe("release debug UI", () => {
     ).toBe(false);
   });
 
-  it("shows six targets and no Publish/Activate/Rollback controls", () => {
+  it("shows experimental Context Lab publish controls without /train", () => {
     expect(workspace).toContain("六个 targets");
     expect(workspace).toContain("创建迁移 Draft");
     expect(workspace).toContain("运行 Preflight");
-    expect(workspace).toContain("刷新");
-    expect(workspace).toContain("放弃本地 Draft");
-    expect(workspace).toContain("本阶段只验证发布快照，不会切换 Context Lab。");
-    expect(workspace).not.toMatch(/>\s*Publish\s*</);
-    expect(workspace).not.toMatch(/>\s*Activate\s*</);
-    expect(workspace).not.toMatch(/>\s*Rollback\s*</);
+    expect(workspace).toContain("Publish");
+    expect(workspace).toContain("确认 Publish");
+    expect(workspace).toContain("设为活动版本/回滚到此版本");
+    expect(workspace).toContain("Experimental Context Lab");
+    expect(workspace).toContain("不会发布到 /train");
     expect(workspace).not.toContain("Promote to Standard");
     expect(workspace).not.toContain('href="/train"');
   });
 
-  it("accepts only releaseId and revision from the browser", () => {
+  it("accepts only CAS identity from the browser", () => {
     expect(actions).not.toContain("userId");
-    expect(actions).not.toContain("fingerprint");
-    expect(actions).not.toContain("pack JSON");
-    expect(actions).not.toContain("desired status");
+    expect(actions).not.toContain("publishedBy");
+    expect(actions).not.toContain("activatedBy");
     expect(actions).toContain("releaseId");
     expect(actions).toContain("revision");
-    expect(workspace).toContain("draft!.releaseId");
-    expect(workspace).toContain("draft!.revision");
+    expect(actions).toContain("publishContextualContentRelease");
+    expect(actions).toContain("rollbackContextualContentActiveRelease");
   });
 });

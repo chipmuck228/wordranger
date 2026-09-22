@@ -16,6 +16,14 @@ function issue(
   return { code, path, detail };
 }
 
+function isSnapshotLocked(status: ContextualContentReleaseStatus): boolean {
+  return (
+    status === "PREFLIGHT_VALIDATED" ||
+    status === "PUBLISHED" ||
+    status === "SUPERSEDED"
+  );
+}
+
 export function validateReleaseTransition(input: {
   current: ContextualContentReleaseManifest | unknown;
   next: ContextualContentReleaseManifest | unknown;
@@ -30,18 +38,13 @@ export function validateReleaseTransition(input: {
       issues: [issue("RELEASE_SCHEMA_INVALID", "manifest", "Release manifest schema is invalid.")],
     };
   }
-  if (input.requestedStatus === "PUBLISHED" || next.status === "PUBLISHED") {
+  if (next.status === "ROLLED_BACK") {
     issues.push(
       issue(
         "RELEASE_TRANSITION_ILLEGAL",
         "status",
-        "Phase 1 cannot publish. DRAFT → PUBLISHED is rejected.",
+        "ROLLED_BACK is not a release status. Rollback only moves the active pointer.",
       ),
-    );
-  }
-  if (next.status === "SUPERSEDED" || next.status === "ROLLED_BACK") {
-    issues.push(
-      issue("RELEASE_TRANSITION_ILLEGAL", "status", "Phase 1 cannot supersede or roll back."),
     );
   }
   if (current.releaseId !== next.releaseId || current.sceneId !== next.sceneId) {
@@ -50,17 +53,31 @@ export function validateReleaseTransition(input: {
   const allowed =
     (current.status === "DRAFT" && next.status === "DRAFT") ||
     (current.status === "DRAFT" && next.status === "PREFLIGHT_VALIDATED") ||
-    (current.status === "PREFLIGHT_VALIDATED" && next.status === "PREFLIGHT_VALIDATED");
+    (current.status === "PREFLIGHT_VALIDATED" && next.status === "PREFLIGHT_VALIDATED") ||
+    (current.status === "PREFLIGHT_VALIDATED" && next.status === "PUBLISHED") ||
+    (current.status === "PUBLISHED" && next.status === "PUBLISHED") ||
+    (current.status === "PUBLISHED" && next.status === "SUPERSEDED") ||
+    (current.status === "SUPERSEDED" && next.status === "SUPERSEDED") ||
+    (current.status === "SUPERSEDED" && next.status === "PUBLISHED");
   if (!allowed) {
     issues.push(
       issue(
         "RELEASE_TRANSITION_ILLEGAL",
         "status",
-        `${current.status} → ${next.status} is not allowed in Phase 1.`,
+        `${current.status} → ${next.status} is not allowed.`,
       ),
     );
   }
-  if (current.status === "PREFLIGHT_VALIDATED") {
+  if (current.status === "DRAFT" && next.status === "PUBLISHED") {
+    issues.push(
+      issue(
+        "RELEASE_TRANSITION_ILLEGAL",
+        "status",
+        "Only PREFLIGHT_VALIDATED releases can be published.",
+      ),
+    );
+  }
+  if (isSnapshotLocked(current.status)) {
     const currentPrint = fingerprintsForManifest(current);
     const nextPrint = fingerprintsForManifest(next);
     if (
@@ -68,13 +85,16 @@ export function validateReleaseTransition(input: {
       currentPrint.releaseFingerprint !== nextPrint.releaseFingerprint ||
       JSON.stringify(current.targetEntries) !== JSON.stringify(next.targetEntries) ||
       current.packFingerprint !== next.packFingerprint ||
-      current.contextModelFingerprint !== next.contextModelFingerprint
+      current.contextModelFingerprint !== next.contextModelFingerprint ||
+      current.createdAt !== next.createdAt ||
+      current.createdBy !== next.createdBy ||
+      current.validatedAt !== next.validatedAt
     ) {
       issues.push(
         issue(
           "RELEASE_IMMUTABLE_MUTATION",
           "targetEntries",
-          "A PREFLIGHT_VALIDATED manifest cannot be rewritten.",
+          "A validated or published snapshot cannot rewrite content, fingerprints, or creation metadata.",
         ),
       );
     }
