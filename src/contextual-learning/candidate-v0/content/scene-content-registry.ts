@@ -11,6 +11,7 @@ import { MEAL_SCENE_EXPANSION_BATCH_01_PACK } from "./packs/meal/meal-scene-expa
 import { MEAL_SCENE_EXPANSION_BATCH_01_CUP_PROMOTION } from "./packs/meal/meal-scene-expansion-batch-01-promotion";
 import { MEAL_SCENE_EXPANSION_BATCH_02_PACK } from "./packs/meal/meal-scene-expansion-batch-02";
 import { MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION } from "./packs/meal/meal-scene-expansion-batch-02-promotion";
+import { MEAL_SCENE_EXPANSION_BATCH_03_PACK } from "./packs/meal/meal-scene-expansion-batch-03";
 import { promotionAttestationMatchesPack } from "./validate-experiment-promotion";
 import type {
   ContextualSceneContentPack,
@@ -87,6 +88,13 @@ const ENTRIES = compileRegistry([
     promotion: MEAL_SCENE_EXPANSION_BATCH_02_PLATE_PROMOTION,
     parentPackId: MEAL_SCENE_EXPANSION_BATCH_01_PACK.id,
     releaseEligibility: "RELEASE_ELIGIBLE",
+  },
+  {
+    packId: MEAL_SCENE_EXPANSION_BATCH_03_PACK.id,
+    status: "CANDIDATE",
+    pack: MEAL_SCENE_EXPANSION_BATCH_03_PACK,
+    parentPackId: MEAL_SCENE_EXPANSION_BATCH_02_PACK.id,
+    releaseEligibility: "NONE",
   },
 ]);
 

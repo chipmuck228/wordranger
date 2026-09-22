@@ -20,6 +20,9 @@ export const MEAL_SENSE = {
   eat: sense("lex-eat", "eat#consume-food"),
   drink: sense("lex-drink", "drink#consume-liquid"),
   choose: sense("lex-choose", "choose#select"),
+  knife: sense("lex-knife", "knife#eating-tool"),
+  bread: sense("lex-bread", "bread#solid-food"),
+  water: sense("lex-water", "water#drinkable-liquid"),
 } as const;
 
 export const MEAL_CONCEPTS: SemanticConcept[] = [
@@ -49,6 +52,9 @@ export const MEAL_PROFILES = [
   profile(MEAL_SENSE.eat, "eat", []),
   profile(MEAL_SENSE.drink, "drink", []),
   profile(MEAL_SENSE.choose, "choose", []),
+  profile(MEAL_SENSE.knife, "knife", ["concept-eating-tool"]),
+  profile(MEAL_SENSE.bread, "bread", []),
+  profile(MEAL_SENSE.water, "water", []),
 ];
 
 export const MEAL_CONTRASTS: ContrastSet[] = [

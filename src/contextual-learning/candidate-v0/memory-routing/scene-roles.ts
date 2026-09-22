@@ -14,6 +14,8 @@ export const MEAL_SCENE_ROLE_IDS = [
   "DRINK_CONTAINER",
   "CONSUME_FOOD_ACTION",
   "SELECT_ACTION",
+  "SOLID_FOOD",
+  "DRINKABLE_LIQUID",
 ] as const;
 
 export const SCHOOL_SCENE_ROLE_IDS = [

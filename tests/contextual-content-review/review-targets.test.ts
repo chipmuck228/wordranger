@@ -38,6 +38,9 @@ describe("generic content review targets", () => {
     expect(listed.map((item) => item.reviewKey)).toEqual([
       "meal-expansion-batch-01-cup",
       "meal-expansion-batch-02-plate",
+      "meal-expansion-batch-03-knife",
+      "meal-expansion-batch-03-bread",
+      "meal-expansion-batch-03-water",
     ]);
     const plateItem = listed.find((item) => item.reviewKey === plate.reviewKey)!;
     expect(plateItem.statusLabel).toBe("APPROVED");

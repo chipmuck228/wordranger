@@ -25,7 +25,9 @@ import {
 } from "@/contextual-learning/candidate-v0/domain/types";
 import { MEAL_FRAMES, mealPrefixForFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_BATCH_02_FRAMES } from "@/contextual-learning/candidate-v0/fixtures/meal/meal-batch-02-contexts";
+import { MEAL_BATCH_03_FRAMES } from "@/contextual-learning/candidate-v0/fixtures/meal/meal-batch-03-contexts";
 import { mealBatch02Skeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/meal-batch-02-skeleton";
+import { mealBatch03Skeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/meal-batch-03-skeleton";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
 import { selectBundledMeaningGloss } from "@/contextual-learning/candidate-v0/content/select-bundled-meaning-gloss";
@@ -68,6 +70,13 @@ function reviewRuntimeContext(spec: ContentReviewTargetSpec): {
   authoredFrames: readonly ContextFrame[];
   skeleton: typeof mealSkeleton;
 } {
+  if (spec.runtimeContext === "MEAL_BATCH_03") {
+    return {
+      frames: MEAL_BATCH_03_FRAMES,
+      authoredFrames: MEAL_BATCH_03_FRAMES.filter((item) => item.id !== "picnic-lunch-v0"),
+      skeleton: mealBatch03Skeleton,
+    };
+  }
   if (spec.runtimeContext === "MEAL_BATCH_02") {
     return {
       frames: MEAL_BATCH_02_FRAMES,
@@ -672,8 +681,10 @@ export function projectContentReviewPacket(input: {
     notices: [
       registryStatus === "APPROVED_FOR_EXPERIMENT"
         ? "已进入实验 Context Lab，不代表 Standard 或生产批准"
-        : "“通过审核”只记录人工审核结果。",
-      "Candidate V0 / APPROVED_FOR_EXPERIMENT only.",
+        : "“通过审核”只记录人工审核结果。不会 promotion，也不会进入 Context Lab。",
+      registryStatus === "CANDIDATE"
+        ? "Candidate V0 / CANDIDATE only. Review-complete still remains unpromoted."
+        : "Candidate V0 / APPROVED_FOR_EXPERIMENT only.",
       "不是 Standard，也不接入生产 /train。",
       "机器验证通过不等于人工批准。",
       "保存审核决定不会修改 registry 或 promotion。",

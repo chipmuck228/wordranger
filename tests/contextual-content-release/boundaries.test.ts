@@ -54,7 +54,18 @@ describe("release pipeline boundaries", () => {
       "meal-home-breakfast-v0",
       "meal-scene-expansion-batch-01",
       "meal-scene-expansion-batch-02",
+      "meal-scene-expansion-batch-03",
     ]);
-    expect(registry.every((item) => item.status === "APPROVED_FOR_EXPERIMENT")).toBe(true);
+    expect(
+      registry
+        .filter((item) => item.packId !== "meal-scene-expansion-batch-03")
+        .every((item) => item.status === "APPROVED_FOR_EXPERIMENT"),
+    ).toBe(true);
+    expect(registry.find((item) => item.packId === "meal-scene-expansion-batch-03")?.status).toBe(
+      "CANDIDATE",
+    );
+    expect(
+      registry.find((item) => item.packId === "meal-scene-expansion-batch-03")?.releaseEligibility,
+    ).toBe("NONE");
   });
 });

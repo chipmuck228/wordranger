@@ -55,7 +55,7 @@ export interface HistoricalReleaseApprovalBinding {
 }
 
 export interface ReleaseContextSnapshot {
-  runtimeContextId: "MEAL_BASE" | "MEAL_BATCH_02";
+  runtimeContextId: "MEAL_BASE" | "MEAL_BATCH_02" | "MEAL_BATCH_03";
   frames: readonly ContextFrame[];
   skeleton: SemanticSkeleton;
 }

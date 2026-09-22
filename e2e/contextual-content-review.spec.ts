@@ -1,11 +1,22 @@
 import { expect, test, type Page } from "@playwright/test";
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 const REVIEW_URL = "/debug/contextual-content-review/meal-expansion-batch-01/cup";
 const RECORD_PATH = "docs/contextual-content-reviews/meal-expansion-batch-01-cup/human-review.record.json";
 const HUMAN_PATH = "docs/contextual-content-reviews/meal-expansion-batch-01-cup/HUMAN_REVIEW.md";
 const originalRecord = existsSync(RECORD_PATH) ? readFileSync(RECORD_PATH) : null;
 const originalHuman = existsSync(HUMAN_PATH) ? readFileSync(HUMAN_PATH) : null;
+const BATCH_03_RECORD_PATHS = [
+  "docs/contextual-content-reviews/meal-expansion-batch-03-knife/human-review.record.json",
+  "docs/contextual-content-reviews/meal-expansion-batch-03-bread/human-review.record.json",
+  "docs/contextual-content-reviews/meal-expansion-batch-03-water/human-review.record.json",
+] as const;
+const BATCH_03_HUMAN_PATHS = [
+  "docs/contextual-content-reviews/meal-expansion-batch-03-knife/HUMAN_REVIEW.md",
+  "docs/contextual-content-reviews/meal-expansion-batch-03-bread/HUMAN_REVIEW.md",
+  "docs/contextual-content-reviews/meal-expansion-batch-03-water/HUMAN_REVIEW.md",
+] as const;
 
 test.afterEach(() => {
   if (originalRecord) {
@@ -15,6 +26,16 @@ test.afterEach(() => {
   }
   if (originalHuman) {
     writeFileSync(HUMAN_PATH, originalHuman);
+  }
+  for (const filePath of BATCH_03_RECORD_PATHS) {
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+    }
+  }
+  for (const filePath of BATCH_03_HUMAN_PATHS) {
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+    }
   }
 });
 
@@ -83,11 +104,23 @@ test.describe("readonly review host", () => {
     );
 
     await page.goto("/debug/contextual-content-review");
-    await expect(page.getByText("Meal Expansion Batch 01")).toBeVisible();
-    await expect(page.getByText("Meal Expansion Batch 02")).toBeVisible();
-    await expect(page.getByText("Status: APPROVED")).toHaveCount(2);
-    await expect(page.getByText("Registry: APPROVED_FOR_EXPERIMENT")).toHaveCount(2);
-    await expect(page.getByText("Registry: CANDIDATE")).toHaveCount(0);
+    await expect(page.getByTestId("review-batch-meal-expansion-batch-01")).toBeVisible();
+    await expect(page.getByTestId("review-batch-meal-expansion-batch-02")).toBeVisible();
+    await expect(page.getByTestId("review-batch-meal-expansion-batch-03")).toBeVisible();
+    await expect(page.getByTestId("meal-expansion-batch-03-total")).toHaveText("3");
+    await expect(page.getByTestId("meal-expansion-batch-03-pending")).toHaveText("3");
+    await expect(page.getByTestId("meal-expansion-batch-03-approved")).toHaveText("0");
+    await expect(page.getByTestId("meal-expansion-batch-03-rejected")).toHaveText("0");
+    await expect(page.getByTestId("meal-expansion-batch-03-stale")).toHaveText("0");
+    await expect(page.getByTestId("meal-expansion-batch-03-blocked")).toHaveText("1");
+    await expect(page.getByTestId("review-blocked-napkin")).toContainText("BLOCKED");
+    await expect(page.getByRole("button", { name: "全部通过" })).toHaveCount(0);
+    await expect(page.getByTestId("review-card-meal-expansion-batch-01-cup")).toContainText("Status: APPROVED");
+    await expect(page.getByTestId("review-card-meal-expansion-batch-02-plate")).toContainText("Status: APPROVED");
+    await expect(page.getByTestId("review-card-meal-expansion-batch-03-knife")).toContainText("Status: PENDING");
+    await expect(page.getByTestId("review-card-meal-expansion-batch-03-bread")).toContainText("Status: PENDING");
+    await expect(page.getByTestId("review-card-meal-expansion-batch-03-water")).toContainText("Status: PENDING");
+    await expect(page.getByTestId("review-card-meal-expansion-batch-03-knife")).toContainText("Registry: CANDIDATE");
 
     await page.goto(REVIEW_URL);
     await expect(page.getByText("Candidate V0 / 已进入实验 Context Lab")).toBeVisible();
@@ -154,6 +187,24 @@ test.describe("readonly review host", () => {
     await expect(page.getByText("板", { exact: true })).toHaveCount(0);
     const unknown = await page.goto("/debug/contextual-content-review/missing-pack/plate");
     expect(unknown?.status()).toBe(404);
+
+    await page.goto("/debug/contextual-content-review/meal-expansion-batch-03/knife");
+    await expect(page.getByText("Candidate / 尚未进入实验")).toBeVisible();
+    await expect(page.getByTestId("review-human-status")).toHaveText("PENDING");
+    await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
+    await expect(page.getByTestId("review-meaning-gloss")).toHaveText("小刀");
+    await expect(page.getByTestId("review-ipa")).toContainText("naɪf");
+    await expect(page.getByTestId("review-promotion-scope")).toHaveCount(0);
+
+    await page.goto("/play/context-lab");
+    await expect(page.getByText("先看看你已经会了哪些词", { exact: true })).toBeVisible();
+    await expect(page.getByText("meal-scene-expansion-batch-03")).toHaveCount(0);
+    await expect(page.getByText("knife(pl.knives)", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("napkin", { exact: true })).toHaveCount(0);
+
+    await page.goto("/train");
+    await expect(page).not.toHaveURL(/debug/);
+    await expect(page.getByText("Meal Expansion Batch 03")).toHaveCount(0);
   });
 
   test("review pages remain usable at required viewports", async ({ page }) => {
@@ -164,9 +215,19 @@ test.describe("readonly review host", () => {
     ]) {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.goto("/debug/contextual-content-review");
+      await expect(page.getByTestId("review-batch-meal-expansion-batch-03")).toBeVisible();
+      await expect(page.getByTestId("review-card-meal-expansion-batch-03-knife")).toBeVisible();
+      let overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+      expect(overflow, `batch ${viewport.width}x${viewport.height}`).toBe(false);
+      await page.keyboard.press("Tab");
+      await page.goto("/debug/contextual-content-review/meal-expansion-batch-03/knife");
+      await expect(page.getByRole("heading", { name: "Candidate / 尚未进入实验" })).toBeVisible();
+      overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+      expect(overflow, `knife ${viewport.width}x${viewport.height}`).toBe(false);
       await page.goto(REVIEW_URL);
       await expect(page.getByRole("heading", { name: "Candidate V0 / 已进入实验 Context Lab" })).toBeVisible();
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+      overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
       expect(overflow, `${viewport.width}x${viewport.height}`).toBe(false);
       await page.keyboard.press("Tab");
     }
@@ -227,5 +288,65 @@ test.describe("writable review host", () => {
     await expect(page.getByTestId("review-human-status")).toHaveText("APPROVED");
     await expect(page.getByTestId("review-revision")).toHaveText(String(pageRevision + 1));
     await expect(page.getByTestId("review-registry-status")).toHaveText("APPROVED_FOR_EXPERIMENT");
+  });
+
+  test("approves one batch-03 target and rejects another without promoting the pack", async ({
+    page,
+  }) => {
+    await page.goto("/debug/contextual-content-review/meal-expansion-batch-03/knife");
+    await expect(page.getByTestId("review-human-status")).toHaveText("PENDING");
+    await page.getByRole("button", { name: "通过审核" }).click();
+    await expect(page.getByTestId("review-confirm-fingerprint")).toBeVisible();
+    await page.getByTestId("review-confirm").click();
+    await expect(page.getByText("已保存人工审核记录。不会修改 registry 或 promotion。")).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId("review-human-status")).toHaveText("APPROVED");
+    await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
+
+    await page.goto("/debug/contextual-content-review/meal-expansion-batch-03/bread");
+    await expect(page.getByTestId("review-human-status")).toHaveText("PENDING");
+    await page.getByRole("button", { name: "拒绝" }).click();
+    await page.getByLabel("拒绝理由").fill("Needs a sharper food-state contrast.");
+    await page.getByTestId("review-confirm").click();
+    await expect(page.getByText("已保存人工审核记录。不会修改 registry 或 promotion。")).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId("review-human-status")).toHaveText("REJECTED");
+    await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
+
+    await page.goto("/debug/contextual-content-review");
+    await expect(page.getByTestId("meal-expansion-batch-03-approved")).toHaveText("1");
+    await expect(page.getByTestId("meal-expansion-batch-03-rejected")).toHaveText("1");
+    await expect(page.getByTestId("meal-expansion-batch-03-pending")).toHaveText("1");
+    await expect(page.getByTestId("meal-expansion-batch-03-unpromoted")).toHaveCount(0);
+  });
+
+  test("marks a stale batch-03 review after the stored fingerprint drifts", async ({ page }) => {
+    await page.goto("/debug/contextual-content-review/meal-expansion-batch-03/water");
+    const fingerprint = (await page.getByTestId("review-fingerprint").innerText()).trim();
+    const stalePath = "docs/contextual-content-reviews/meal-expansion-batch-03-water/human-review.record.json";
+    mkdirSync(path.dirname(stalePath), { recursive: true });
+    writeFileSync(
+      stalePath,
+      `${JSON.stringify(
+        {
+          schemaVersion: "candidate-v0",
+          reviewKey: "meal-expansion-batch-03-water",
+          packId: "meal-scene-expansion-batch-03",
+          target: { lexemeId: "stale", senseId: "water#drinkable-liquid" },
+          contentFingerprint: `stale-${fingerprint}`,
+          decision: "APPROVED",
+          notes: [],
+          reviewedAt: "2026-09-22T00:00:00.000Z",
+          revision: 1,
+          reviewer: "LOCAL_INTERNAL_REVIEWER",
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await page.reload();
+    await expect(page.getByTestId("review-stale-state")).toHaveText("STALE_REVIEW");
+    await expect(page.getByTestId("review-human-status")).toHaveText("PENDING");
+    await expect(page.getByTestId("review-registry-status")).toHaveText("CANDIDATE");
   });
 });

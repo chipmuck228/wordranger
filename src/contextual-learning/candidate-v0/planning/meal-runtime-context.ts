@@ -5,18 +5,24 @@
 
 import { experimentalMealContextLabPack } from "../content/experimental-meal-runtime-pack";
 import { MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID } from "../content/packs/meal/meal-scene-expansion-batch-02";
+import { MEAL_SCENE_EXPANSION_BATCH_03_PACK_ID } from "../content/packs/meal/meal-scene-expansion-batch-03";
 import type { ContextFrame, SemanticSkeleton } from "../domain/types";
 import { MEAL_FRAMES } from "../fixtures/meal/contexts";
 import { MEAL_BATCH_02_FRAMES } from "../fixtures/meal/meal-batch-02-contexts";
+import { MEAL_BATCH_03_FRAMES } from "../fixtures/meal/meal-batch-03-contexts";
 import { mealBatch02Skeleton } from "../fixtures/meal/meal-batch-02-skeleton";
+import { mealBatch03Skeleton } from "../fixtures/meal/meal-batch-03-skeleton";
 import { mealSkeleton } from "../fixtures/meal/skeleton";
 
-export type MealRuntimeContextId = "MEAL_BASE" | "MEAL_BATCH_02";
+export type MealRuntimeContextId = "MEAL_BASE" | "MEAL_BATCH_02" | "MEAL_BATCH_03";
+
+const PACK_RUNTIME_CONTEXT: Record<string, MealRuntimeContextId> = {
+  [MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID]: "MEAL_BATCH_02",
+  [MEAL_SCENE_EXPANSION_BATCH_03_PACK_ID]: "MEAL_BATCH_03",
+};
 
 export function mealRuntimeContextIdForPack(packId: string): MealRuntimeContextId {
-  return packId === MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID
-    ? "MEAL_BATCH_02"
-    : "MEAL_BASE";
+  return PACK_RUNTIME_CONTEXT[packId] ?? "MEAL_BASE";
 }
 
 export function experimentalMealRuntimeContextId(): MealRuntimeContextId {
@@ -26,12 +32,18 @@ export function experimentalMealRuntimeContextId(): MealRuntimeContextId {
 export function framesForMealRuntime(
   runtimeContextId: MealRuntimeContextId,
 ): readonly ContextFrame[] {
+  if (runtimeContextId === "MEAL_BATCH_03") {
+    return MEAL_BATCH_03_FRAMES;
+  }
   return runtimeContextId === "MEAL_BATCH_02" ? MEAL_BATCH_02_FRAMES : MEAL_FRAMES;
 }
 
 export function skeletonForMealRuntime(
   runtimeContextId: MealRuntimeContextId,
 ): SemanticSkeleton {
+  if (runtimeContextId === "MEAL_BATCH_03") {
+    return mealBatch03Skeleton;
+  }
   return runtimeContextId === "MEAL_BATCH_02" ? mealBatch02Skeleton : mealSkeleton;
 }
 

@@ -118,6 +118,27 @@ export const MEAL_SCENE_CLUSTER: SceneVocabularyCluster = {
       "Action of selecting a suitable tool",
       { learningPriority: "SUPPORTING" },
     ),
+    member(
+      "knife",
+      MEAL_SENSE.knife.senseId,
+      "EATING_TOOL",
+      "Utensil used to cut solid food, contrasted with spoon and fork",
+      { learningPriority: "CONTRAST" },
+    ),
+    member(
+      "bread",
+      MEAL_SENSE.bread.senseId,
+      "SOLID_FOOD",
+      "Solid food that can be cut, contrasted with soup",
+      { learningPriority: "SUPPORTING" },
+    ),
+    member(
+      "water",
+      MEAL_SENSE.water.senseId,
+      "DRINKABLE_LIQUID",
+      "Drinkable liquid at the table, contrasted with soup",
+      { learningPriority: "SUPPORTING" },
+    ),
   ],
 };
 

@@ -37,12 +37,15 @@ describe("three-case scene catalog and routing", () => {
         "CONSUME_FOOD_ACTION",
         "DRINK",
         "DRINK_CONTAINER",
+        "DRINKABLE_LIQUID",
+        "EATING_TOOL",
         "EATING_TOOL",
         "EATING_TOOL",
         "FOOD",
         "FOOD_CONTAINER",
         "FOOD_SUPPORT",
         "SELECT_ACTION",
+        "SOLID_FOOD",
       ].sort(),
     );
     const spoon = memberByFixture(MEAL_SCENE_CLUSTER.members, "lex-spoon");

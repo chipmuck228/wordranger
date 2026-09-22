@@ -64,6 +64,21 @@ export const BUNDLED_LEXEME_BINDINGS = {
     lemma: "soup",
     canonicalKey: "lex-1300-1",
   },
+  knife: {
+    fixtureLexemeId: "lex-knife",
+    lemma: "knife(pl.knives)",
+    canonicalKey: "lex-0747-1",
+  },
+  bread: {
+    fixtureLexemeId: "lex-bread",
+    lemma: "bread",
+    canonicalKey: "lex-0184-1",
+  },
+  water: {
+    fixtureLexemeId: "lex-water",
+    lemma: "water",
+    canonicalKey: "lex-1517-1",
+  },
   eat: {
     fixtureLexemeId: "lex-eat",
     lemma: "eat",

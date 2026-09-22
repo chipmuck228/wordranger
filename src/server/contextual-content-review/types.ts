@@ -130,6 +130,45 @@ export interface ContentReviewListItem {
   statusLabel: string;
   frameLabels: string[];
   registryStatus: SceneContentRegistryStatus;
+  batchId: string;
+  lexemeId: string;
+  senseId: string;
+  lemma: string;
+  meaningGloss: string;
+  phonetic?: string;
+  roleId: string;
+  sceneMembership: string;
+  probeSummary: string;
+  buildSummaries: string[];
+  strengthenSummary: string;
+  contrastSummary: string;
+  provenance: string[];
+  validationIssues: string[];
+  contentFingerprint: string;
+  reviewRevision: number;
+}
+
+export interface ContentReviewBlockedCandidate {
+  batchId: string;
+  plannedLemma: string;
+  reason: string;
+}
+
+export interface ContentReviewBatchSummary {
+  batchId: string;
+  title: string;
+  packId: string;
+  registryStatus: SceneContentRegistryStatus;
+  releaseEligibility: "NONE" | "RELEASE_ELIGIBLE";
+  totalAuthored: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  stale: number;
+  blocked: number;
+  reviewCompleteUnpromoted: boolean;
+  targets: ContentReviewListItem[];
+  blockedCandidates: ContentReviewBlockedCandidate[];
 }
 
 export type SaveContentReviewResult =

@@ -48,6 +48,16 @@ export function ReviewWorkspace({
             <dt className="text-muted-foreground">Selected meaning</dt>
             <dd data-testid="review-meaning-gloss">{packet.target.meaningGloss}</dd>
           </div>
+          <div>
+            <dt className="text-muted-foreground">Lemma</dt>
+            <dd data-testid="review-lemma">{packet.target.lemma}</dd>
+          </div>
+          {packet.target.phonetic ? (
+            <div>
+              <dt className="text-muted-foreground">IPA</dt>
+              <dd data-testid="review-ipa">{packet.target.phonetic}</dd>
+            </div>
+          ) : null}
           <div className="md:col-span-2">
             <dt className="text-muted-foreground">content fingerprint</dt>
             <dd data-testid="review-fingerprint" className="break-all">

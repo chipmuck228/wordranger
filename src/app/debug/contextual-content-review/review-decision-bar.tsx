@@ -126,8 +126,14 @@ export function ReviewDecisionBar({
             </label>
           )}
           <div className="flex gap-2">
-            <Button type="button" disabled={busy} onClick={() => void confirm()}>
-              确认
+            <Button
+              type="button"
+              disabled={busy}
+              aria-busy={busy}
+              data-testid="review-confirm"
+              onClick={() => void confirm()}
+            >
+              {busy ? "保存中…" : "确认"}
             </Button>
             <Button type="button" variant="ghost" onClick={() => setPending(null)}>
               取消
