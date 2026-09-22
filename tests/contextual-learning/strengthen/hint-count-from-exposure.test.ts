@@ -5,7 +5,7 @@ import {
 } from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
 import { MEAL_SENSE } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
 import { deriveFrozenHintCountFromSupportExposure } from "@/contextual-learning/candidate-v0/strengthen/derive-frozen-hint-count";
-import { spellingCueFromDisplayForm } from "@/contextual-learning/candidate-v0/strengthen/spelling-cue";
+import { spellingCueFromAnswerForm } from "@/contextual-learning/candidate-v0/strengthen/spelling-cue";
 import type { ContextualSupportExposure } from "@/contextual-learning/candidate-v0/strengthen/types";
 
 const spoon = {
@@ -125,8 +125,8 @@ describe("deriveFrozenHintCountFromSupportExposure", () => {
   });
 
   it("builds a deterministic cue from the verified display form", () => {
-    expect(spellingCueFromDisplayForm("spoon")).toBe("s _ _ _ _");
-    expect(spellingCueFromDisplayForm("bowl")).toBe("b _ _ _");
-    expect(spellingCueFromDisplayForm("")).toBeNull();
+    expect(spellingCueFromAnswerForm("spoon")).toBe("s _ _ _ _");
+    expect(spellingCueFromAnswerForm("bowl")).toBe("b _ _ _");
+    expect(spellingCueFromAnswerForm("")).toBeNull();
   });
 });

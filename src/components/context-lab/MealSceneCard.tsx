@@ -53,6 +53,9 @@ export function MealSceneCard({
           {context.supportReveal.phonetic ? (
             <p className="text-muted-foreground mt-1">{context.supportReveal.phonetic}</p>
           ) : null}
+          {context.supportReveal.inflectionNote ? (
+            <p className="text-muted-foreground mt-1">{context.supportReveal.inflectionNote}</p>
+          ) : null}
           {context.supportReveal.spellingCue ? (
             <p aria-label="拼写提示" className="mt-2 font-mono text-lg tracking-widest">
               {context.supportReveal.spellingCue}

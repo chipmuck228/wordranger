@@ -39,6 +39,11 @@ export type {
 } from "./batch-promotion";
 export { selectBundledMeaningGloss } from "./select-bundled-meaning-gloss";
 export {
+  projectLearnerLexicalForm,
+  requireLearnerLexicalForm,
+} from "./project-learner-lexical-form";
+export type { LearnerLexicalForm } from "./project-learner-lexical-form";
+export {
   MEAL_LEGACY_EXPERIMENT_BASELINE,
   matchesLegacyExperimentBaseline,
 } from "./packs/meal/meal-legacy-experiment-baseline";

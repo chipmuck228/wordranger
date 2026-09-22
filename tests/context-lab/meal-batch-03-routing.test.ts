@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { EvidenceOutcome } from "@/domain/learning/evidence.types";
 import { V1_PLACEHOLDER_USER_ID } from "@/server/auth/v1-user";
 import {
   MEAL_SCENE_EXPANSION_BATCH_03_BREAD_TARGET,
@@ -18,9 +19,7 @@ import {
 } from "./batch-03-release-helpers";
 
 const READY_BEFORE_KNIFE = ["soup", "bowl", "spoon", "fork", "cup", "plate"] as const;
-const KNIFE_FORM =
-  bundledSceneLexemeLoader(BUNDLED_LEXEME_BINDINGS.knife.canonicalKey)?.display ??
-  "knife(pl.knives)";
+const KNIFE_FORM = "knife";
 const BREAD_FORM =
   bundledSceneLexemeLoader(BUNDLED_LEXEME_BINDINGS.bread.canonicalKey)?.display ?? "bread";
 const WATER_FORM =
@@ -204,9 +203,21 @@ describe("Meal Context Lab nine-word active-release routing", () => {
     while (screen.kind === "GUIDED") {
       const before = learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length;
       expect(screen.context.entities.some((item) => item.id === "home-knife")).toBe(true);
+      expect(JSON.stringify(screen)).not.toContain("knife(pl.knives)");
       if (screen.context.highlightedEntityIds.length > 0) {
         expect(screen.context.highlightedEntityIds).toContain("home-knife");
         expect(screen.context.highlightedEntityIds).not.toContain("home-spoon");
+      }
+      if (screen.buildPhase === "TEACH") {
+        expect(screen.context.supportReveal?.lexicalForm).toBe("knife");
+        expect(screen.context.supportReveal?.inflectionNote).toBe("复数 knives");
+        expect(screen.context.supportReveal?.lexicalForm).not.toContain("(");
+      }
+      if (screen.buildPhase === "FADE") {
+        expect(screen.context.supportReveal?.spellingCue).toBe("k _ _ _ _");
+        expect(screen.context.supportReveal?.spellingCue).not.toBe(
+          "k _ _ _ _ _ _ _ _ _ _ _ _",
+        );
       }
       screen = await controller.acknowledge({
         runId: screen.handle.runId,
@@ -222,6 +233,11 @@ describe("Meal Context Lab nine-word active-release routing", () => {
     const afterFirst = learning.listEvidenceForUser(V1_PLACEHOLDER_USER_ID).length;
     expect(afterFirst).toBe(evidenceAfterProbe + 1);
     assertKind(first, "FROZEN_TASK_RECORDED");
+    const knifeEvidence = learning
+      .listEvidenceForUser(V1_PLACEHOLDER_USER_ID)
+      .find((item) => item.taskId === issuedTaskId);
+    expect(knifeEvidence?.outcome).toBe(EvidenceOutcome.INDEPENDENT_CORRECT);
+    expect(knifeEvidence?.hintCount).toBe(0);
     await controller.submitFrozenTask({
       runId: first.handle.runId,
       revision: first.handle.revision,

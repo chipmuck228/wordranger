@@ -4,6 +4,7 @@
  * This file is not a second authored truth.
  */
 
+import { requireLearnerLexicalForm } from "../content/project-learner-lexical-form";
 import { selectBundledMeaningGloss } from "../content/select-bundled-meaning-gloss";
 import { HOME_BREAKFAST_FRAME_ID } from "../content/packs/meal/meal-scene-content";
 import { experimentalMealContextLabPack } from "../content/experimental-meal-runtime-pack";
@@ -128,7 +129,10 @@ export function resolveMealLexicalStrengthenProfiles(input: {
       input.displayLabelForEntity(identity.entityId) ??
       findResolvedLexeme(snapshot, identity.target)?.displayLabel ??
       "";
-    const displayForm = lexeme?.display.trim() || lexeme?.lemma.trim() || "";
+    const projected = lexeme ? requireLearnerLexicalForm(lexeme) : null;
+    const displayForm = projected?.displayForm ?? "";
+    const answerForm = projected?.answerForm ?? "";
+    const inflectionNote = projected?.inflectionNote ?? null;
     const authored = pack.lexemes.find((item) =>
       sameLexemeSense(item.target, identity.target),
     );
@@ -153,6 +157,8 @@ export function resolveMealLexicalStrengthenProfiles(input: {
         ? {
             ...projectStrengthenProfile(resolved, snapshot.sceneClusterId),
             displayForm,
+            answerForm,
+            inflectionNote,
             meaningGloss,
             displayLabel,
             phonetic,
@@ -160,6 +166,8 @@ export function resolveMealLexicalStrengthenProfiles(input: {
         : {
             ...identity,
             displayForm,
+            answerForm,
+            inflectionNote,
             meaningGloss,
             displayLabel,
             phonetic,

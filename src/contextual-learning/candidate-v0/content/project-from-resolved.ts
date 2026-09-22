@@ -61,6 +61,8 @@ export function projectStrengthenProfile(
     ...projectStrengthenIdentity(lexeme),
     sceneClusterId,
     displayForm: lexeme.displayForm,
+    answerForm: lexeme.answerForm,
+    inflectionNote: lexeme.inflectionNote,
     meaningGloss: lexeme.meaningGloss,
     displayLabel: lexeme.displayLabel,
     phonetic: lexeme.phonetic,

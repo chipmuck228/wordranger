@@ -32,6 +32,7 @@ export interface PublicContextPresentation {
     lexicalForm?: string;
     meaningGloss?: string;
     phonetic?: string;
+    inflectionNote?: string;
     spellingCue?: string;
     note: string;
   };

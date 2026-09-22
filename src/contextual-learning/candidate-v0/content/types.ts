@@ -173,6 +173,8 @@ export interface ResolvedContextualSceneLexeme {
   fixtureSense: LexemeSenseRef;
   canonicalKey: string;
   displayForm: string;
+  answerForm: string;
+  inflectionNote: string | null;
   meaningGloss: string;
   phonetic?: string;
   displayLabel: string;

@@ -60,6 +60,8 @@ function snapshotLexeme(
     fixtureSense: { ...lexeme.fixtureSense },
     canonicalKey: lexeme.canonicalKey,
     displayForm: "",
+    answerForm: "",
+    inflectionNote: null,
     meaningGloss: "",
     displayLabel: lexeme.lexicalPresentation.displayLabel,
     frameId,

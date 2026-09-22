@@ -14,6 +14,7 @@ import {
   type SceneContentValidation,
 } from "./errors";
 import { validatePackAllowedKeys } from "./allowed-pack-keys";
+import { requireLearnerLexicalForm } from "./project-learner-lexical-form";
 import { selectBundledMeaningGloss } from "./select-bundled-meaning-gloss";
 import { sameAuthoredAndFrameFactArgs } from "./fact-args";
 import { connectBindings, frameFactsFor } from "./frame-facts";
@@ -253,7 +254,9 @@ export function validateSceneContent(input: {
     }
 
     const bundled = loadLexeme(lexeme.canonicalKey);
-    const displayForm = bundled?.display.trim() || bundled?.lemma.trim() || "";
+    const projected = bundled ? requireLearnerLexicalForm(bundled) : null;
+    const displayForm = projected?.displayForm ?? "";
+    const answerForm = projected?.answerForm ?? "";
     const gloss = selectBundledMeaningGloss({
       meaningsZh: bundled?.meaningsZh,
       selector: lexeme.lexicalPresentation.meaningGlossSelector,
@@ -263,7 +266,7 @@ export function validateSceneContent(input: {
         issue(SceneContentErrorCode.CONTENT_BUNDLED_IDENTITY_MISMATCH, `${path}.target`),
       );
     }
-    if (!displayForm) {
+    if (!displayForm || !answerForm) {
       issues.push(
         issue(SceneContentErrorCode.CONTENT_DISPLAY_FORM_MISSING, `${path}.displayForm`),
       );

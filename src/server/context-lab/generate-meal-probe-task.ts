@@ -13,6 +13,7 @@ import type {
   ContextualProbeTarget,
 } from "@/contextual-learning/candidate-v0/probe/types";
 import { experimentalMealContextLabPack } from "@/contextual-learning/candidate-v0/content/experimental-meal-runtime-pack";
+import { requireLearnerLexicalForm } from "@/contextual-learning/candidate-v0/content/project-learner-lexical-form";
 import { selectBundledMeaningGloss } from "@/contextual-learning/candidate-v0/content/select-bundled-meaning-gloss";
 import { sameLexemeSense } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
 import { bundledVocabularyRepository } from "@/server/runtime/bundled-vocabulary";
@@ -47,15 +48,27 @@ export async function generateMealProbeTask(input: {
   if (created.status !== "GENERATED") {
     return { ok: false, reason: "PROBE_TASK_UNAVAILABLE" };
   }
+  const projected = projectedLearnerFormForTarget(input.target, input.pack);
+  if (!projected) {
+    return { ok: false, reason: "PROBE_TASK_UNAVAILABLE" };
+  }
   const stamped: GeneratedLearningTask = {
     ...created.value,
     publicTask: { ...created.value.publicTask, id: taskId, hints: [] },
-    answerKey: { ...created.value.answerKey, taskId },
+    answerKey: {
+      ...created.value.answerKey,
+      taskId,
+      exactAcceptedTexts: [projected.answerForm],
+    },
   };
   const prepared =
     input.skill === "ACTIVE_RECALL"
       ? sceneSafeRecallTask(stamped)
-      : sceneSafeRecognitionTask(stamped, input.target, input.pack);
+      : sceneSafeRecognitionTask(
+          sceneSafeRecognitionPrompt(stamped, projected.displayForm),
+          input.target,
+          input.pack,
+        );
   if (!matchesFrozenProbeContract(prepared, input.skill, lexemeId, input.targetLemma)) {
     return { ok: false, reason: "PROBE_TASK_SEMANTIC_MISMATCH" };
   }
@@ -135,6 +148,36 @@ function sceneSafeRecognitionTask(
         ...task.publicTask.responseContract,
         options,
       },
+    },
+  };
+}
+
+function projectedLearnerFormForTarget(
+  target: ContextualProbeTarget,
+  pack = experimentalMealContextLabPack(),
+) {
+  const authored = pack.lexemes.find((lexeme) =>
+    sameLexemeSense(lexeme.target, target.target),
+  );
+  if (!authored) {
+    return null;
+  }
+  const bundled = bundledSceneLexemeLoader(authored.canonicalKey);
+  return bundled ? requireLearnerLexicalForm(bundled) : null;
+}
+
+function sceneSafeRecognitionPrompt(
+  task: GeneratedLearningTask,
+  displayForm: string,
+): GeneratedLearningTask {
+  if (task.publicTask.prompt.kind !== "LEXEME_TEXT") {
+    return task;
+  }
+  return {
+    ...task,
+    publicTask: {
+      ...task.publicTask,
+      prompt: { ...task.publicTask.prompt, text: displayForm },
     },
   };
 }

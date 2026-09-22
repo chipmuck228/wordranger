@@ -288,10 +288,12 @@ export function createSyntheticMealReleaseFixture(extraTargetCount: number): Syn
       return bundledSceneLexemeLoader(canonicalKey);
     }
     const index = extra.canonicalKey.slice(-2);
+    const n = Number(index);
+    const token = `item${String.fromCharCode(97 + Math.floor(n / 26))}${String.fromCharCode(97 + (n % 26))}`;
     return {
       id: extra.target.lexemeId,
-      display: `item${index}`,
-      lemma: `item${index}`,
+      display: token,
+      lemma: token,
       meaningsZh: [`义项${Number(index)}`],
       ipa: [],
     };

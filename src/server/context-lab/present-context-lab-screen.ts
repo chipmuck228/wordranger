@@ -28,7 +28,7 @@ import type { ContextualProbeSkill } from "@/contextual-learning/candidate-v0/pr
 import type { MealLexicalBuildProfile } from "@/contextual-learning/candidate-v0/build/types";
 import type { MealLexicalStrengthenProfile } from "@/contextual-learning/candidate-v0/strengthen/types";
 import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
-import { spellingCueFromDisplayForm } from "@/contextual-learning/candidate-v0/strengthen/spelling-cue";
+import { spellingCueFromAnswerForm } from "@/contextual-learning/candidate-v0/strengthen/spelling-cue";
 import { errorScreen } from "./context-lab-errors";
 import {
   buildTitleFor,
@@ -389,7 +389,7 @@ export function strengthenSupportReveal(
   profile: MealLexicalStrengthenProfile,
   kind: "RECONNECT_FORM" | "FADE_FORM",
 ): PublicContextPresentation["supportReveal"] | undefined {
-  if (!profile.displayForm || !profile.meaningGloss) {
+  if (!profile.displayForm || !profile.answerForm || !profile.meaningGloss) {
     return undefined;
   }
   if (kind === "RECONNECT_FORM") {
@@ -398,10 +398,11 @@ export function strengthenSupportReveal(
       lexicalForm: profile.displayForm,
       meaningGloss: profile.meaningGloss,
       phonetic: profile.phonetic,
+      inflectionNote: profile.inflectionNote ?? undefined,
       note: "这是强化提示，不是测试。",
     };
   }
-  const spellingCue = spellingCueFromDisplayForm(profile.displayForm);
+  const spellingCue = spellingCueFromAnswerForm(profile.answerForm);
   if (!spellingCue) {
     return undefined;
   }

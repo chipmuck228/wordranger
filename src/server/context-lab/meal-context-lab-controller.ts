@@ -49,6 +49,8 @@ import {
   type PlannerAuthoredRuntime,
 } from "@/contextual-learning/candidate-v0/planning";
 import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
+import { requireLearnerLexicalForm } from "@/contextual-learning/candidate-v0/content/project-learner-lexical-form";
+import { findBundledLexemeBinding } from "@/contextual-learning/candidate-v0/memory-routing/bundled-lexeme-bindings";
 import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import { experimentalMealRuntimeContextId } from "@/contextual-learning/candidate-v0/planning/meal-runtime-context";
 import {
@@ -1909,12 +1911,22 @@ export function mealStrengthenPlanningInput(
 function resolvePlanTargets(
   plan: LearningExperiencePlan,
 ): ResolvedTargetSnapshot[] {
-  return plan.targets.map((target) => ({
-    targetId: target.id,
-    sense: target.sense,
-    displayForm: findProfile(PLANNER_SENSE_PROFILES, target.sense)?.displayForm ?? "",
-    focus: target.focus,
-  }));
+  return plan.targets.map((target) => {
+    const binding = findBundledLexemeBinding(target.sense.lexemeId);
+    const bundled = binding
+      ? bundledSceneLexemeLoader(binding.canonicalKey)
+      : null;
+    const projected = bundled ? requireLearnerLexicalForm(bundled) : null;
+    return {
+      targetId: target.id,
+      sense: target.sense,
+      displayForm:
+        bundled != null
+          ? (projected?.answerForm ?? "")
+          : (findProfile(PLANNER_SENSE_PROFILES, target.sense)?.displayForm ?? ""),
+      focus: target.focus,
+    };
+  });
 }
 
 function typingCapabilities(): RuntimeCapability[] {

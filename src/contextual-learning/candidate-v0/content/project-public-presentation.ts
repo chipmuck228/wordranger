@@ -3,6 +3,7 @@
  * Never includes AnswerKey, Evidence, or learner state.
  */
 
+import { spellingCueFromAnswerForm } from "../strengthen/spelling-cue";
 import type { ResolvedContextualSceneLexeme } from "./types";
 
 export type ScenePresentationStage =
@@ -33,14 +34,6 @@ export interface PublicSceneLexemePresentation {
   instruction: string;
 }
 
-function spellingCue(displayForm: string): string {
-  const trimmed = displayForm.trim();
-  if (trimmed.length <= 1) {
-    return trimmed;
-  }
-  return `${trimmed[0] ?? ""}${"_".repeat(Math.max(trimmed.length - 1, 1))}`;
-}
-
 export function projectPublicScenePresentation(input: {
   stage: ScenePresentationStage;
   lexeme: ResolvedContextualSceneLexeme;
@@ -64,7 +57,7 @@ export function projectPublicScenePresentation(input: {
   if (stage === "BUILD_FADE" || stage === "STRENGTHEN_FADE") {
     return {
       ...base,
-      spellingCue: spellingCue(lexeme.displayForm),
+      spellingCue: spellingCueFromAnswerForm(lexeme.answerForm) ?? undefined,
     };
   }
   if (stage === "BUILD_CONNECT") {

@@ -10,6 +10,7 @@ import { SceneContentErrorCode } from "./errors";
 import { connectFactIdFor, resolvedBuildForFrame, resolvedFactsForFrame } from "./frame-facts";
 import { frameBindingFor } from "./frame-binding";
 import { cloneFrozen } from "./immutable";
+import { requireLearnerLexicalForm } from "./project-learner-lexical-form";
 import { selectBundledMeaningGloss } from "./select-bundled-meaning-gloss";
 import { validateSceneContent } from "./validate-scene-content";
 import type {
@@ -95,14 +96,23 @@ function resolveLexeme(
     return null;
   }
   const bundled = loadLexeme(lexeme.canonicalKey);
-  const displayForm = bundled?.display.trim() || bundled?.lemma.trim() || "";
+  const projected = bundled ? requireLearnerLexicalForm(bundled) : null;
+  const displayForm = projected?.displayForm ?? "";
+  const answerForm = projected?.answerForm ?? "";
+  const inflectionNote = projected?.inflectionNote ?? null;
   const meaningGloss =
     selectBundledMeaningGloss({
       meaningsZh: bundled?.meaningsZh,
       selector: lexeme.lexicalPresentation.meaningGlossSelector,
     }) ?? "";
   const phonetic = bundled?.ipa[0]?.trim() || undefined;
-  if (!bundled || bundled.id !== lexeme.target.lexemeId || !displayForm || !meaningGloss) {
+  if (
+    !bundled ||
+    bundled.id !== lexeme.target.lexemeId ||
+    !displayForm ||
+    !answerForm ||
+    !meaningGloss
+  ) {
     return null;
   }
   const contrasts: ResolvedContextualContrast[] = lexeme.contrastBindings.map((item) => {
@@ -132,6 +142,8 @@ function resolveLexeme(
     fixtureSense: { ...lexeme.fixtureSense },
     canonicalKey: lexeme.canonicalKey,
     displayForm,
+    answerForm,
+    inflectionNote,
     meaningGloss,
     phonetic,
     displayLabel: lexeme.lexicalPresentation.displayLabel,

@@ -33,9 +33,7 @@ function assertKind<K extends ContextLabCurrentScreen["kind"]>(
 }
 
 const READY_BEFORE_KNIFE = ["soup", "bowl", "spoon", "fork", "cup", "plate"] as const;
-const KNIFE_FORM =
-  bundledSceneLexemeLoader(BUNDLED_LEXEME_BINDINGS.knife.canonicalKey)?.display ??
-  "knife(pl.knives)";
+const KNIFE_FORM = "knife";
 const BREAD_FORM =
   bundledSceneLexemeLoader(BUNDLED_LEXEME_BINDINGS.bread.canonicalKey)?.display ?? "bread";
 const WATER_FORM =

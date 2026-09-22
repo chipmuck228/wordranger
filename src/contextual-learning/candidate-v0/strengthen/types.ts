@@ -37,6 +37,8 @@ export interface MealLexicalStrengthenProfile {
   canonicalKey: string;
   stepToken: string;
   displayForm: string;
+  answerForm: string;
+  inflectionNote: string | null;
   meaningGloss: string;
   displayLabel: string;
   phonetic?: string;

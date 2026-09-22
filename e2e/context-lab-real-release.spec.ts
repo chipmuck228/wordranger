@@ -22,7 +22,7 @@ const PROBE_TARGETS = [
     label: "小刀",
     lemma: "knife",
     avoid: "小刀",
-    cue: "k _ _ _ _ _ _ _ _ _ _ _ _",
+    cue: "k _ _ _ _",
   },
   { token: "bread", label: "面包", lemma: "bread", avoid: "面包", cue: "b _ _ _ _" },
   { token: "water", label: "水", lemma: "water", avoid: "水", cue: "w _ _ _ _" },
@@ -200,8 +200,10 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
     await page.getByRole("button", { name: "继续" }).click();
     const knifeReveal = page.locator('[data-support-kind="LEXICAL_FORM"]');
     await expect(knifeReveal).toBeVisible();
-    await expect(knifeReveal).toContainText(/knife/i);
+    await expect(knifeReveal).toContainText("knife");
     await expect(knifeReveal).toContainText("小刀");
+    await expect(knifeReveal).toContainText("复数 knives");
+    await expect(knifeReveal).not.toContainText("knife(pl.knives)");
     await page.getByRole("button", { name: "继续" }).click();
     await expect(page.locator('[data-build-phase="CONTRAST"]')).toBeVisible();
     await expect(page.getByText("小刀：切开固体食物", { exact: true })).toBeVisible();
@@ -240,6 +242,13 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
     await expect(page.getByText("本次需要建立的词已经完成。", { exact: true })).toBeVisible();
     const afterKnifeFrozen = await memoryEvidence(page);
     expect(afterKnifeFrozen.evidenceCount).toBe(beforeKnifeFrozen.evidenceCount + 1);
+    const knifeFrozenEvidence = afterKnifeFrozen.items.find(
+      (item) =>
+        !beforeKnifeFrozen.items.some(
+          (previous) => previous.taskId === item.taskId && previous.sessionId === item.sessionId,
+        ),
+    );
+    expect(knifeFrozenEvidence?.outcome).toBe("INDEPENDENT_CORRECT");
 
     await page.reload();
     await expect(page.getByText("“小刀”的这次建立已记录。", { exact: true })).toBeVisible();
@@ -281,6 +290,7 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
     writeJson("evidence.json", {
       afterProbe: afterProbe.evidenceCount,
       afterKnifeFrozen: afterKnifeFrozen.evidenceCount,
+      knifeFrozenOutcome: knifeFrozenEvidence?.outcome,
       afterBread: afterBread.evidenceCount,
     });
 
@@ -476,7 +486,12 @@ async function resetMemoryProbe(page: Page): Promise<void> {
 
 async function memoryEvidence(page: Page): Promise<{
   evidenceCount: number;
-  items: Array<{ outcome: string; lexemeId?: string }>;
+  items: Array<{
+    outcome: string;
+    lexemeId?: string;
+    taskId?: string;
+    sessionId?: string;
+  }>;
 }> {
   const response = await page.request.get("/play/context-lab/memory-probe");
   expect(response.ok()).toBeTruthy();
