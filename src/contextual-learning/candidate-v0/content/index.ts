@@ -15,6 +15,28 @@ export {
   fingerprintAuthoredPack,
   contentFingerprintPayload,
 } from "./content-fingerprint";
+export {
+  BATCH_PROMOTION_SCHEMA_VERSION,
+  CONTEXTUAL_CONTENT_BATCH_PROMOTION_KIND,
+  compareTargets,
+  evaluateBatchPromotionReadiness,
+  fingerprintBatchPromotionRecord,
+  lineageFingerprintFor,
+  newTargetsAgainstParent,
+  parseBatchPromotionRecord,
+  projectEffectiveSceneContentRegistry,
+  promotionRecordIsCurrent,
+  targetKey,
+} from "./batch-promotion";
+export type {
+  BatchPromotionIssue,
+  BatchPromotionIssueCode,
+  BatchPromotionReadiness,
+  BatchPromotionReviewRecord,
+  BatchPromotionReviewTarget,
+  BatchPromotionTargetBinding,
+  ContextualContentBatchPromotionRecord,
+} from "./batch-promotion";
 export { selectBundledMeaningGloss } from "./select-bundled-meaning-gloss";
 export {
   MEAL_LEGACY_EXPERIMENT_BASELINE,

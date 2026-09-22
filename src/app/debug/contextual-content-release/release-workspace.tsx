@@ -141,6 +141,13 @@ export function ReleaseWorkspace({
             </dd>
           </div>
         </dl>
+        {(workspace.eligibility.unpromotedCandidates?.length ?? 0) > 0 ? (
+          <ul data-testid="release-unpromoted-candidates" className="text-sm">
+            {workspace.eligibility.unpromotedCandidates.map((item) => (
+              <li key={item.packId}>{item.reason}</li>
+            ))}
+          </ul>
+        ) : null}
         {!workspace.eligibility.canCreateDraft ? (
           <div data-testid="release-create-blocked" className="space-y-1 text-sm">
             <p>当前不能创建 Draft。存在未审核、过期审核或资格不唯一的问题。</p>

@@ -1,12 +1,20 @@
 import { expect, test, type Page } from "@playwright/test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 
 const RELEASE_URL = "/debug/contextual-content-release";
 const LAB_URL = "/play/context-lab";
 const CUP_RECORD = "docs/contextual-content-reviews/meal-expansion-batch-01-cup/human-review.record.json";
 const PLATE_RECORD = "docs/contextual-content-reviews/meal-expansion-batch-02-plate/human-review.record.json";
+const BATCH_03_PROMOTION_PATH =
+  "docs/contextual-content-promotions/meal-scene-v0__meal-scene-expansion-batch-03.json";
 const cupBefore = readFileSync(CUP_RECORD, "utf8");
 const plateBefore = readFileSync(PLATE_RECORD, "utf8");
+
+function restorePromotionArtifacts() {
+  if (existsSync(BATCH_03_PROMOTION_PATH)) {
+    unlinkSync(BATCH_03_PROMOTION_PATH);
+  }
+}
 
 function restoreReviewRecords() {
   writeFileSync(CUP_RECORD, cupBefore);
@@ -48,12 +56,16 @@ test.describe("readonly release host", () => {
       "href",
       RELEASE_URL,
     );
+    restorePromotionArtifacts();
     await page.goto(RELEASE_URL);
     await expect(page.getByRole("heading", { name: "内容发布工具" })).toBeVisible();
     await expect(page.getByTestId("release-phase-notice")).toContainText("Experimental Context Lab");
     await expect(page.getByTestId("release-content-source")).toHaveText("static");
     await expect(page.getByTestId("release-current-pack")).toHaveText("meal-scene-expansion-batch-02");
     await expect(page.getByTestId("release-live-targets").locator("li")).toHaveCount(6);
+    await expect(page.getByTestId("release-unpromoted-candidates")).toContainText(
+      "meal-scene-expansion-batch-03 remains CANDIDATE",
+    );
     await expect(page.getByRole("button", { name: "创建迁移 Draft" })).toBeDisabled();
     await expect(page.getByTestId("release-readonly")).toBeVisible();
   });
@@ -65,6 +77,7 @@ test.describe("writable release host with active-release Context Lab", () => {
   test.afterEach(async ({ page }) => {
     await page.goto(RELEASE_URL);
     await discardIfPresent(page);
+    restorePromotionArtifacts();
     expect(readFileSync(CUP_RECORD, "utf8")).toBe(cupBefore);
     expect(readFileSync(PLATE_RECORD, "utf8")).toBe(plateBefore);
   });

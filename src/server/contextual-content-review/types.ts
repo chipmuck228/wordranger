@@ -167,6 +167,18 @@ export interface ContentReviewBatchSummary {
   stale: number;
   blocked: number;
   reviewCompleteUnpromoted: boolean;
+  packFingerprint: string | null;
+  parentPackId: string | null;
+  lineageOk: boolean;
+  promotionReady: boolean;
+  promotionIssues: string[];
+  promotionStatus: "NONE" | "PROMOTED" | "STALE";
+  promotionRevision: number;
+  promotedAt: string | null;
+  promotedBy: string | null;
+  effectiveReleaseEligibility: "NONE" | "RELEASE_ELIGIBLE";
+  writeEnabled: boolean;
+  expectedPromotionRevision: number;
   targets: ContentReviewListItem[];
   blockedCandidates: ContentReviewBlockedCandidate[];
 }

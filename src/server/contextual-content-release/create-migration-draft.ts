@@ -1,6 +1,11 @@
 import "server-only";
 
-import { MEAL_MIGRATION_RELEASE_ID, validateMealReleaseCapabilities } from "@/contextual-learning/candidate-v0/release";
+import { listSceneContentRegistry } from "@/contextual-learning/candidate-v0/content";
+import { promotionRecordIsCurrent } from "@/contextual-learning/candidate-v0/content";
+import { MEAL_MIGRATION_RELEASE_ID, MEAL_RELEASE_SCENE_ID, validateMealReleaseCapabilities } from "@/contextual-learning/candidate-v0/release";
+import { evaluateRegisteredPackPromotionReadiness } from "@/server/contextual-content-promotion/evaluate-pack-readiness";
+import { createContextualPromotionRepository } from "@/server/contextual-content-promotion/create-promotion-runtime";
+import { loadEffectiveSceneContentRegistry } from "@/server/contextual-content-promotion/load-effective-registry";
 import { isContextualContentReleaseWriteEnabled } from "./gates";
 import {
   buildMealMigrationAuthority,
@@ -28,8 +33,51 @@ export async function createMealMigrationDraft(
       message: "Release writes are disabled.",
     };
   }
-  const eligibility = await inspectMealReleaseEligibility(input);
-  const authority = await buildMealMigrationAuthority(input);
+  const loaded = input.registry
+    ? { ok: true, registry: [...input.registry] }
+    : await loadEffectiveSceneContentRegistry({
+        env: input.env,
+        reviewRepository: input.reviewRepository,
+        promotionRepository: input.promotionRepository,
+      });
+  if (!input.registry && !loaded.ok) {
+    return {
+      ok: false,
+      code: "RELEASE_INVALID",
+      message: "Effective registry projection is fail-closed.",
+    };
+  }
+  const registry = input.registry ?? loaded.registry;
+  const eligibility = await inspectMealReleaseEligibility({ ...input, registry });
+  const authority = await buildMealMigrationAuthority({ ...input, registry });
+  const livePackId = input.pack?.id ?? eligibility.packId;
+  if (!input.registry && livePackId) {
+    const authored = listSceneContentRegistry().find((entry) => entry.packId === livePackId);
+    const projected = registry.find((entry) => entry.packId === livePackId);
+    if (authored?.status === "CANDIDATE") {
+      const promotionRepository =
+        input.promotionRepository ?? createContextualPromotionRepository(input.env);
+      const stored = await promotionRepository.get({
+        sceneId: MEAL_RELEASE_SCENE_ID,
+        packId: livePackId,
+      });
+      const readiness = await evaluateRegisteredPackPromotionReadiness({
+        packId: livePackId,
+        reviewRepository: input.reviewRepository,
+      });
+      if (
+        projected?.releaseEligibility !== "RELEASE_ELIGIBLE" ||
+        !stored ||
+        !promotionRecordIsCurrent({ record: stored, readiness })
+      ) {
+        return {
+          ok: false,
+          code: "RELEASE_INVALID",
+          message: "Candidate pack requires a current fingerprint-bound batch promotion.",
+        };
+      }
+    }
+  }
   const uniqueTargets = uniquePackTargets(authority.snapshot.pack);
   const capabilities = validateMealReleaseCapabilities({
     targets: uniqueTargets,

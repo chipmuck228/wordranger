@@ -49,6 +49,7 @@ import { safeReviewArtifactDirectory } from "@/server/contextual-content-review/
 import { CONTENT_REVIEW_TARGETS } from "@/server/contextual-content-review/review-target-registry";
 import type { ContentReviewRepository } from "@/server/contextual-content-review/content-review-repository";
 import { fileContentReviewRepository } from "@/server/contextual-content-review/file-content-review-repository";
+import type { ContextualContentBatchPromotionRepository } from "@/server/contextual-content-promotion/promotion-repository";
 import type { SceneLexemeLoader } from "@/contextual-learning/candidate-v0/content/types";
 import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import { RELEASE_ACTOR_ID } from "./types";
@@ -69,6 +70,7 @@ export interface ReleaseAssemblyOptions {
   context?: ReleaseContextSnapshot;
   parentPackId?: string | null;
   capabilities?: readonly RuntimeCapability[];
+  promotionRepository?: ContextualContentBatchPromotionRepository;
 }
 
 export interface ReleaseAuthority {

@@ -51,3 +51,6 @@ docs/contextual-content-reviews/**/human-review.record.json
 
 # Local content-release dry-run records. Never a published runtime pointer.
 docs/contextual-content-releases/**
+
+# Local fingerprint-bound batch promotions. Never a published runtime pointer.
+docs/contextual-content-promotions/**

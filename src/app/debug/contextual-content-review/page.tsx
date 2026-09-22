@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { requireDebugTools } from "@/server/debug-tools/require-debug-tools";
 import { isContextualContentReviewEnabled } from "@/server/contextual-content-review/gates";
 import { listContentReviewBatches } from "@/server/contextual-content-review/list-review-batches";
+import { promoteReviewedBatch } from "./actions";
+import { PromoteBatchBar } from "./promote-batch-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -62,10 +64,40 @@ export default async function ContextualContentReviewIndexPage() {
             <p className="text-muted-foreground text-sm">
               Registry: {batch.registryStatus} · Eligibility: {batch.releaseEligibility}
             </p>
+            <p className="text-muted-foreground break-all text-xs">
+              Pack fingerprint: {batch.packFingerprint ?? "—"}
+            </p>
+            <p className="text-muted-foreground text-xs">Parent: {batch.parentPackId ?? "—"}</p>
+            <p className="text-muted-foreground text-xs">
+              Lineage: {batch.lineageOk ? "PASS" : "FAIL"} · Promotion: {batch.promotionStatus} ·
+              Revision: {batch.promotionRevision} · Effective eligibility:{" "}
+              {batch.effectiveReleaseEligibility}
+            </p>
+            {batch.promotedAt ? (
+              <p className="text-muted-foreground text-xs">
+                Promoted at {batch.promotedAt} by {batch.promotedBy}
+              </p>
+            ) : null}
             {batch.reviewCompleteUnpromoted ? (
               <p data-testid={`${batch.batchId}-unpromoted`} className="text-sm">
                 Batch 03 is review-complete but remains unpromoted.
               </p>
+            ) : null}
+            {batch.registryStatus === "CANDIDATE" && batch.promotionReady ? (
+              <PromoteBatchBar
+                packId={batch.packId}
+                expectedRevision={batch.expectedPromotionRevision}
+                writeEnabled={batch.writeEnabled}
+                ready={batch.promotionReady}
+                onPromote={promoteReviewedBatch}
+              />
+            ) : null}
+            {batch.registryStatus === "CANDIDATE" && !batch.promotionReady ? (
+              <div data-testid={`${batch.batchId}-promotion-blocked`} className="space-y-1 text-sm">
+                {batch.promotionIssues.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
+              </div>
             ) : null}
           </header>
           <ul className="space-y-3">

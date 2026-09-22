@@ -1,6 +1,7 @@
 "use server";
 
 import { isContextualContentReviewWriteEnabled } from "@/server/contextual-content-review/gates";
+import { promoteContextualContentBatch } from "@/server/contextual-content-promotion/promote-contextual-content-batch";
 import { saveContentReviewDecision } from "@/server/contextual-content-review/save-review-decision";
 import type { HumanContentReviewDecision, SaveContentReviewResult } from "@/server/contextual-content-review/types";
 
@@ -38,6 +39,35 @@ export async function submitContentReviewDecision(input: {
     revision: input.revision,
     decision: input.decision,
     notes: input.notes.map((note) => String(note)),
+  });
+  if (!result.ok) {
+    return { ok: false, code: result.code, message: result.message };
+  }
+  return { ok: true };
+}
+
+export async function promoteReviewedBatch(input: {
+  packId: string;
+  expectedRevision: number;
+}): Promise<{
+  ok: boolean;
+  message?: string;
+  code?: string;
+}> {
+  if (!isContextualContentReviewWriteEnabled()) {
+    return { ok: false, code: "PROMOTION_WRITE_DISABLED", message: "Promotion writes are disabled." };
+  }
+  if (
+    !input ||
+    typeof input.packId !== "string" ||
+    !Number.isInteger(input.expectedRevision) ||
+    input.expectedRevision < 0
+  ) {
+    return { ok: false, code: "PROMOTION_INVALID", message: "Invalid promotion payload." };
+  }
+  const result = await promoteContextualContentBatch({
+    packId: input.packId,
+    expectedRevision: input.expectedRevision,
   });
   if (!result.ok) {
     return { ok: false, code: result.code, message: result.message };

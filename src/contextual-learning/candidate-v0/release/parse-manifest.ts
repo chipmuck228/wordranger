@@ -98,7 +98,9 @@ function parseContextSnapshot(value: unknown): ReleaseContextSnapshot | null {
     return null;
   }
   if (
-    (value.runtimeContextId !== "MEAL_BASE" && value.runtimeContextId !== "MEAL_BATCH_02") ||
+    (value.runtimeContextId !== "MEAL_BASE" &&
+      value.runtimeContextId !== "MEAL_BATCH_02" &&
+      value.runtimeContextId !== "MEAL_BATCH_03") ||
     !Array.isArray(value.frames) ||
     !isRecord(value.skeleton)
   ) {

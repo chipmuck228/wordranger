@@ -112,6 +112,7 @@ export interface ReleaseEligibilityCard {
   lineageOk: boolean;
   eligibilityOk: boolean;
   canCreateDraft: boolean;
+  unpromotedCandidates: { packId: string; reason: string }[];
   issues: ReleaseValidationIssue[];
 }
 

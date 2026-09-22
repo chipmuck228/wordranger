@@ -97,6 +97,7 @@ export async function preflightContextualContentRelease(
       context: input.context,
       parentPackId: input.parentPackId,
       capabilities: input.capabilities,
+      promotionRepository: input.promotionRepository,
     })),
   );
   if (issues.length > 0) {

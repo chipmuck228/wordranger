@@ -4,6 +4,7 @@ import {
   resolveReleaseEligiblePack,
   type ReleaseValidationIssue,
 } from "@/contextual-learning/candidate-v0/release";
+import { loadEffectiveSceneContentRegistry } from "@/server/contextual-content-promotion/load-effective-registry";
 import {
   buildMealMigrationAuthority,
   uniquePackTargets,
@@ -22,6 +23,7 @@ export interface ReleaseEligibilityInspection {
   lineageOk: boolean;
   eligibilityOk: boolean;
   canCreateDraft: boolean;
+  unpromotedCandidates: { packId: string; reason: string }[];
   issues: ReleaseValidationIssue[];
 }
 
@@ -53,12 +55,49 @@ export function draftCreationBlocked(issues: readonly ReleaseValidationIssue[]):
 export async function inspectMealReleaseEligibility(
   input: ReleaseAssemblyOptions = {},
 ): Promise<ReleaseEligibilityInspection> {
-  const registry = input.registry ?? listSceneContentRegistry();
+  const loaded = input.registry
+    ? { ok: true, registry: [...input.registry] }
+    : await loadEffectiveSceneContentRegistry({
+        reviewRepository: input.reviewRepository,
+        promotionRepository: input.promotionRepository,
+      });
+  if (!input.registry && !loaded.ok) {
+    return {
+      packId: null,
+      parentPackId: null,
+      targetCount: 0,
+      legacyCount: 0,
+      humanApprovedCount: 0,
+      unresolvedCount: 0,
+      staleReviewCount: 0,
+      unusedSourceCount: 0,
+      lineageOk: false,
+      eligibilityOk: false,
+      canCreateDraft: false,
+      unpromotedCandidates: listSceneContentRegistry()
+        .filter((entry) => entry.status === "CANDIDATE")
+        .map((entry) => ({
+          packId: entry.packId,
+          reason: `${entry.packId} remains CANDIDATE; effective projection is fail-closed.`,
+        })),
+      issues: [
+        {
+          code: "RELEASE_ELIGIBILITY_AMBIGUOUS",
+          path: "registry",
+          detail: "Effective registry projection is fail-closed.",
+        },
+      ],
+    };
+  }
+  const registry = loaded.registry;
   const selected = resolveReleaseEligiblePack({
     sceneClusterId: MEAL_SCENE_CLUSTER.id,
     registry,
   });
-  const authority = await buildMealMigrationAuthority(input);
+  const authority = await buildMealMigrationAuthority({
+    ...input,
+    registry,
+  });
   const pack = input.pack ?? selected.entry?.pack ?? authority.livePack;
   const uniqueTargets = uniquePackTargets(pack);
   const unresolvedCount = Math.max(0, uniqueTargets.length - authority.targetEntries.length);
@@ -70,6 +109,16 @@ export async function inspectMealReleaseEligibility(
       item.code === "RELEASE_REMOVAL_UNSUPPORTED",
   );
   const issues = [...selected.issues, ...authority.issues];
+  const unpromotedCandidates = listSceneContentRegistry()
+    .filter((entry) => entry.status === "CANDIDATE")
+    .filter((entry) => {
+      const effective = registry.find((item) => item.packId === entry.packId);
+      return !effective || effective.releaseEligibility !== "RELEASE_ELIGIBLE";
+    })
+    .map((entry) => ({
+      packId: entry.packId,
+      reason: `${entry.packId} remains CANDIDATE until a valid batch promotion exists.`,
+    }));
   const canCreateDraft =
     selected.ok &&
     lineageOk &&
@@ -90,6 +139,7 @@ export async function inspectMealReleaseEligibility(
     lineageOk,
     eligibilityOk: selected.ok,
     canCreateDraft,
+    unpromotedCandidates,
     issues,
   };
 }

@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { currentContentFingerprint } from "../src/server/contextual-content-review/project-review-packet";
+import { CONTENT_REVIEW_TARGETS } from "../src/server/contextual-content-review/review-target-registry";
 
 const REVIEW_URL = "/debug/contextual-content-review/meal-expansion-batch-01/cup";
 const RECORD_PATH = "docs/contextual-content-reviews/meal-expansion-batch-01-cup/human-review.record.json";
@@ -17,6 +19,35 @@ const BATCH_03_HUMAN_PATHS = [
   "docs/contextual-content-reviews/meal-expansion-batch-03-bread/HUMAN_REVIEW.md",
   "docs/contextual-content-reviews/meal-expansion-batch-03-water/HUMAN_REVIEW.md",
 ] as const;
+const BATCH_03_PROMOTION_PATH =
+  "docs/contextual-content-promotions/meal-scene-v0__meal-scene-expansion-batch-03.json";
+
+function seedApprovedBatch03Reviews() {
+  for (const slug of ["knife", "bread", "water"] as const) {
+    const spec = CONTENT_REVIEW_TARGETS.find((item) => item.targetSlug === slug)!;
+    const filePath = `docs/contextual-content-reviews/${spec.reviewKey}/human-review.record.json`;
+    mkdirSync(path.dirname(filePath), { recursive: true });
+    writeFileSync(
+      filePath,
+      `${JSON.stringify(
+        {
+          schemaVersion: "candidate-v0",
+          reviewKey: spec.reviewKey,
+          packId: spec.packId,
+          target: spec.target,
+          contentFingerprint: currentContentFingerprint(spec),
+          decision: "APPROVED",
+          notes: [],
+          reviewedAt: "2026-09-22T09:00:00.000Z",
+          revision: 1,
+          reviewer: "LOCAL_INTERNAL_REVIEWER",
+        },
+        null,
+        2,
+      )}\n`,
+    );
+  }
+}
 
 test.afterEach(() => {
   if (originalRecord) {
@@ -36,6 +67,9 @@ test.afterEach(() => {
     if (existsSync(filePath)) {
       unlinkSync(filePath);
     }
+  }
+  if (existsSync(BATCH_03_PROMOTION_PATH)) {
+    unlinkSync(BATCH_03_PROMOTION_PATH);
   }
 });
 
@@ -121,6 +155,9 @@ test.describe("readonly review host", () => {
     await expect(page.getByTestId("review-card-meal-expansion-batch-03-bread")).toContainText("Status: PENDING");
     await expect(page.getByTestId("review-card-meal-expansion-batch-03-water")).toContainText("Status: PENDING");
     await expect(page.getByTestId("review-card-meal-expansion-batch-03-knife")).toContainText("Registry: CANDIDATE");
+    await expect(page.getByTestId("promote-reviewed-batch")).toHaveCount(0);
+    await expect(page.getByTestId("meal-expansion-batch-03-promotion-blocked")).toBeVisible();
+    await expect(page.getByText("PROMOTION_REVIEW_PENDING").first()).toBeVisible();
 
     await page.goto(REVIEW_URL);
     await expect(page.getByText("Candidate V0 / 已进入实验 Context Lab")).toBeVisible();
@@ -318,6 +355,70 @@ test.describe("writable review host", () => {
     await expect(page.getByTestId("meal-expansion-batch-03-rejected")).toHaveText("1");
     await expect(page.getByTestId("meal-expansion-batch-03-pending")).toHaveText("1");
     await expect(page.getByTestId("meal-expansion-batch-03-unpromoted")).toHaveCount(0);
+    await expect(page.getByTestId("promote-reviewed-batch")).toHaveCount(0);
+  });
+
+  test("promotes a fully approved batch once and keeps Context Lab on six words", async ({
+    page,
+  }) => {
+    seedApprovedBatch03Reviews();
+    await page.goto("/debug/contextual-content-review");
+    await expect(page.getByTestId("meal-expansion-batch-03-approved")).toHaveText("3");
+    await expect(page.getByTestId("meal-expansion-batch-03-pending")).toHaveText("0");
+    await expect(page.getByTestId("review-blocked-napkin")).toContainText("BLOCKED");
+    await expect(page.getByTestId("promote-reviewed-batch")).toBeVisible();
+    await page.getByTestId("promote-reviewed-batch").click();
+    await expect(page.getByTestId("promote-confirm")).toBeVisible();
+    await expect(page.getByText("不会立即发布到 Context Lab")).toBeVisible();
+    await expect(page.getByText("不会进入 /train")).toBeVisible();
+    await page.getByTestId("promote-confirm").dblclick();
+    await expect(page.getByTestId("promote-save-message")).toContainText("Batch promotion 已保存");
+    await expect(page.getByTestId("promote-confirm")).toHaveCount(0);
+    expect(existsSync(BATCH_03_PROMOTION_PATH)).toBe(true);
+    const stored = JSON.parse(readFileSync(BATCH_03_PROMOTION_PATH, "utf8")) as { revision: number };
+    expect(stored.revision).toBe(1);
+
+    await page.goto("/debug/contextual-content-release");
+    await expect(page.getByTestId("release-eligible-pack")).toHaveText("meal-scene-expansion-batch-03");
+    await expect(page.getByTestId("release-eligible-target-count")).toHaveText("9");
+    await expect(page.getByTestId("release-live-targets").locator("li")).toHaveCount(9);
+    await expect(page.getByTestId("release-unpromoted-candidates")).toHaveCount(0);
+
+    await page.goto("/play/context-lab");
+    await expect(page.getByText("meal-scene-expansion-batch-03")).toHaveCount(0);
+    await expect(page.getByText("knife(pl.knives)", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("napkin", { exact: true })).toHaveCount(0);
+  });
+
+  test("rejects a stale promotion write after another record appears", async ({ page }) => {
+    seedApprovedBatch03Reviews();
+    await page.goto("/debug/contextual-content-review");
+    await expect(page.getByTestId("promote-reviewed-batch")).toBeVisible();
+    mkdirSync(path.dirname(BATCH_03_PROMOTION_PATH), { recursive: true });
+    writeFileSync(
+      BATCH_03_PROMOTION_PATH,
+      `${JSON.stringify(
+        {
+          schemaVersion: "candidate-v0",
+          kind: "CONTEXTUAL_CONTENT_BATCH_PROMOTION",
+          sceneId: "meal-scene-v0",
+          packId: "meal-scene-expansion-batch-03",
+          parentPackId: "meal-scene-expansion-batch-02",
+          packFingerprint: "stale-pack",
+          lineageFingerprint: "stale-lineage",
+          targetApprovalBindings: [],
+          decision: "PROMOTED",
+          revision: 1,
+          promotedAt: "2026-09-22T09:05:00.000Z",
+          promotedBy: "LOCAL_INTERNAL_PROMOTER",
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await page.getByTestId("promote-reviewed-batch").click();
+    await page.getByTestId("promote-confirm").click();
+    await expect(page.getByTestId("promote-save-message")).toContainText("Another promotion write happened first.");
   });
 
   test("marks a stale batch-03 review after the stored fingerprint drifts", async ({ page }) => {

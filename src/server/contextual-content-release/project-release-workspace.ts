@@ -1,9 +1,7 @@
-import {
-  experimentalMealContextLabPack,
-  listSceneContentRegistry,
-} from "@/contextual-learning/candidate-v0/content";
+import { experimentalMealContextLabPack } from "@/contextual-learning/candidate-v0/content";
 import { MEAL_MIGRATION_RELEASE_ID } from "@/contextual-learning/candidate-v0/release";
 import { resolveContextLabContentSourceMode } from "@/server/context-lab/context-lab-content-source";
+import { loadEffectiveSceneContentRegistry } from "@/server/contextual-content-promotion/load-effective-registry";
 import { buildMealMigrationAuthority } from "./authority";
 import { inspectMealReleaseEligibility } from "./inspect-release-eligibility";
 import { createContextualReleaseRepository } from "./create-release-runtime";
@@ -15,6 +13,7 @@ import type {
   ReleaseWorkspaceTarget,
 } from "./types";
 import type { ContentReviewRepository } from "@/server/contextual-content-review/content-review-repository";
+import type { ContextualContentBatchPromotionRepository } from "@/server/contextual-content-promotion/promotion-repository";
 
 function toWorkspaceTarget(
   entry: {
@@ -51,14 +50,36 @@ export async function projectReleaseWorkspace(input: {
   env?: Record<string, string | undefined>;
   repository?: ContextualContentReleaseRepository;
   reviewRepository?: ContentReviewRepository;
+  promotionRepository?: ContextualContentBatchPromotionRepository;
 } = {}): Promise<ReleaseWorkspace> {
   const env = input.env ?? process.env;
+  const loaded = await loadEffectiveSceneContentRegistry({
+    env,
+    reviewRepository: input.reviewRepository,
+    promotionRepository: input.promotionRepository,
+  });
   const authority = await buildMealMigrationAuthority({
     reviewRepository: input.reviewRepository,
+    promotionRepository: input.promotionRepository,
+    registry: loaded.registry,
   });
   const eligibility = await inspectMealReleaseEligibility({
     reviewRepository: input.reviewRepository,
+    promotionRepository: input.promotionRepository,
+    registry: loaded.registry,
   });
+  if (!loaded.ok) {
+    eligibility.eligibilityOk = false;
+    eligibility.canCreateDraft = false;
+    eligibility.issues = [
+      {
+        code: "RELEASE_ELIGIBILITY_AMBIGUOUS",
+        path: "registry",
+        detail: "Effective registry projection is fail-closed.",
+      },
+      ...eligibility.issues,
+    ];
+  }
   const repository = input.repository ?? createContextualReleaseRepository(env);
   const listed = await repository.list();
   const draft =
@@ -108,7 +129,7 @@ export async function projectReleaseWorkspace(input: {
           ? "Context Lab 当前从服务端 active release 加载实验内容。这不会发布到 /train，不代表学习完成，也不修改 Evidence 或掌握度。"
           : "Context Lab 当前仍使用 static 六词实验 pack。发布只影响 active-release 模式。这不会发布到 /train。",
     },
-    registry: listSceneContentRegistry().map((entry) => ({
+    registry: loaded.registry.map((entry) => ({
       packId: entry.packId,
       status: entry.status,
       approvalBasis: entry.approvalBasis ?? null,

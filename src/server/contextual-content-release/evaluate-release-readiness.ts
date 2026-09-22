@@ -17,6 +17,7 @@ import {
 } from "@/contextual-learning/candidate-v0/release";
 import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-loader";
 import { fileContentReviewRepository } from "@/server/contextual-content-review/file-content-review-repository";
+import { loadEffectiveSceneContentRegistry } from "@/server/contextual-content-promotion/load-effective-registry";
 import type { SceneLexemeLoader } from "@/contextual-learning/candidate-v0/content/types";
 import type { RuntimeCapability } from "@/contextual-learning/candidate-v0/domain/types";
 import { buildMealMigrationAuthority, uniquePackTargets, type ReleaseAssemblyOptions } from "./authority";
@@ -223,11 +224,22 @@ export async function evaluatePublishReadiness(
   const loadLexeme = input.loadLexeme ?? bundledSceneLexemeLoader;
   const issues = evaluateSnapshotIntegrity(input.existing, loadLexeme, input.capabilities);
   issues.push(...evaluateHistoricalApprovalBindings(input.existing));
+  const loaded = input.registry
+    ? { ok: true, registry: [...input.registry] }
+    : await loadEffectiveSceneContentRegistry({
+        reviewRepository: input.reviewRepository,
+        promotionRepository: input.promotionRepository,
+      });
+  if (!input.registry && !loaded.ok) {
+    issues.push(
+      issue("RELEASE_ELIGIBILITY_AMBIGUOUS", "registry", "Effective registry projection is fail-closed."),
+    );
+  }
   const authority = await buildMealMigrationAuthority({
     reviewRepository: input.reviewRepository ?? fileContentReviewRepository,
     loadLexeme,
     pack: input.pack,
-    registry: input.registry,
+    registry: input.registry ?? loaded.registry,
     extraApprovalSources: input.extraApprovalSources,
     extraPacks: input.extraPacks,
     extraReviewTargets: input.extraReviewTargets,

@@ -145,10 +145,20 @@ describe("Meal expansion batch 03 review registration", () => {
       ),
     ).toBeNull();
     const actions = readFileSync("src/app/debug/contextual-content-review/actions.ts", "utf8");
-    expect(actions).not.toContain("reviewKey");
-    expect(actions).not.toContain("packId");
-    expect(actions).not.toContain("userId");
-    expect(actions).not.toContain("targetSlug");
-    expect(actions).toContain("fingerprint");
+    const submit = actions.slice(
+      actions.indexOf("export async function submitContentReviewDecision"),
+      actions.indexOf("export async function promoteReviewedBatch"),
+    );
+    expect(submit).not.toContain("reviewKey");
+    expect(submit).not.toContain("packId");
+    expect(submit).not.toContain("userId");
+    expect(submit).not.toContain("targetSlug");
+    expect(submit).toContain("fingerprint");
+    const promote = actions.slice(actions.indexOf("export async function promoteReviewedBatch"));
+    expect(promote).toContain("packId");
+    expect(promote).toContain("expectedRevision");
+    expect(promote).not.toContain("userId");
+    expect(promote).not.toContain("targetApprovalBindings");
+    expect(promote).not.toContain("promotedBy");
   });
 });
