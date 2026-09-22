@@ -230,7 +230,13 @@ export class MealContextLabController {
         createdAt,
         updatedAt: createdAt,
       });
-      return this.toPublicScreen(prepared.run, 0, prepared.issued, content.pack);
+      return this.toPublicScreen(
+        prepared.run,
+        0,
+        prepared.issued,
+        content.pack,
+        content.releaseId,
+      );
     } catch (error) {
       return this.contentErrorScreen(error);
     }
@@ -354,6 +360,7 @@ export class MealContextLabController {
         issuedTask,
       },
       loaded.content.pack,
+      record.releaseId,
     );
   }
 
@@ -683,7 +690,7 @@ export class MealContextLabController {
       return staleRunScreen();
     }
     return presentRecordedScreen({
-      handle: { runId: input.record.id, revision: saved.revision },
+      handle: this.handleFor(input.record.id, saved.revision, input.record.releaseId),
       feedback: input.feedback,
       progress: progressForIssuedRun(recorded.run),
       planMode: planModeOf(recorded.run),
@@ -712,7 +719,7 @@ export class MealContextLabController {
         return loaded.screen;
       }
       return presentRecordedScreen({
-        handle: { runId: record.id, revision: record.revision },
+        handle: this.handleFor(record.id, record.revision, record.releaseId),
         feedback: contextLabFeedbackFromEvidence(evidence),
         progress: progressForIssuedRun(record.experienceRun),
         planMode: planModeOf(record.experienceRun),
@@ -755,7 +762,7 @@ export class MealContextLabController {
       return loaded.screen;
     }
     return presentRecordedScreen({
-      handle: { runId: record.id, revision: record.revision },
+      handle: this.handleFor(record.id, record.revision, record.releaseId),
       feedback: contextLabFeedbackFromEvidence(evidence),
       progress: progressForIssuedRun(record.experienceRun),
       planMode: planModeOf(record.experienceRun),
@@ -932,7 +939,11 @@ export class MealContextLabController {
     const run = record.experienceRun;
     const current = run.stepRuns[run.currentStepIndex];
     const progress = progressForIssuedRun(run);
-    const handle = { runId: run.id, revision: record.revision };
+    const handle = this.handleFor(
+      run.id,
+      record.revision,
+      record.releaseId ?? run.releaseId,
+    );
     if (run.status === "GUIDED_ACTIVITY_ISSUED" && current?.activityId) {
       const step = run.planSnapshot.plan.steps[run.currentStepIndex];
       if (!step || !isGuidedExperienceStep(step)) {
@@ -983,8 +994,9 @@ export class MealContextLabController {
     revision: number,
     issued: IssuedPayload,
     pack: ContextualSceneContentPack,
+    releaseId?: string | null,
   ): ContextLabCurrentScreen {
-    const handle = { runId: run.id, revision };
+    const handle = this.handleFor(run.id, revision, releaseId ?? run.releaseId);
     const progress = progressForIssuedRun(run);
     if (issued.issuedActivity) {
       return presentGuidedScreen({
@@ -1346,7 +1358,7 @@ export class MealContextLabController {
         return this.reconcileProbeAfterEvidence(record, input.taskId);
       }
       return presentProbeRecordedScreen({
-        handle: { runId: record.id, revision: saved.revision },
+        handle: this.handleFor(record.id, saved.revision, record.releaseId),
         progress: {
           current: nextProbe.currentTargetIndex + 1,
           total: nextProbe.targets.length,
@@ -1428,7 +1440,7 @@ export class MealContextLabController {
       return again ? this.presentStoredRun(again) : staleRunScreen();
     }
     return presentProbeRecordedScreen({
-      handle: { runId: latest.id, revision: saved.revision },
+      handle: this.handleFor(latest.id, saved.revision, latest.releaseId),
       progress: {
         current: nextProbe.currentTargetIndex + 1,
         total: nextProbe.targets.length,
@@ -1566,6 +1578,7 @@ export class MealContextLabController {
       saved.revision,
       prepared.issued,
       content.pack,
+      content.releaseId,
     );
   }
 
@@ -1685,6 +1698,7 @@ export class MealContextLabController {
       saved.revision,
       prepared.issued,
       content.pack,
+      content.releaseId,
     );
   }
 
