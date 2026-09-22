@@ -12,6 +12,7 @@ export type {
   ContextualContentActiveReleasePointer,
   ContextualContentReleaseManifest,
   ContextualContentReleaseStatus,
+  HistoricalReleaseApprovalBinding,
   ReleaseApprovalBasis,
   ReleaseContextSnapshot,
   ReleaseHumanDecision,

@@ -40,6 +40,20 @@ export interface ReleaseTargetEntry {
   approvalBasis: ReleaseApprovalBasis;
 }
 
+/**
+ * Frozen approval basis recorded at draft creation.
+ * Historical rollback verifies this snapshot, not the current live pack.
+ */
+export interface HistoricalReleaseApprovalBinding {
+  reviewKey: string;
+  approvalBasis: ReleaseApprovalBasis;
+  approvedContentFingerprint: string;
+  reviewRevision: number;
+  humanDecision: ReleaseHumanDecision;
+  approvalPackId: string;
+  approvalSourceRefs: readonly string[];
+}
+
 export interface ReleaseContextSnapshot {
   runtimeContextId: "MEAL_BASE" | "MEAL_BATCH_02";
   frames: readonly ContextFrame[];
@@ -115,6 +129,7 @@ export interface ContextualContentReleaseManifest {
   publishedBy: string | null;
   supersededAt: string | null;
   supersededByReleaseId: string | null;
+  historicalApprovalBindings: readonly HistoricalReleaseApprovalBinding[];
 }
 
 export const CONTEXTUAL_CONTENT_ACTIVE_POINTER_KIND =

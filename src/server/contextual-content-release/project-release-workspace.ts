@@ -83,7 +83,9 @@ export async function projectReleaseWorkspace(input: {
         : item.validationSummary
           ? item.validationSummary.ok
           : null,
-    isActive: pointer?.releaseId === item.releaseId,
+    isActive:
+      pointer?.releaseId === item.releaseId &&
+      pointer.releaseFingerprint === item.releaseFingerprint,
     publishedAt: item.publishedAt,
     supersededAt: item.supersededAt,
     supersededByReleaseId: item.supersededByReleaseId,

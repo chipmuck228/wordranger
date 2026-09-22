@@ -20,6 +20,13 @@ import type {
   PublishAtomicResult,
   RollbackPointerResult,
 } from "./release-repository";
+import {
+  parsePublishAtom,
+  publishedManifestFromStored,
+  rejectPublishIdentity,
+  restoredPublishedManifestFromStored,
+  supersededManifestFromStored,
+} from "./release-lifecycle";
 import type { ReleaseSaveResult } from "./types";
 
 export class FileContextualContentReleaseRepository
@@ -195,11 +202,11 @@ export class FileContextualContentReleaseRepository
       expectedRevision: number;
     };
   }): PublishAtomicResult {
-    const parsed = parseReleaseManifest(input.record);
-    const pointer = parseActiveReleasePointer(input.pointer);
-    if (!parsed || !pointer || parsed.status !== "PUBLISHED") {
+    const parsedAtom = parsePublishAtom({ record: input.record, pointer: input.pointer });
+    if (!parsedAtom) {
       return { ok: false, code: "RELEASE_INVALID", message: "Published snapshot or pointer is invalid." };
     }
+    const { record: parsed, pointer } = parsedAtom;
     const existing = this.read(parsed.releaseId);
     if (!existing) {
       return { ok: false, code: "RELEASE_NOT_FOUND", message: "Release was not found." };
@@ -224,13 +231,22 @@ export class FileContextualContentReleaseRepository
     if (existing.status !== "PREFLIGHT_VALIDATED") {
       return { ok: false, code: "RELEASE_INVALID", message: "Only PREFLIGHT_VALIDATED releases can be published." };
     }
+    const identity = rejectPublishIdentity({ stored: existing, incoming: parsed, pointer });
+    if (identity) {
+      return identity;
+    }
     if ((currentPointer?.revision ?? null) !== input.expectedPointerRevision) {
       return { ok: false, code: "RELEASE_CONFLICT", message: "Active pointer changed before publish." };
     }
-    const nextRelease = cloneFrozen({
-      ...parsed,
-      revision: input.expectedRevision + 1,
+    const nextRelease = publishedManifestFromStored({
+      stored: existing,
+      expectedRevision: input.expectedRevision,
+      publishedAt: parsed.publishedAt ?? "",
+      publishedBy: parsed.publishedBy ?? "",
     });
+    if (!nextRelease.publishedAt || !nextRelease.publishedBy) {
+      return { ok: false, code: "RELEASE_INVALID", message: "Published snapshot is missing publishedAt/publishedBy." };
+    }
     let nextSuperseded: ContextualContentReleaseManifest | null = null;
     if (input.superseded) {
       const superseded = parseReleaseManifest(input.superseded.record);
@@ -242,9 +258,17 @@ export class FileContextualContentReleaseRepository
       ) {
         return { ok: false, code: "RELEASE_CONFLICT", message: "Previous active release changed before publish." };
       }
-      nextSuperseded = cloneFrozen({
-        ...superseded,
-        revision: input.superseded.expectedRevision + 1,
+      if (
+        superseded.releaseId !== currentSuperseded.releaseId ||
+        superseded.releaseFingerprint !== currentSuperseded.releaseFingerprint
+      ) {
+        return { ok: false, code: "RELEASE_INVALID", message: "Supersede manifest identity does not match the stored release." };
+      }
+      nextSuperseded = supersededManifestFromStored({
+        stored: currentSuperseded,
+        expectedRevision: input.superseded.expectedRevision,
+        supersededAt: superseded.supersededAt ?? nextRelease.publishedAt,
+        supersededByReleaseId: nextRelease.releaseId,
       });
     }
     const nextPointer = cloneFrozen({
@@ -296,14 +320,24 @@ export class FileContextualContentReleaseRepository
     ) {
       return { ok: false, code: "RELEASE_NOT_PUBLISHED", message: "Only previously published releases can become active." };
     }
-    const restored =
-      target.status === "SUPERSEDED"
-        ? cloneFrozen({
-            ...target,
-            status: "PUBLISHED" as const,
-            revision: target.revision + 1,
-          })
-        : target;
+    if (pointer.releaseFingerprint !== target.releaseFingerprint) {
+      return { ok: false, code: "RELEASE_INVALID", message: "Rollback pointer fingerprint does not match the target." };
+    }
+    if (current.releaseId !== target.releaseId) {
+      const outgoing = this.read(current.releaseId);
+      if (!outgoing) {
+        return { ok: false, code: "RELEASE_NOT_FOUND", message: "Release was not found." };
+      }
+      this.write(
+        supersededManifestFromStored({
+          stored: outgoing,
+          expectedRevision: outgoing.revision,
+          supersededAt: pointer.activatedAt,
+          supersededByReleaseId: target.releaseId,
+        }),
+      );
+    }
+    const restored = restoredPublishedManifestFromStored({ stored: target });
     const nextPointer = cloneFrozen({
       ...pointer,
       revision: input.expectedPointerRevision + 1,

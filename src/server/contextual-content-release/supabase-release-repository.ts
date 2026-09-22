@@ -15,15 +15,13 @@ import type {
   PublishAtomicResult,
   RollbackPointerResult,
 } from "./release-repository";
+import {
+  ReleasePersistenceInconsistencyError,
+  RELEASE_ROW_SELECT_COLUMNS,
+  releaseRowManifestMismatch,
+  type ContextualContentReleaseRow,
+} from "./row-manifest-consistency";
 import type { ReleaseSaveResult } from "./types";
-
-interface ReleaseRow {
-  release_id: string;
-  revision: number;
-  status: string;
-  scene_id: string;
-  manifest: unknown;
-}
 
 interface PointerRow {
   scene_id: string;
@@ -64,28 +62,24 @@ export class SupabaseContextualContentReleaseRepository
   async get(releaseId: string): Promise<ContextualContentReleaseManifest | null> {
     const { data, error } = await this.client
       .from("contextual_content_releases")
-      .select("manifest")
+      .select(RELEASE_ROW_SELECT_COLUMNS)
       .eq("release_id", releaseId)
       .maybeSingle();
     if (error || !data) {
       return null;
     }
-    const parsed = parseReleaseManifest(data.manifest);
-    return parsed ? cloneFrozen(parsed) : null;
+    return parseConsistentReleaseRow(data as unknown as ContextualContentReleaseRow, releaseId);
   }
 
   async list(): Promise<ContextualContentReleaseManifest[]> {
     const { data, error } = await this.client
       .from("contextual_content_releases")
-      .select("manifest")
+      .select(RELEASE_ROW_SELECT_COLUMNS)
       .order("release_id");
     if (error || !data) {
       return [];
     }
-    return data.flatMap((row) => {
-      const parsed = parseReleaseManifest(row.manifest);
-      return parsed ? [cloneFrozen(parsed)] : [];
-    });
+    return data.map((row) => parseConsistentReleaseRow(row as unknown as ContextualContentReleaseRow));
   }
 
   async listByScene(sceneId: string): Promise<ContextualContentReleaseManifest[]> {
@@ -174,7 +168,15 @@ export class SupabaseContextualContentReleaseRepository
     if (!pointer) {
       return { ok: false, code: "RELEASE_POINTER_INVALID", message: "No active release pointer." };
     }
-    const release = await this.get(pointer.releaseId);
+    let release: ContextualContentReleaseManifest | null;
+    try {
+      release = await this.get(pointer.releaseId);
+    } catch (error) {
+      if (error instanceof ReleasePersistenceInconsistencyError) {
+        return { ok: false, code: "RELEASE_POINTER_MISMATCH", message: error.message };
+      }
+      throw error;
+    }
     if (!release) {
       return { ok: false, code: "RELEASE_NOT_FOUND", message: "Active release is missing." };
     }
@@ -220,7 +222,15 @@ export class SupabaseContextualContentReleaseRepository
         message: "Publish transaction failed.",
       };
     }
-    const record = await this.get(input.record.releaseId);
+    let record: ContextualContentReleaseManifest | null;
+    try {
+      record = await this.get(input.record.releaseId);
+    } catch (error) {
+      if (error instanceof ReleasePersistenceInconsistencyError) {
+        return { ok: false, code: "RELEASE_RUNTIME_INVALID", message: error.message };
+      }
+      throw error;
+    }
     const pointer = await this.getActivePointer(input.pointer.sceneId);
     if (!record || !pointer) {
       return { ok: false, code: "RELEASE_RUNTIME_INVALID", message: "Publish transaction did not persist." };
@@ -257,7 +267,15 @@ export class SupabaseContextualContentReleaseRepository
       };
     }
     const pointer = await this.getActivePointer(input.sceneId);
-    const target = await this.get(input.pointer.releaseId);
+    let target: ContextualContentReleaseManifest | null;
+    try {
+      target = await this.get(input.pointer.releaseId);
+    } catch (error) {
+      if (error instanceof ReleasePersistenceInconsistencyError) {
+        return { ok: false, code: "RELEASE_RUNTIME_INVALID", message: error.message };
+      }
+      throw error;
+    }
     if (!pointer || !target) {
       return { ok: false, code: "RELEASE_NOT_FOUND", message: "Release was not found." };
     }
@@ -294,4 +312,23 @@ function parsePointerRow(row: PointerRow): ContextualContentActiveReleasePointer
   });
 }
 
-export type { ReleaseRow };
+function parseConsistentReleaseRow(
+  row: ContextualContentReleaseRow,
+  releaseId?: string,
+): ContextualContentReleaseManifest {
+  const parsed = parseReleaseManifest(row.manifest);
+  if (!parsed) {
+    throw new ReleasePersistenceInconsistencyError(
+      `Release ${releaseId ?? row.release_id} manifest is unreadable.`,
+    );
+  }
+  const mismatch = releaseRowManifestMismatch(row, parsed);
+  if (mismatch) {
+    throw new ReleasePersistenceInconsistencyError(
+      `Release ${parsed.releaseId} row/manifest mismatch: ${mismatch}`,
+    );
+  }
+  return cloneFrozen(parsed);
+}
+
+export type { ContextualContentReleaseRow as ReleaseRow };

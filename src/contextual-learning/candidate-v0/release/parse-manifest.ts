@@ -1,6 +1,7 @@
 import { cloneFrozen } from "../content/immutable";
 import type {
   ContextualContentReleaseManifest,
+  HistoricalReleaseApprovalBinding,
   ReleaseContextSnapshot,
   ReleaseTargetEntry,
 } from "./types";
@@ -57,6 +58,38 @@ function parseTargetEntry(value: unknown): ReleaseTargetEntry | null {
     selectedMeaning: value.selectedMeaning,
     sourceRefs: [...value.sourceRefs],
     approvalBasis: value.approvalBasis,
+  };
+}
+
+function parseHistoricalApprovalBinding(
+  value: unknown,
+): HistoricalReleaseApprovalBinding | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (
+    typeof value.reviewKey !== "string" ||
+    !RELEASE_ID_PATTERN.test(value.reviewKey) ||
+    (value.approvalBasis !== "LEGACY_EXPERIMENT_BASELINE" &&
+      value.approvalBasis !== "HUMAN_REVIEW_PROMOTION") ||
+    typeof value.approvedContentFingerprint !== "string" ||
+    !Number.isInteger(value.reviewRevision) ||
+    (value.reviewRevision as number) < 0 ||
+    (value.humanDecision !== "APPROVED" && value.humanDecision !== "LEGACY_BASELINE") ||
+    typeof value.approvalPackId !== "string" ||
+    !Array.isArray(value.approvalSourceRefs) ||
+    !value.approvalSourceRefs.every((item) => typeof item === "string")
+  ) {
+    return null;
+  }
+  return {
+    reviewKey: value.reviewKey,
+    approvalBasis: value.approvalBasis,
+    approvedContentFingerprint: value.approvedContentFingerprint,
+    reviewRevision: value.reviewRevision as number,
+    humanDecision: value.humanDecision,
+    approvalPackId: value.approvalPackId,
+    approvalSourceRefs: [...value.approvalSourceRefs],
   };
 }
 
@@ -140,6 +173,12 @@ export function parseReleaseManifest(
   ) {
     return null;
   }
+  const historicalApprovalBindings = Array.isArray(value.historicalApprovalBindings)
+    ? value.historicalApprovalBindings.map(parseHistoricalApprovalBinding)
+    : [];
+  if (historicalApprovalBindings.some((item) => item === null)) {
+    return null;
+  }
   return cloneFrozen({
     schemaVersion: CONTEXTUAL_CONTENT_RELEASE_SCHEMA_VERSION,
     kind: CONTEXTUAL_CONTENT_RELEASE_KIND,
@@ -162,6 +201,7 @@ export function parseReleaseManifest(
     supersededAt: typeof value.supersededAt === "string" ? value.supersededAt : null,
     supersededByReleaseId:
       typeof value.supersededByReleaseId === "string" ? value.supersededByReleaseId : null,
+    historicalApprovalBindings: historicalApprovalBindings as HistoricalReleaseApprovalBinding[],
     validationSummary:
       value.validationSummary && isRecord(value.validationSummary)
         ? {

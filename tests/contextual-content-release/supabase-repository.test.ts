@@ -1,10 +1,36 @@
 import { describe, expect, it, vi } from "vitest";
 import { MEAL_RELEASE_SCENE_ID } from "@/contextual-learning/candidate-v0/release";
 import { SupabaseContextualContentReleaseRepository } from "@/server/contextual-content-release/supabase-release-repository";
+import { ReleasePersistenceInconsistencyError } from "@/server/contextual-content-release/row-manifest-consistency";
 import { manifestFromAuthority, buildMealMigrationAuthority } from "@/server/contextual-content-release/authority";
 
+function releaseRow(record: {
+  releaseId: string;
+  sceneId: string;
+  status: string;
+  revision: number;
+  schemaVersion: string;
+  publishedAt: string | null;
+  publishedBy: string | null;
+  supersededAt: string | null;
+  supersededByReleaseId: string | null;
+}) {
+  return {
+    release_id: record.releaseId,
+    scene_id: record.sceneId,
+    status: record.status,
+    revision: record.revision,
+    schema_version: record.schemaVersion,
+    published_at: record.publishedAt,
+    published_by: record.publishedBy,
+    superseded_at: record.supersededAt,
+    superseded_by_release_id: record.supersededByReleaseId,
+    manifest: record,
+  };
+}
+
 function client(input: {
-  rpc: (name: string) => Promise<{ data: unknown; error: null | { message: string } }>;
+  rpc?: (name: string) => Promise<{ data: unknown; error: null | { message: string } }>;
   release: unknown;
   pointer: unknown;
 }) {
@@ -17,19 +43,22 @@ function client(input: {
               return {
                 maybeSingle: async () =>
                   table === "contextual_content_releases"
-                    ? { data: { manifest: input.release }, error: null }
+                    ? { data: input.release, error: null }
                     : { data: input.pointer, error: null },
                 eq() {
                   return { select: async () => ({ data: [], error: null }) };
                 },
               };
             },
-            order: async () => ({ data: [], error: null }),
+            order: async () => ({
+              data: table === "contextual_content_releases" ? [input.release] : [],
+              error: null,
+            }),
           };
         },
       };
     },
-    rpc: input.rpc,
+    rpc: input.rpc ?? (async () => ({ data: { ok: true }, error: null })),
   };
 }
 
@@ -61,7 +90,7 @@ describe("supabase release repository", () => {
       activated_by: "LOCAL_INTERNAL_RELEASER",
     };
     const repository = new SupabaseContextualContentReleaseRepository(
-      client({ rpc, release: published, pointer }) as never,
+      client({ rpc, release: releaseRow(published), pointer }) as never,
     );
     const result = await repository.publishAtomic({
       record: published,
@@ -80,5 +109,33 @@ describe("supabase release repository", () => {
     });
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(result.message);
+    }
+    expect(result.record.revision).toBe(1);
+    expect(result.record.status).toBe("PUBLISHED");
+  });
+
+  it("fails closed when row columns disagree with the stored manifest", async () => {
+    const authority = await buildMealMigrationAuthority();
+    const draft = manifestFromAuthority({
+      authority,
+      createdAt: "2026-09-22T00:00:00.000Z",
+    });
+    const mismatched = releaseRow({
+      ...draft,
+      status: "PREFLIGHT_VALIDATED",
+      revision: 0,
+    });
+    mismatched.status = "PUBLISHED";
+    mismatched.revision = 4;
+    const repository = new SupabaseContextualContentReleaseRepository(
+      client({
+        release: mismatched,
+        pointer: null,
+      }) as never,
+    );
+    await expect(repository.get(draft.releaseId)).rejects.toBeInstanceOf(ReleasePersistenceInconsistencyError);
+    await expect(repository.list()).rejects.toBeInstanceOf(ReleasePersistenceInconsistencyError);
   });
 });

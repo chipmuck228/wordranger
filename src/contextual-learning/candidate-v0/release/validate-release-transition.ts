@@ -88,7 +88,9 @@ export function validateReleaseTransition(input: {
       current.contextModelFingerprint !== next.contextModelFingerprint ||
       current.createdAt !== next.createdAt ||
       current.createdBy !== next.createdBy ||
-      current.validatedAt !== next.validatedAt
+      current.validatedAt !== next.validatedAt ||
+      JSON.stringify(current.historicalApprovalBindings) !==
+        JSON.stringify(next.historicalApprovalBindings)
     ) {
       issues.push(
         issue(

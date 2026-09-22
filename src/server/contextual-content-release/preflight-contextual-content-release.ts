@@ -10,9 +10,10 @@ import type { ContextualSceneContentPack } from "@/contextual-learning/candidate
 import type { ContentReviewRepository } from "@/server/contextual-content-review/content-review-repository";
 import { fileContentReviewRepository } from "@/server/contextual-content-review/file-content-review-repository";
 import { createContextualReleaseRepository } from "./create-release-runtime";
-import { evaluateReleaseReadiness } from "./evaluate-release-readiness";
+import { evaluatePublishReadiness } from "./evaluate-release-readiness";
 import { isContextualContentReleaseWriteEnabled } from "./gates";
 import type { ContextualContentReleaseRepository } from "./release-repository";
+import { ReleasePersistenceInconsistencyError } from "./row-manifest-consistency";
 import type { ReleasePreflightResult } from "./types";
 
 function issue(
@@ -49,7 +50,20 @@ export async function preflightContextualContentRelease(input: {
     };
   }
   const repository = input.repository ?? createContextualReleaseRepository(input.env);
-  const existing = await repository.get(input.releaseId);
+  let existing;
+  try {
+    existing = await repository.get(input.releaseId);
+  } catch (error) {
+    if (error instanceof ReleasePersistenceInconsistencyError) {
+      return {
+        ok: false,
+        code: "RELEASE_RUNTIME_INVALID",
+        message: error.message,
+        issues: [issue("RELEASE_SCHEMA_INVALID", "manifest", error.message)],
+      };
+    }
+    throw error;
+  }
   if (!existing) {
     return {
       ok: false,
@@ -72,7 +86,7 @@ export async function preflightContextualContentRelease(input: {
     issues.push(issue("RELEASE_TRANSITION_ILLEGAL", "status", "A published snapshot cannot be preflighted again."));
   }
   issues.push(
-    ...(await evaluateReleaseReadiness({
+    ...(await evaluatePublishReadiness({
       existing,
       reviewRepository: input.reviewRepository ?? fileContentReviewRepository,
       pack: input.pack,

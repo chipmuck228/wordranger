@@ -7,11 +7,11 @@ import {
 } from "@/contextual-learning/candidate-v0/release";
 import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
 import type { ContentReviewRepository } from "@/server/contextual-content-review/content-review-repository";
-import { fileContentReviewRepository } from "@/server/contextual-content-review/file-content-review-repository";
 import { createContextualReleaseRepository } from "./create-release-runtime";
-import { evaluateReleaseReadiness } from "./evaluate-release-readiness";
+import { evaluateHistoricalReleaseIntegrity } from "./evaluate-release-readiness";
 import { isContextualContentReleaseWriteEnabled } from "./gates";
 import type { ContextualContentReleaseRepository } from "./release-repository";
+import { ReleasePersistenceInconsistencyError } from "./row-manifest-consistency";
 import { RELEASE_ACTOR_ID, type ReleaseRollbackResult } from "./types";
 
 export async function rollbackContextualContentActiveRelease(input: {
@@ -41,7 +41,15 @@ export async function rollbackContextualContentActiveRelease(input: {
   }
   const repository = input.repository ?? createContextualReleaseRepository(input.env);
   const pointer = await repository.getActivePointer(input.sceneId);
-  const target = await repository.get(input.targetReleaseId);
+  let target;
+  try {
+    target = await repository.get(input.targetReleaseId);
+  } catch (error) {
+    if (error instanceof ReleasePersistenceInconsistencyError) {
+      return { ok: false, code: "RELEASE_RUNTIME_INVALID", message: error.message };
+    }
+    throw error;
+  }
   if (!pointer || !target) {
     return { ok: false, code: "RELEASE_NOT_FOUND", message: "Release was not found." };
   }
@@ -67,10 +75,8 @@ export async function rollbackContextualContentActiveRelease(input: {
   if (computed.releaseFingerprint !== target.releaseFingerprint) {
     return { ok: false, code: "RELEASE_POINTER_MISMATCH", message: "Target release fingerprint cannot be recomputed." };
   }
-  const issues = await evaluateReleaseReadiness({
+  const issues = await evaluateHistoricalReleaseIntegrity({
     existing: target,
-    reviewRepository: input.reviewRepository ?? fileContentReviewRepository,
-    pack: input.pack,
   });
   if (issues.length > 0) {
     return { ok: false, code: "RELEASE_INVALID", message: issues[0]!.detail };
