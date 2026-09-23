@@ -8,6 +8,11 @@
 >
 > Related: [ADR-084](./DECISIONS.md#adr-084--free-practice-is-a-separate-product-surface-candidate)
 
+Revision after `17ebb05`: `RECENTLY_INCORRECT` is a latest-terminal-per-skill
+read model, not “last 40 INCORRECT rows”. TaskGenerator input is a local
+compatibility projection, not Scheduler provenance. Implementation is
+conditional on that isolation being testable.
+
 Do not treat the prompting task as authority. The inventory below is
 taken from the current repository.
 
@@ -163,11 +168,12 @@ and must not call `planLearningSession()` to impersonate Daily Training.
 `TaskGenerationRequest.need` is a `LearningNeed`.
 `PublicLearningTask.learningNeedId` is required.
 `MEANING_CHOICE` accepts every existing reason.
+`LearningEvidence` has **no** `learningNeedId` field.
 
-This is an application adapter gap, not permission to extend
-`LearningNeedReason`. V0 maps a `FreePracticeItem` to a TaskGenerator
-input **only** so the frozen generator can run. That object is not
-Scheduler output and must not be stored as a `LearningSessionPlan`.
+This is a frozen-protocol compatibility gap, not permission to extend
+`LearningNeedReason` or to call the mapped object a current
+`LearningNeed`. See §5.5. If a later implementation cannot keep that
+projection isolated, it is a `CORE_INTEGRATION_BLOCKER`.
 
 ### 3.6 Evidence has no orchestration source field
 
@@ -199,8 +205,10 @@ process memory. There is no student mark store.
 
 `LearningRepository` can read evidence only per `userId + lexemeId`.
 
-RECENTLY_INCORRECT therefore needs a new **read** query. It does not
-need a new Evidence type.
+RECENTLY_INCORRECT therefore needs a new **read** query over a bounded
+window of recent **terminal** Evidence (all outcomes). It does not
+need a new Evidence type or field. Querying only `INCORRECT` rows is
+forbidden: a later same-key correct result would stay invisible.
 
 ### 3.9 Identity
 
@@ -312,7 +320,7 @@ Evaluated, not all selected.
 | Source | Data today | Identity | Sort | Dedup | Short pool | Fill from others? | Daily Training conflict | Needs Scheduler? | V0 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `UNSEEN` | `listLexemes()` minus models with `masteryStage !== UNSEEN` (missing model counts as unseen) | Yes | `sourceIndex`, then `canonicalKey` | `lexemeId` | `PARTIAL` or `EMPTY` | No | Writes real Evidence, so later Daily Training sees fewer `NEW_WORD`s. Expected. | No | **Yes — primary** |
-| `RECENTLY_INCORRECT` | New read of `learning_evidence` where `outcome = INCORRECT`, recent window | Yes | `occurredAt` desc, then `lexemeId` | `lexemeId` | `PARTIAL` or `EMPTY` | No | May overlap current Daily needs. Allowed. | No | **Yes — named request** |
+| `RECENTLY_INCORRECT` | Bounded recent **terminal** Evidence window; latest row per `lexemeId + skill` must be `INCORRECT` | Yes | Selected-key `occurredAt` desc, then `lexemeId` | `lexemeId` (keep newest unresolved skill) | `PARTIAL` or `EMPTY` | No | May overlap current Daily needs. Allowed. | No | **Yes — named request** |
 | `USER_MARKED` | In-memory Debug only; no store | Would | `markedAt` desc | `lexemeId` | `EMPTY` | No | N/A | No | **No — no persistence** |
 | `RECENTLY_LEARNED` | Models with recent `lastSuccessAt` | Yes | `lastSuccessAt` desc | `lexemeId` | `PARTIAL` | No | Overlaps healthy words Daily Training just deferred | No | No |
 | `MIXED` | Union of the above | Yes | Priority table | `lexemeId` | Auto-fill hides emptiness | Yes | Blurs Daily vs Free | Tempting, dishonest | No |
@@ -401,53 +409,129 @@ authoritative user.
 
 **RECENTLY_INCORRECT**
 
-- New query, suggested window: last 40 `INCORRECT` evidence rows for
-  the user, newest first. 40 matches the current activity floor used
-  by `planLearningSession`.
-- Dedup by `lexemeId`; keep the newest incorrect row.
-- Skip lexemes that are no longer in the bundled vocabulary.
-- `targetSkill` is the skill on that newest incorrect evidence if it
-  is a currently generatable skill (`MEANING_RECOGNITION`,
-  `ACTIVE_RECALL`, `SPELLING_RECALL`, `SEMANTIC_CONNECTION`).
-  Otherwise fall back to `MEANING_RECOGNITION` when meaning content
-  exists.
-- Do not require an unresolved `Weakness`. Incorrect evidence is
-  enough. Do not invent `USER_MARKED` or `WEAKNESS` needs.
+This is an application read model over existing `LearningEvidence`.
+It does not add Evidence fields, does not read `Weakness[]` as
+authority, and does not call the Scheduler.
+
+Do not query “the last 40 `INCORRECT` rows”. That keeps a later-corrected
+error eligible forever and contradicts completion/repeat `EMPTY`.
+
+#### Algorithm
+
+Application constant, not a Scheduler or Core constant:
+
+```ts
+FREE_PRACTICE_RECENT_TERMINAL_EVIDENCE_LIMIT = 40
+```
+
+1. **Window.** Load the user's 40 most recent **terminal** Evidence
+   rows, **all outcomes**. Order: `occurredAt` descending, then `id`
+   descending. If the user has fewer than 40, use all of them.
+   Evidence outside this window is invisible. A very old `INCORRECT`
+   must not re-enter merely because it is still among the last 40
+   incorrect rows.
+
+2. **Latest per key.** Group window rows by `lexemeId + skill`.
+   For each key, the latest row is the first in that same order
+   (`occurredAt` desc, `id` desc).
+
+3. **Unresolved recent incorrect.** A key is eligible only when that
+   latest outcome is `INCORRECT`.
+   - `INDEPENDENT_CORRECT` or `ASSISTED_CORRECT` on the **same**
+     `lexemeId + skill` **clears** the key.
+   - `SKIPPED` and `TIMEOUT` are not `INCORRECT`, so they neither
+     keep nor create eligibility.
+   - A success on a **different** skill does **not** clear the key.
+     Default: cross-skill success is not a resolution.
+
+4. **Missing vocabulary.** Drop a key whose `lexemeId` is absent from
+   the current bundled `listLexemes()`.
+
+5. **Generatable skill.** V0 can generate
+   `MEANING_RECOGNITION`, `ACTIVE_RECALL`, `SPELLING_RECALL`, and
+   `SEMANTIC_CONNECTION` when required content exists. Drop a key
+   whose skill is not generatable (`LISTENING_RECOGNITION`,
+   `CONTEXT_USE`, or missing content). **Do not** rewrite that key
+   into another skill. Silent fallback to `MEANING_RECOGNITION`
+   would practice a different skill and then clear the wrong key.
+
+6. **Dedup by `lexemeId`.** If one lexeme still has several unresolved
+   generatable skills, keep **one** item: the key whose latest
+   `INCORRECT` is newest (`occurredAt` desc, then `id` desc).
+   `targetSkill` is that key's skill.
+
+7. **Plan order.** Remaining items sort by that selected-key
+   `occurredAt` descending, then `lexemeId` ascending.
+
+8. **No weakness invention.** Do not require an unresolved `Weakness`.
+   Do not emit `USER_MARKED` or `WEAKNESS` needs.
+
+#### Worked acceptance
+
+| Id | History in / affecting the window | Eligible? | Result |
+| --- | --- | --- | --- |
+| A | meaning `INCORRECT`, then meaning correct | No | meaning key cleared |
+| B | meaning `INCORRECT`, then spelling correct | Yes | meaning key still latest `INCORRECT` |
+| C | same lexeme, two unresolved skills | One item | newer `occurredAt` skill |
+| D | three lexemes, each one unresolved `INCORRECT`; request 10 | Yes | `PARTIAL`, `plannedCount: 3` |
+| E | those three later answered correctly on the **same** skill | No | `EMPTY` |
+| F | `INCORRECT` older than the 40-row terminal window, even if it is still among the last 40 incorrect rows | No | outside window |
+
+Assisted correct counts as a clearing success for this read model
+only. It is not independent mastery.
 
 Do not call the Scheduler for either pool.
 
-### 5.5 TaskGenerator adapter
+### 5.5 TaskGenerator compatibility projection
 
 `DefaultTaskGenerator.generate()` still requires `LearningNeed`.
 Changing that interface is a Task Protocol change and is out of scope.
 
-V0 uses a local adapter:
+`FreePracticeItem` remains the application object. It is not a
+`LearningNeed` and not Scheduler output.
+
+V0 may build a **local compatibility projection** solely to call the
+frozen generator:
 
 ```text
 FreePracticeItem
-  → toTaskGenerationNeed(item): LearningNeed
-  → DefaultTaskGenerator.generate({ need })
+  → toTaskGenerationProjection(item)
+  → DefaultTaskGenerator.generate({ need: projection })
 ```
 
-Adapter rules:
+Projection rules:
 
-- `need.id` is the Free Practice item id.
-- `need.lexemeId` / `need.targetSkill` copy the item.
-- `need.priority` is `0`. TaskGenerator does not rank.
-- `need.reason` is a **generator routing field only**:
-  - `UNSEEN` → `"NEW_WORD"`
-  - `RECENTLY_INCORRECT` → `"STAGE_PROGRESS"`
-- No `weaknessFocus` unless a later contract proves a real weakness.
-- `preferredPromptModes` and `avoidRecentTaskTypes` stay empty in V0.
-- The constructed need is **not** persisted as Scheduler output.
-- `game_sessions.state` stores `FreePracticeItem[]`, not a
-  `LearningSessionPlan`.
-- Student UI never sees `LearningNeed`, `reason`, or the adapter.
+- `NEW_WORD` and `STAGE_PROGRESS` are existing **archetype routing
+  tokens** only. They are not a current pedagogical need, not a
+  Scheduler reason, and not a mastery judgment.
+- Mapping, if isolation holds:
+  - `UNSEEN` → routing token `"NEW_WORD"`
+  - `RECENTLY_INCORRECT` → routing token `"STAGE_PROGRESS"`
+- `projection.id` equals `FreePracticeItem.id`.
+- `lexemeId` / `targetSkill` copy the item.
+- `priority` is `0`. No `weaknessFocus` in V0.
+- `preferredPromptModes` and `avoidRecentTaskTypes` stay empty.
+- The projection **must not** enter a `LearningSessionPlan`.
+- `game_sessions.state` stores only `FreePracticeItem[]` and Free
+  Practice session fields. It must not persist the projection or a
+  scheduler plan.
+- `PublicLearningTask.learningNeedId` is the frozen protocol's
+  required correlation value. In this Candidate it equals
+  `FreePracticeItem.id`. It is not Scheduler provenance.
+- `LearningEvidence` does **not** store `learningNeedId`. Do not add
+  that field.
+- Student UI never sees `LearningNeed`, routing tokens, or the
+  projection.
+- Do not add `FREE_PRACTICE` to `LearningNeedReason`.
 
-Using `"NEW_WORD"` / `"STAGE_PROGRESS"` here does **not** mean the
-Scheduler selected those reasons. It only satisfies
-`supportedNeedReasons` on existing archetypes. Do not add
-`FREE_PRACTICE` to `LearningNeedReason`.
+A later implementation **must** include architecture / boundary tests
+showing that no production consumer treats the projection as Scheduler
+provenance (no write to `LearningSessionPlan`, no Scheduler trace, no
+Evidence / snapshot field, no student copy).
+
+If those tests cannot prove isolation, stop and record
+`CORE_INTEGRATION_BLOCKER`. Do **not** modify `LearningNeedReason`,
+`TaskGenerator`, Evidence, or Scheduler to paper over the gap.
 
 If a future Standard wants TaskGenerator to accept a thinner input,
 that is a separate contract-changing task.
@@ -498,8 +582,14 @@ items. UI may say 这次有 3 个可练习的单词.
 - No fake words
 
 Repeated start after a completed or abandoned session creates a **new**
-session from a fresh plan. It does not replay the previous plan. This
-matches Daily Training 再练一组.
+session from a **fresh** read-model plan. It does not replay the
+previous plan.
+
+For `RECENTLY_INCORRECT`, that fresh plan uses the algorithm in §5.4.
+If every previously eligible `lexemeId + skill` now has a later
+same-skill correct result, the next request is `EMPTY`. If those keys
+are still latest-`INCORRECT`, they remain eligible. A different-skill
+success does not remove them. This matches cases A, B, D, and E.
 
 A client timeout on start may still create a second session. Same
 inherited limitation as Daily Training. Do not hide it.
@@ -724,7 +814,8 @@ Suggested later route: `/practice`. Not `/train`. Not `/play/*`.
 9. Free Practice does not call one completed group “学会了”.
 10. Daily Training does not break spacing or v2 deferral to fill a
     count.
-11. Free Practice does not fake `LearningNeed` as Scheduler output.
+11. Free Practice does not treat a TaskGenerator compatibility
+    projection as a `LearningNeed` or Scheduler output.
 12. Free Practice does not write `FREE_PRACTICE` onto `Evidence.gameId`.
 13. Free Practice does not keep a client-side weak-word list.
 14. `sourceIndex` is not difficulty.
@@ -744,8 +835,9 @@ has usable meaning content; no auto-fill.
 - **Request:** `{ source: "UNSEEN", requestedCount: 10 }`
 - **Eligible pool:** 100 unseen lexemes, ordered by `sourceIndex`
 - **Plan:** `READY`, `plannedCount: 10`, first 10 in source order
-- **Tasks:** adapter reason `NEW_WORD`, skill `MEANING_RECOGNITION`,
-  lazy `DefaultTaskGenerator`, assign to this session
+- **Tasks:** compatibility projection routing token `NEW_WORD`, skill
+  `MEANING_RECOGNITION`, lazy `DefaultTaskGenerator`, assign to this
+  session. Projection is not persisted.
 - **Evidence:** one row per completed task; `gameId = RANGER_TRIAL`;
   `sessionId` is the Free Practice session
 - **Completion:** 本组练习完成 / 完成 10 个 / 答对 N 个
@@ -753,22 +845,47 @@ has usable meaning content; no auto-fill.
   Training is unchanged until the user opens `/train`
 - **UI:** 开始练习 → `1 / 10` … `10 / 10`. No Scheduler claim.
 
-### Case 2 — 3 recently incorrect, request 10
+### Case 2 — 3 unresolved recent incorrect, request 10
 
 - **Request:** `{ source: "RECENTLY_INCORRECT", requestedCount: 10 }`
-- **Eligible pool:** 3 distinct lexemes with recent `INCORRECT`
+- **Eligible pool:** 3 distinct lexemes whose latest same-skill
+  terminal Evidence in the 40-row window is `INCORRECT`
 - **Plan:** `PARTIAL`, `plannedCount: 3`,
   `reason: "INSUFFICIENT_ELIGIBLE_WORDS"`
-- **Tasks:** three tasks, adapter reason `STAGE_PROGRESS`, skill from
-  the newest incorrect evidence when generatable
+- **Tasks:** three tasks; compatibility projection routing token
+  `STAGE_PROGRESS`; `targetSkill` from the selected unresolved key
 - **Evidence:** at most three new rows; no padding Evidence
 - **Completion:** 完成 3 个
-- **Next action:** repeating the same request may `PARTIAL` again or
-  `EMPTY` if those words were just answered
+- **Repeat:** rebuild the read model. Same-skill correct on all three
+  → `EMPTY`. Same-skill still `INCORRECT` → `PARTIAL` 3 again.
 - **UI:** 这次有 3 个可练习的单词. Never show `1 / 10`.
 
 If the user had requested `UNSEEN` instead, this pool would be
 irrelevant. V0 does not mix.
+
+#### Case 2 acceptance rows
+
+These are required Slice 2 tests, not optional examples.
+
+**A.** meaning `INCORRECT`, then meaning correct → that lexeme is not
+eligible.
+
+**B.** meaning `INCORRECT`, then spelling correct → meaning error
+remains eligible; `targetSkill` stays `MEANING_RECOGNITION`.
+
+**C.** one lexeme, meaning and spelling both latest-`INCORRECT` → one
+item; `targetSkill` is the skill with newer `occurredAt` (tie-break
+`id`).
+
+**D.** three unresolved incorrect lexemes, request 10 → `PARTIAL`,
+`plannedCount: 3`.
+
+**E.** those three later answered correctly on the same skill →
+`EMPTY`, `plannedCount: 0`. No session row.
+
+**F.** an `INCORRECT` outside the last 40 terminal Evidence rows is
+not eligible, even if it would still appear in “last 40 INCORRECT
+rows”.
 
 ### Case 3 — Placeholder / exhausted Daily needs, user still wants practice
 
@@ -817,13 +934,17 @@ Do not implement these slices in this task.
 ### Slice 2 — Free Practice plan / read model
 
 - **Does:** `FreePracticeRequest` → eligible pool →
-  `FreePracticePlanResult`. UNSEEN first; RECENTLY_INCORRECT query.
+  `FreePracticePlanResult`. UNSEEN first; `RECENTLY_INCORRECT` uses
+  the latest-terminal-per-skill algorithm in §5.4.
 - **Files expected:** `src/server/free-practice/plan-free-practice.ts`,
-  types, query port (new method on a read repository, not Core).
+  types, query port that returns a bounded terminal Evidence window
+  (all outcomes), not Core.
 - **Frozen forbidden:** Scheduler policy, Need Generator, Evidence
   schema, `LearningNeedReason`.
-- **Tests:** 100 unseen → 10 READY; 3 incorrect → PARTIAL; 0 → EMPTY;
-  no `planLearningSession` call; deterministic `sourceIndex` order.
+- **Tests:** 100 unseen → 10 `READY`; Case 2 A–F; 0 eligible →
+  `EMPTY`; no `planLearningSession` call; UNSEEN order is
+  `sourceIndex` then `canonicalKey`; query is not “last N INCORRECT
+  rows”.
 - **Rollback:** delete the module; no sessions exist yet.
 - **Done:** planner is pure application code and does not persist.
 
@@ -835,7 +956,9 @@ Do not implement these slices in this task.
   schema documented in `docs/DATABASE.md`.
 - **Frozen forbidden:** Core engine, Scheduler, evaluator.
 - **Tests:** start / submit / continue / resume / duplicate submit /
-  double continue / `SESSION_CONFLICT`.
+  double continue / `SESSION_CONFLICT`; persisted state contains
+  `FreePracticeItem[]` only — no `LearningSessionPlan`, no projection
+  `reason`.
 - **Rollback:** unused `game_type` rows are inert; no table drop
   required.
 - **Done:** one plan per session; public payloads have no AnswerKey.
@@ -848,7 +971,8 @@ Do not implement these slices in this task.
   `src/components/training/*`.
 - **Frozen forbidden:** games must not grade; no new renderer tree.
 - **Tests:** architecture import boundary; payload safety; e2e start →
-  answer → 下一题 → complete.
+  answer → 下一题 → complete; no consumer treats
+  `PublicLearningTask.learningNeedId` as Scheduler provenance.
 - **Rollback:** unpublish the route.
 - **Done:** no Bubble / Matching / Snake / 单词闯关 chrome.
 
@@ -860,7 +984,9 @@ Do not implement these slices in this task.
 - **Frozen forbidden:** Evidence types, factory, `processEvidence`,
   policy numbers.
 - **Tests:** one Evidence per task; assisted/independent unchanged;
-  session join can recover `FREE_PRACTICE`.
+  session join can recover `FREE_PRACTICE`; Evidence has no
+  `learningNeedId`; no production consumer reads the projection as
+  Scheduler provenance.
 - **Rollback:** stop creating sessions; existing Evidence remains
   valid facts.
 - **Done:** no `FreePracticeEvidence`; no `gameId = FREE_PRACTICE`.
@@ -936,17 +1062,28 @@ Allowed later, in implementation slices, not now:
 
 - new `src/server/free-practice/**`
 - `game_sessions.game_type` value `FREE_PRACTICE`
-- a read query for recent incorrect outcomes
+- a read query for a bounded recent **terminal** Evidence window
 - identity / auth adapters
 - `/practice` UI that reuses existing renderers
+- architecture tests that the compatibility projection is not
+  Scheduler provenance; otherwise `CORE_INTEGRATION_BLOCKER`
 
 ---
 
 ## 16. Final Candidate statement
 
-Free Practice V0 can be implemented without bypassing the frozen
-pipeline. It needs its own request, plan, session `game_type`, and
-identity boundary. It reuses Task / Evaluator / Evidence / Core.
+Free Practice V0 can be implemented **only after** the TaskGenerator
+compatibility-projection boundary in §5.5 is proven by tests. Until
+then, this Candidate defines the contract; it does not claim the
+isolation is already demonstrated.
+
+If that isolation cannot be proven, the honest result is
+`CORE_INTEGRATION_BLOCKER`. Do not change `LearningNeedReason`,
+TaskGenerator, Evidence, or Scheduler to bypass it.
+
+The path still needs its own request, latest-terminal-per-skill
+`RECENTLY_INCORRECT` read model, session `game_type`, and identity
+boundary. It reuses Task / Evaluator / Evidence / Core.
 
 It is not Daily Training with a larger count. It is not Context Lab.
 It is not the Ranger Trial UI pilot. It is not a Standard until a
