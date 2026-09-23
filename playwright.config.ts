@@ -7,6 +7,39 @@ const REAL_RELEASE_FORBIDDEN_HOST =
   process.env.VERCEL_ENV === "production" || process.env.VERCEL_ENV === "preview";
 const ordinaryWorkspaceEnv = REAL_RELEASE_E2E ? {} : ordinaryE2EWorkspaceEnv();
 
+function homepageHostEnv(
+  overrides: Record<string, string | undefined>,
+): Record<string, string> {
+  const merged: Record<string, string | undefined> = {
+    ...process.env,
+    RANGER_TRIAL_RUNTIME: "memory",
+    GAME_RUNTIME: "memory",
+    DEBUG_TOOLS_ENABLED: "0",
+    CONTEXTUAL_CONTENT_REVIEW_ENABLED: "0",
+    CONTEXTUAL_CONTENT_REVIEW_WRITE_ENABLED: "0",
+    CONTEXTUAL_CONTENT_PROMOTION_ENABLED: "0",
+    CONTEXTUAL_CONTENT_PROMOTION_WRITE_ENABLED: "0",
+    CONTEXTUAL_CONTENT_RELEASE_ENABLED: "0",
+    CONTEXTUAL_CONTENT_RELEASE_WRITE_ENABLED: "0",
+    CONTEXT_LAB_E2E: "0",
+    CONTEXT_LAB_E2E_PROBE_ENABLED: "0",
+    ...ordinaryWorkspaceEnv,
+    ...overrides,
+  };
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(merged)) {
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) {
+      env[key] = "";
+    }
+  }
+  return env;
+}
+
 if (REAL_RELEASE_E2E && REAL_RELEASE_FORBIDDEN_HOST) {
   throw new Error(
     "CONTEXT_LAB_REAL_RELEASE_E2E is forbidden on production/preview hosts",
@@ -96,6 +129,28 @@ const ordinaryWebServers = [
         CONTEXT_LAB_CONTENT_SOURCE: "active-release",
         ...ordinaryWorkspaceEnv,
       },
+    },
+    {
+      command: "npx next start --hostname 127.0.0.1 --port 3320",
+      url: "http://127.0.0.1:3320",
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: homepageHostEnv({
+        CONTEXT_LAB_ENABLED: "0",
+        CONTEXT_LAB_RUNTIME: undefined,
+        CONTEXT_LAB_CONTENT_SOURCE: undefined,
+      }),
+    },
+    {
+      command: "npx next start --hostname 127.0.0.1 --port 3322",
+      url: "http://127.0.0.1:3322",
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: homepageHostEnv({
+        CONTEXT_LAB_ENABLED: "1",
+        CONTEXT_LAB_CONTENT_SOURCE: "static",
+        CONTEXT_LAB_RUNTIME: undefined,
+      }),
     },
   ];
 

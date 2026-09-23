@@ -156,7 +156,9 @@ describe("Context Lab import boundary", () => {
     expect(home).not.toContain("loadContextLabContent");
     expect(projection).toContain("isContextLabEnabled");
     expect(projection).toContain("resolveContextLabContentSourceMode");
+    expect(projection).toContain("resolveContextLabRuntimeMode");
     expect(projection).not.toContain("loadContextLabContent");
     expect(projection).not.toContain("loadActiveRelease");
+    expect(projection).not.toContain("createContextLabRuntime");
   });
 });

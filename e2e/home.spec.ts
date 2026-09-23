@@ -108,3 +108,40 @@ test("old free-play routes remain directly reachable", async ({ page }) => {
   const snake = await page.goto("/play/snake");
   expect(snake?.ok()).toBeTruthy();
 });
+
+test.describe("flag-off Homepage host", () => {
+  test.use({ baseURL: "http://127.0.0.1:3320" });
+
+  test("shows preparing and does not link Context Lab", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    await expect(page.getByText("场景学习正在准备中")).toBeVisible();
+    await expect(page.getByRole("link", { name: "进入场景" })).toHaveCount(0);
+    const lab = await page.goto("/play/context-lab");
+    expect(lab?.status()).toBe(404);
+  });
+});
+
+test.describe("enabled Homepage host with unset runtime", () => {
+  test.use({ baseURL: "http://127.0.0.1:3322" });
+
+  test("shows preparing", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    await expect(page.getByText("场景学习正在准备中")).toBeVisible();
+    await expect(page.getByRole("link", { name: "进入场景" })).toHaveCount(0);
+  });
+});
+
+test.describe("active-release Homepage host", () => {
+  test.use({ baseURL: "http://127.0.0.1:3319" });
+
+  test("stays conservative and does not show a startable scene", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    await expect(page.getByText("场景学习正在准备中")).toBeVisible();
+    await expect(page.getByRole("link", { name: "进入场景" })).toHaveCount(0);
+  });
+});

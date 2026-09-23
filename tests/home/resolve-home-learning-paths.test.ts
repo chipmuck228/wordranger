@@ -6,6 +6,9 @@ import {
   resolveSceneLearningAvailability,
 } from "@/server/home/resolve-home-learning-paths";
 
+const preparing = { status: "preparing" as const };
+const ready = { status: "ready" as const, href: CONTEXT_LAB_HREF };
+
 describe("Homepage learning-path projection", () => {
   it("keeps Daily Training as the only primary entry", () => {
     expect(resolveHomeLearningPaths({}).primaryHref).toBe(DAILY_TRAINING_HREF);
@@ -13,44 +16,107 @@ describe("Homepage learning-path projection", () => {
   });
 
   it("keeps scene learning unclickable when Context Lab is off", () => {
-    expect(resolveSceneLearningAvailability({})).toEqual({ status: "preparing" });
+    expect(resolveSceneLearningAvailability({})).toEqual(preparing);
     expect(
       resolveSceneLearningAvailability({ CONTEXT_LAB_ENABLED: "true" }),
-    ).toEqual({ status: "preparing" });
+    ).toEqual(preparing);
     expect(
-      resolveSceneLearningAvailability({
-        CONTEXT_LAB_ENABLED: "1",
-        CONTEXT_LAB_CONTENT_SOURCE: "active-release",
-      }),
-    ).toEqual({ status: "preparing" });
+      resolveSceneLearningAvailability({ CONTEXT_LAB_ENABLED: "0" }),
+    ).toEqual(preparing);
   });
 
-  it("exposes Context Lab only for an explicit static source", () => {
+  it("fail-closes when the lab is enabled but runtime is unset", () => {
     expect(
       resolveSceneLearningAvailability({
         CONTEXT_LAB_ENABLED: "1",
       }),
-    ).toEqual({ status: "ready", href: CONTEXT_LAB_HREF });
+    ).toEqual(preparing);
     expect(
       resolveSceneLearningAvailability({
         CONTEXT_LAB_ENABLED: "1",
         CONTEXT_LAB_CONTENT_SOURCE: "static",
       }),
-    ).toEqual({ status: "ready", href: CONTEXT_LAB_HREF });
+    ).toEqual(preparing);
   });
 
-  it("fail-closes invalid or unverifiable content sources", () => {
+  it("fail-closes an invalid runtime", () => {
     expect(
       resolveSceneLearningAvailability({
         CONTEXT_LAB_ENABLED: "1",
-        CONTEXT_LAB_CONTENT_SOURCE: "latest",
+        CONTEXT_LAB_CONTENT_SOURCE: "static",
+        CONTEXT_LAB_RUNTIME: "maps",
       }),
-    ).toEqual({ status: "preparing" });
+    ).toEqual(preparing);
+  });
+
+  it("marks local static + memory as ready", () => {
+    expect(
+      resolveSceneLearningAvailability({
+        CONTEXT_LAB_ENABLED: "1",
+        CONTEXT_LAB_RUNTIME: "memory",
+      }),
+    ).toEqual(ready);
+    expect(
+      resolveSceneLearningAvailability({
+        CONTEXT_LAB_ENABLED: "1",
+        CONTEXT_LAB_CONTENT_SOURCE: "static",
+        CONTEXT_LAB_RUNTIME: "memory",
+      }),
+    ).toEqual(ready);
+  });
+
+  it("rejects memory on Vercel production and preview", () => {
+    expect(
+      resolveSceneLearningAvailability({
+        CONTEXT_LAB_ENABLED: "1",
+        CONTEXT_LAB_CONTENT_SOURCE: "static",
+        CONTEXT_LAB_RUNTIME: "memory",
+        VERCEL_ENV: "production",
+      }),
+    ).toEqual(preparing);
+    expect(
+      resolveSceneLearningAvailability({
+        CONTEXT_LAB_ENABLED: "1",
+        CONTEXT_LAB_CONTENT_SOURCE: "static",
+        CONTEXT_LAB_RUNTIME: "memory",
+        VERCEL_ENV: "preview",
+      }),
+    ).toEqual(preparing);
+  });
+
+  it("does not guess active-release or supabase startability", () => {
     expect(
       resolveSceneLearningAvailability({
         CONTEXT_LAB_ENABLED: "1",
         CONTEXT_LAB_CONTENT_SOURCE: "active-release",
+        CONTEXT_LAB_RUNTIME: "memory",
       }),
-    ).toEqual({ status: "preparing" });
+    ).toEqual(preparing);
+    expect(
+      resolveSceneLearningAvailability({
+        CONTEXT_LAB_ENABLED: "1",
+        CONTEXT_LAB_CONTENT_SOURCE: "static",
+        CONTEXT_LAB_RUNTIME: "supabase",
+      }),
+    ).toEqual(preparing);
+    expect(
+      resolveSceneLearningAvailability({
+        CONTEXT_LAB_ENABLED: "1",
+        CONTEXT_LAB_CONTENT_SOURCE: "static",
+        CONTEXT_LAB_RUNTIME: "supabase",
+        NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      }),
+    ).toEqual(preparing);
+  });
+
+  it("fail-closes invalid content sources even with a legal runtime", () => {
+    expect(
+      resolveSceneLearningAvailability({
+        CONTEXT_LAB_ENABLED: "1",
+        CONTEXT_LAB_CONTENT_SOURCE: "latest",
+        CONTEXT_LAB_RUNTIME: "memory",
+      }),
+    ).toEqual(preparing);
   });
 });

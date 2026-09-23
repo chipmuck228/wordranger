@@ -1,5 +1,6 @@
 import { isContextLabEnabled } from "@/server/context-lab/is-context-lab-enabled";
 import { resolveContextLabContentSourceMode } from "@/server/context-lab/context-lab-content-source";
+import { resolveContextLabRuntimeMode } from "@/server/context-lab/context-lab-runtime-mode";
 
 export const CONTEXT_LAB_HREF = "/play/context-lab" as const;
 export const DAILY_TRAINING_HREF = "/train" as const;
@@ -17,9 +18,9 @@ export interface HomeLearningPaths {
  * Homepage-only projection. It does not load releases, reviews,
  * promotions, or run state.
  *
- * Active-release availability cannot be confirmed without reading the
- * pointer. Homepage therefore fail-closes that mode instead of guessing
- * or falling back to static.
+ * Ready is only the combination Homepage can confirm without guessing:
+ * enabled + static content + a locally legal memory runtime. Other
+ * combinations, including supabase and active-release, stay preparing.
  */
 export function resolveHomeLearningPaths(
   env: Record<string, string | undefined> = process.env,
@@ -38,8 +39,9 @@ export function resolveSceneLearningAvailability(
   }
 
   try {
-    const mode = resolveContextLabContentSourceMode(env);
-    if (mode === "static") {
+    const source = resolveContextLabContentSourceMode(env);
+    const runtime = resolveContextLabRuntimeMode(env);
+    if (source === "static" && runtime === "memory") {
       return { status: "ready", href: CONTEXT_LAB_HREF };
     }
     return { status: "preparing" };
