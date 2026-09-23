@@ -17,6 +17,7 @@ import {
   markDailyTrainingRoundComplete,
 } from "@/components/training/training-session-storage";
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
+import { DIRECT_PRACTICE_PRESENTATION_TYPE } from "@/server/auth/v1-user";
 import { DAILY_TRAINING_USER_MESSAGES } from "@/server/training/daily-training-errors";
 import type {
   DailyTrainingPublicSession,
@@ -68,6 +69,13 @@ function tickMsFromSearch(): number {
   return Math.min(400, Math.max(40, parsed));
 }
 
+function presentDailyTrainingRenderer(type: string | null | undefined): string | null {
+  if (!type) {
+    return null;
+  }
+  return DIRECT_PRACTICE_PRESENTATION_TYPE;
+}
+
 function subscribeTickMs(onStoreChange: () => void): () => void {
   window.addEventListener("popstate", onStoreChange);
   return () => window.removeEventListener("popstate", onStoreChange);
@@ -117,7 +125,11 @@ export function DailyTrainingPlayClient() {
     }
     if (result.feedback) {
       setFeedback(result.feedback);
-      setRendererGameType(result.rendererGameType ?? result.progress.rendererGameType);
+      setRendererGameType(
+        presentDailyTrainingRenderer(
+          result.rendererGameType ?? result.progress.rendererGameType,
+        ),
+      );
       if (result.task) {
         setTask(result.task);
       }
@@ -126,7 +138,11 @@ export function DailyTrainingPlayClient() {
     }
     if (result.task) {
       setTask(result.task);
-      setRendererGameType(result.rendererGameType ?? result.progress.rendererGameType);
+      setRendererGameType(
+        presentDailyTrainingRenderer(
+          result.rendererGameType ?? result.progress.rendererGameType,
+        ),
+      );
       startedAt.current = performance.now();
       setScreen("playing");
       return;
@@ -209,7 +225,7 @@ export function DailyTrainingPlayClient() {
     sessionStorage.setItem(DAILY_TRAINING_SESSION_KEY, result.session.sessionId);
     setSession(result.session);
     setTask(result.task);
-    setRendererGameType(result.rendererGameType);
+    setRendererGameType(presentDailyTrainingRenderer(result.rendererGameType));
     setFeedback(null);
     setSelectedOptionId(null);
     setRecapWords([]);
@@ -302,7 +318,7 @@ export function DailyTrainingPlayClient() {
       return;
     }
     setTask(result.task);
-    setRendererGameType(result.rendererGameType);
+    setRendererGameType(presentDailyTrainingRenderer(result.rendererGameType));
     setFeedback(null);
     setSelectedOptionId(null);
     setScreen("playing");

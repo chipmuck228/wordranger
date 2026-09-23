@@ -5,7 +5,10 @@ import {
   RANGER_TRIAL_GAME_ID,
   WORD_BUBBLE_GAME_TYPE,
 } from "@/server/auth/v1-user";
-import { selectDailyTrainingRenderer } from "@/server/training/daily-training-renderer-policy";
+import {
+  dailyTrainingPresentationType,
+  selectDailyTrainingRenderer,
+} from "@/server/training/daily-training-renderer-policy";
 import {
   confusableChoiceTask,
   meaningChoiceTask,
@@ -38,6 +41,16 @@ describe("Daily Training renderer policy", () => {
     expect(selectDailyTrainingRenderer({ task: confusableChoiceTask() }).gameType).not.toBe(
       "MATCHING",
     );
+  });
+
+  it("presents stored game items as DIRECT_PRACTICE", () => {
+    expect(dailyTrainingPresentationType(WORD_BUBBLE_GAME_TYPE)).toBe(
+      DIRECT_PRACTICE_PRESENTATION_TYPE,
+    );
+    expect(dailyTrainingPresentationType(DIRECT_PRACTICE_PRESENTATION_TYPE)).toBe(
+      DIRECT_PRACTICE_PRESENTATION_TYPE,
+    );
+    expect(dailyTrainingPresentationType(null)).toBeNull();
   });
 
   it("ignores recent-renderer streak", () => {

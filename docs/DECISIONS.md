@@ -496,7 +496,7 @@ Free-practice `/play/ranger-trial` may have a distinct light, mobile-first shell
 
 **Status:** accepted
 
-Student-facing `/train` is 自由练习: a scheduled small set of direct questions. It is not free word selection and does not bypass Scheduler, TaskEvaluator, or Evidence. New Daily Training items use presentation identity `DIRECT_PRACTICE` and reuse Ranger Trial task contracts. `Evidence.gameId` stays `RANGER_TRIAL`. `DIRECT_PRACTICE` is not a fifth learning renderer. In-progress sessions that already stored Bubble / Matching / Snake keep that renderer until the current item completes; the next generated item uses direct presentation. Homepage does not link Context Lab. Free-play `/play/*` routes stay reachable by URL.
+Student-facing `/train` is 自由练习: a scheduled small set of direct questions. It is not free word selection and does not bypass Scheduler, TaskEvaluator, or Evidence. New Daily Training items use presentation identity `DIRECT_PRACTICE` and reuse Ranger Trial task contracts. `Evidence.gameId` stays `RANGER_TRIAL`. `DIRECT_PRACTICE` is not a fifth learning renderer. In-progress sessions that already stored Bubble / Matching / Snake keep that stored gameId for Evidence; student-facing `/train` presents the current item as direct practice. The next generated item uses direct presentation. Homepage does not link Context Lab. Free-play `/play/*` routes stay reachable by URL.
 
 ## Additional notes
 

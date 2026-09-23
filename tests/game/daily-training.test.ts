@@ -126,7 +126,7 @@ describe("Daily Training controller", () => {
     });
     const resumed = await fresh.controller.resume(started.session.sessionId);
     expect(resumed.task?.id).toBe(started.task.id);
-    expect(resumed.rendererGameType).toBe(WORD_BUBBLE_GAME_TYPE);
+    expect(resumed.rendererGameType).toBe(DIRECT_PRACTICE_PRESENTATION_TYPE);
     expect(fresh.learning.listEvidenceForUser(fresh.userId)).toHaveLength(0);
     await fresh.controller.submit({
       sessionId: started.session.sessionId,
@@ -248,7 +248,7 @@ describe("Daily Training controller", () => {
     expect(started.rendererGameType).toBe(MATCHING_GAME_TYPE);
     const resumed = await world.createController().resume(started.session.sessionId);
     expect(resumed.task?.id).toBe(started.task.id);
-    expect(resumed.rendererGameType).toBe(MATCHING_GAME_TYPE);
+    expect(resumed.rendererGameType).toBe(DIRECT_PRACTICE_PRESENTATION_TYPE);
     expect(world.learning.listEvidenceForUser(world.userId)).toHaveLength(0);
   });
 
