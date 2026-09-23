@@ -5,65 +5,69 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomePage } from "@/components/home/home-page";
-import { CONTEXT_LAB_HREF, DAILY_TRAINING_HREF } from "@/server/home/resolve-home-learning-paths";
+import {
+  DAILY_TRAINING_LAST_COMPLETED_SESSION_KEY,
+  DAILY_TRAINING_SESSION_KEY,
+} from "@/components/training/training-session-storage";
+import { DAILY_TRAINING_HREF } from "@/server/home/resolve-home-learning-paths";
 
 afterEach(() => {
   cleanup();
+  sessionStorage.clear();
 });
 
 const homeSource = [
   readFileSync("src/app/page.tsx", "utf8"),
   readFileSync("src/components/home/home-page.tsx", "utf8"),
-  readFileSync("src/server/home/resolve-home-learning-paths.ts", "utf8"),
+  readFileSync("src/components/home/home-practice-entry.tsx", "utf8"),
 ].join("\n");
 
-function renderReady() {
+function renderHome() {
   return render(
     <HomePage
       debugTools={[]}
       paths={{
         primaryHref: DAILY_TRAINING_HREF,
-        scene: { status: "ready", href: CONTEXT_LAB_HREF },
-      }}
-    />,
-  );
-}
-
-function renderPreparing() {
-  return render(
-    <HomePage
-      debugTools={[]}
-      paths={{
-        primaryHref: DAILY_TRAINING_HREF,
-        scene: { status: "preparing" },
       }}
     />,
   );
 }
 
 describe("Homepage learning-path presentation", () => {
-  it("shows the product claim, both learning paths, and three steps", () => {
-    renderReady();
+  it("shows the product claim, free practice, and three steps", () => {
+    renderHome();
     expect(
       screen.getByRole("heading", { name: "让学过的单词，在需要时想得起来" }),
     ).toBeTruthy();
     expect(screen.getByRole("heading", { name: "自由练习" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "场景学习" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "学习会怎样进行？" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "先自己想一想" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "找到合适的学习方式" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "再试着回忆一次" })).toBeTruthy();
-    expect(screen.getByText(/在场景学习中，已经会的词可以继续前进/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        "随时开始一小组单词练习。系统会安排适合当前练习的单词，你只需要直接选择或输入答案。",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("单词由系统根据当前学习情况安排。")).toBeTruthy();
   });
 
-  it("keeps Daily Training as the primary entry", () => {
-    renderReady();
-    const primary = screen.getByRole("link", { name: "继续今天的学习" });
+  it("uses 开始自由练习 as the primary entry to /train", () => {
+    renderHome();
+    const primary = screen.getByRole("link", { name: "开始自由练习" });
     expect(primary.getAttribute("href")).toBe("/train");
+    expect(screen.queryByRole("link", { name: "继续今天的学习" })).toBeNull();
+  });
+
+  it("shows 继续自由练习 from the existing incomplete session key", () => {
+    sessionStorage.setItem(DAILY_TRAINING_SESSION_KEY, "sess-open");
+    sessionStorage.setItem(DAILY_TRAINING_LAST_COMPLETED_SESSION_KEY, "sess-old");
+    renderHome();
+    expect(screen.getByRole("link", { name: "继续自由练习" }).getAttribute("href")).toBe(
+      "/train",
+    );
   });
 
   it("does not show old game menu items or Debug tools", () => {
-    renderReady();
+    renderHome();
     expect(screen.queryByRole("link", { name: "连连看" })).toBeNull();
     expect(screen.queryByRole("link", { name: "贪食蛇" })).toBeNull();
     expect(screen.queryByRole("link", { name: "单词泡泡" })).toBeNull();
@@ -73,27 +77,21 @@ describe("Homepage learning-path presentation", () => {
   });
 
   it("does not invent a free-practice selector", () => {
-    renderReady();
+    renderHome();
     expect(screen.queryByRole("link", { name: "选择练习方式" })).toBeNull();
     expect(screen.queryByRole("button", { name: "选择练习方式" })).toBeNull();
   });
 
-  it("links to Context Lab only when the projection marks the scene ready", () => {
-    renderReady();
-    const enter = screen.getByRole("link", { name: "进入场景" });
-    expect(enter.getAttribute("href")).toBe("/play/context-lab");
-    expect(screen.queryByText("场景学习正在准备中")).toBeNull();
-  });
-
-  it("shows a conservative preparing state when the scene is not startable", () => {
-    renderPreparing();
+  it("shows scene learning as preparing only", () => {
+    renderHome();
     expect(screen.getByRole("status").textContent).toContain("场景学习正在准备中");
     expect(screen.queryByRole("link", { name: "进入场景" })).toBeNull();
     expect(screen.queryByRole("link", { name: /场景/ })).toBeNull();
+    expect(homeSource).not.toContain("/play/context-lab");
   });
 
   it("does not claim a target count or leak internal Candidate data", () => {
-    renderReady();
+    renderHome();
     expect(screen.queryByText(/9 个/)).toBeNull();
     expect(screen.queryByText(/fingerprint/i)).toBeNull();
     expect(screen.queryByText(/AnswerKey/i)).toBeNull();
@@ -107,16 +105,14 @@ describe("Homepage learning-path presentation", () => {
     expect(homeSource).not.toContain("9 个目标词");
   });
 
-  it("is keyboard reachable for the primary and scene actions", async () => {
+  it("is keyboard reachable for the primary action", async () => {
     const user = userEvent.setup();
-    renderReady();
+    renderHome();
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "设置" }));
     await user.tab();
     expect(document.activeElement).toBe(
-      screen.getByRole("link", { name: "继续今天的学习" }),
+      screen.getByRole("link", { name: "开始自由练习" }),
     );
-    await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole("link", { name: "进入场景" }));
   });
 });

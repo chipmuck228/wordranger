@@ -10,8 +10,7 @@ export function TrainingComplete(props: {
   return (
     <div className="flex flex-col gap-8 text-center">
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">这一轮完成</h1>
-        <p className="text-muted-foreground text-sm">今天又稳了一点。</p>
+        <h1 className="text-3xl font-semibold tracking-tight">本组练习完成</h1>
       </div>
       <div className="space-y-1 text-lg">
         <p>完成 {props.stats.attempted} 个</p>
@@ -29,7 +28,7 @@ export function TrainingComplete(props: {
           className="h-12 w-full text-base"
           onClick={props.onPlayAgain}
         >
-          再来一轮
+          再练一组
         </Button>
         <Button
           nativeButton={false}

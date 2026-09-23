@@ -20,12 +20,11 @@ function serverSnapshot(): number {
 
 export function HomeDailyStatus() {
   const rounds = useSyncExternalStore(subscribe, readRounds, serverSnapshot);
-  if (rounds < 1) {
-    return null;
-  }
   return (
     <p className="text-muted-foreground text-sm">
-      今天已经完成 {rounds} 轮训练
+      {rounds < 1
+        ? "今天还没有完成练习"
+        : `今天已完成 ${rounds} 组练习`}
     </p>
   );
 }

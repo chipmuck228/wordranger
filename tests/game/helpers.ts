@@ -12,6 +12,9 @@ import { createInMemoryWordBubbleRuntime } from "@/server/runtime/create-in-memo
 import { createInMemoryMatchingRuntime } from "@/server/runtime/create-in-memory-matching-runtime";
 import { createInMemorySnakeRuntime } from "@/server/runtime/create-in-memory-snake-runtime";
 import { createInMemoryDailyTrainingRuntime } from "@/server/runtime/create-in-memory-daily-training-runtime";
+import type { InMemoryLearningRepository } from "@/server/learning/in-memory-learning-repository";
+import type { InMemoryLearningTaskRepository } from "@/server/tasks/in-memory-learning-task-repository";
+import type { InMemoryDailyTrainingSessionStore } from "@/server/training/in-memory-daily-training-session-store";
 import type { InMemoryGameSessionStore } from "@/server/game-session/in-memory-game-session-store";
 import type { selectRendererForTask } from "@/server/training/renderer-selector";
 import { LexemeRelationType } from "@/domain/vocabulary/lexeme-relation";
@@ -103,6 +106,9 @@ export function createDailyTrainingWorld(
   options?: {
     requestedNeedCount?: number;
     selectRenderer?: typeof selectRendererForTask;
+    learning?: InMemoryLearningRepository;
+    tasks?: InMemoryLearningTaskRepository;
+    sessions?: InMemoryDailyTrainingSessionStore;
   },
 ) {
   const runtime = createInMemoryDailyTrainingRuntime({
@@ -113,6 +119,9 @@ export function createDailyTrainingWorld(
     createEvidenceId: sequentialIdFactory("tev"),
     requestedNeedCount: options?.requestedNeedCount ?? 8,
     selectRenderer: options?.selectRenderer,
+    learning: options?.learning,
+    tasks: options?.tasks,
+    sessions: options?.sessions,
   });
   return {
     vocabulary: runtime.vocabulary,

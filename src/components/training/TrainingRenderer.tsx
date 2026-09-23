@@ -7,11 +7,13 @@ import { WordBubble } from "@/components/game/word-bubble/WordBubble";
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
 import type { StudentActionIntent } from "@/server/game-session/learning-game-session.types";
 import {
+  DIRECT_PRACTICE_PRESENTATION_TYPE,
   MATCHING_GAME_TYPE,
   RANGER_TRIAL_GAME_TYPE,
   SNAKE_GAME_TYPE,
   WORD_BUBBLE_GAME_TYPE,
 } from "@/server/auth/v1-user";
+import { DirectPracticeRenderer } from "./DirectPracticeRenderer";
 import { TRAINING_RENDERER_COPY } from "./renderer-copy";
 
 export function TrainingRenderer(props: {
@@ -35,6 +37,13 @@ export function TrainingRenderer(props: {
       ) : null}
       {instruction ? (
         <p className="text-muted-foreground text-center text-sm">{instruction}</p>
+      ) : null}
+      {props.rendererGameType === DIRECT_PRACTICE_PRESENTATION_TYPE ? (
+        <DirectPracticeRenderer
+          task={props.task}
+          disabled={props.disabled}
+          onAction={props.onAction}
+        />
       ) : null}
       {props.rendererGameType === RANGER_TRIAL_GAME_TYPE ? (
         <RangerTrial

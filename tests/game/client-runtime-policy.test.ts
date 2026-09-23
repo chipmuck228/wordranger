@@ -28,7 +28,7 @@ describe("R6 shared client runtime error policy", () => {
     expect(text).toContain("withClientGameTimeout");
     expect(text).toContain("GameSessionErrorPanel");
     expect(text).toContain("DAILY_TRAINING_USER_MESSAGES.NETWORK_ERROR");
-    expect(text).toContain("正在准备今天的训练…");
+    expect(text).toContain("正在准备练习…");
     expect(text).toContain("onRetry");
     expect(text).not.toContain("TaskEvaluator");
     expect(text).not.toContain("LearningRepository");

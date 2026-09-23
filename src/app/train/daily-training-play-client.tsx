@@ -5,7 +5,10 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { TaskFeedback } from "@/components/game/ranger-trial/TaskFeedback";
 import { GameSessionErrorPanel } from "@/components/game/shared/GameSessionErrorPanel";
-import { withClientGameTimeout } from "@/components/game/shared/bounded-game-operation";
+import {
+  withClientGameTimeout,
+  type ClientGameTimeoutResult,
+} from "@/components/game/shared/bounded-game-operation";
 import { SNAKE_LOGICAL_TICK_MS } from "@/components/game/snake/snake-engine";
 import { TrainingComplete } from "@/components/training/TrainingComplete";
 import { TrainingRenderer } from "@/components/training/TrainingRenderer";
@@ -40,8 +43,18 @@ type Screen =
   | "complete"
   | "error";
 
+async function boundedTrainingAction<T>(
+  operation: Promise<T>,
+): Promise<ClientGameTimeoutResult<T>> {
+  try {
+    return await withClientGameTimeout(operation);
+  } catch {
+    return { timedOut: true };
+  }
+}
+
 const LOADING_COPY: Partial<Record<Screen, string>> = {
-  loading: "正在准备今天的训练…",
+  loading: "正在准备练习…",
   submitting: "正在提交…",
   continuing: "下一题",
 };
@@ -120,7 +133,7 @@ export function DailyTrainingPlayClient() {
     setErrorSource("play");
     setError(null);
     setScreen("loading");
-    const outcome = await withClientGameTimeout(resumeDailyTrainingSession(sessionId));
+    const outcome = await boundedTrainingAction(resumeDailyTrainingSession(sessionId));
     if (id !== requestId.current) {
       return;
     }
@@ -169,7 +182,7 @@ export function DailyTrainingPlayClient() {
     setErrorSource("start");
     setError(null);
     setScreen("loading");
-    const outcome = await withClientGameTimeout(startDailyTrainingSession());
+    const outcome = await boundedTrainingAction(startDailyTrainingSession());
     if (id !== requestId.current) {
       return;
     }
@@ -206,7 +219,7 @@ export function DailyTrainingPlayClient() {
       setSelectedOptionId(intent.optionId);
     }
     setScreen("submitting");
-    const outcome = await withClientGameTimeout(
+    const outcome = await boundedTrainingAction(
       submitDailyTrainingAction({
         sessionId: session.sessionId,
         taskId: task.id,
@@ -242,7 +255,7 @@ export function DailyTrainingPlayClient() {
     requestId.current = id;
     setErrorSource("play");
     setScreen("continuing");
-    const outcome = await withClientGameTimeout(
+    const outcome = await boundedTrainingAction(
       continueDailyTrainingSession(session.sessionId),
     );
     if (id !== requestId.current) {
@@ -313,9 +326,9 @@ export function DailyTrainingPlayClient() {
         <div className="flex flex-col gap-8 text-center">
           <div className="space-y-3">
             <p className="text-muted-foreground text-sm">WordRanger</p>
-            <h1 className="text-4xl font-semibold tracking-tight">今日训练</h1>
+            <h1 className="text-4xl font-semibold tracking-tight">自由练习</h1>
             <p className="text-muted-foreground text-base leading-relaxed">
-              系统会安排今天最值得练的单词。
+              单词由系统根据当前学习情况安排。
             </p>
           </div>
           <Button
@@ -323,7 +336,7 @@ export function DailyTrainingPlayClient() {
             className="h-12 w-full text-base"
             onClick={() => void start()}
           >
-            开始
+            开始练习
           </Button>
         </div>
       ) : null}
@@ -367,6 +380,7 @@ export function DailyTrainingPlayClient() {
             feedback={feedback}
             onContinue={() => void onContinue()}
             disabled={busy}
+            continueLabel="下一题"
           />
         </div>
       ) : null}

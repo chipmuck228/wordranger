@@ -4,6 +4,20 @@ export const DAILY_TRAINING_COMPLETED_ROUNDS_KEY =
 export const DAILY_TRAINING_LAST_COMPLETED_SESSION_KEY =
   "wordranger.daily-training.lastCompletedSessionId";
 
+export function hasIncompleteDailyTrainingSession(): boolean {
+  if (typeof sessionStorage === "undefined") {
+    return false;
+  }
+  const sessionId = sessionStorage.getItem(DAILY_TRAINING_SESSION_KEY);
+  if (!sessionId) {
+    return false;
+  }
+  return (
+    sessionStorage.getItem(DAILY_TRAINING_LAST_COMPLETED_SESSION_KEY) !==
+    sessionId
+  );
+}
+
 export function markDailyTrainingRoundComplete(sessionId: string): void {
   if (typeof sessionStorage === "undefined") {
     return;

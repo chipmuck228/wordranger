@@ -49,12 +49,15 @@ import {
   rendererByGameType,
   type TrainingRendererDefinition,
 } from "./renderer-registry";
+import { selectDailyTrainingRenderer } from "./daily-training-renderer-policy";
 import { selectRendererForTask } from "./renderer-selector";
 
 /**
  * Product orchestrator for one Daily Training round.
- * Plans once, generates one task at a time, selects a renderer after generation,
- * and submits through `submitTaskAction` with the actual renderer gameId.
+ * Plans once, generates one task at a time, applies the Daily Training
+ * direct-practice presentation policy, and submits through `submitTaskAction`
+ * with Evidence.gameId RANGER_TRIAL for new items. In-progress items that
+ * already store a game renderer keep that renderer until the item completes.
  * Start retry after a client timeout may still create a second session
  * (inherited limitation; not redesigned in Phase 09).
  */
@@ -180,7 +183,7 @@ export class DailyTrainingController {
       deps.createTaskRandom ??
       ((sessionId, needId) =>
         createTaskRandom(DAILY_TRAINING_ORCHESTRATION_TYPE, sessionId, needId));
-    this.selectRenderer = deps.selectRenderer ?? selectRendererForTask;
+    this.selectRenderer = deps.selectRenderer ?? selectDailyTrainingRenderer;
   }
 
   private async bounded<T>(operation: Promise<T>): Promise<T> {

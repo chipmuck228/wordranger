@@ -67,8 +67,10 @@ describe("G5 renderer architecture boundary", () => {
     const files = [
       join(process.cwd(), "src/app/train/daily-training-play-client.tsx"),
       join(process.cwd(), "src/components/training/TrainingRenderer.tsx"),
+      join(process.cwd(), "src/components/training/DirectPracticeRenderer.tsx"),
       join(process.cwd(), "src/components/training/TrainingComplete.tsx"),
       join(process.cwd(), "src/components/training/home-daily-status.tsx"),
+      join(process.cwd(), "src/components/home/home-practice-entry.tsx"),
     ];
     const forbidden = [
       "TaskEvaluator",
@@ -87,13 +89,15 @@ describe("G5 renderer architecture boundary", () => {
   });
 
   it("renderer selector inspects PublicLearningTask only", () => {
-    const text = readFileSync(
+    for (const file of [
       join(process.cwd(), "src/server/training/renderer-selector.ts"),
-      "utf8",
-    );
-    expect(text).not.toMatch(/AnswerKey/);
-    expect(text).not.toMatch(/correctOptionIds/);
-    expect(text).not.toMatch(/expectedAnswer/);
-    expect(text).not.toMatch(/Math\.random/);
+      join(process.cwd(), "src/server/training/daily-training-renderer-policy.ts"),
+    ]) {
+      const text = readFileSync(file, "utf8");
+      expect(text).not.toMatch(/AnswerKey/);
+      expect(text).not.toMatch(/correctOptionIds/);
+      expect(text).not.toMatch(/expectedAnswer/);
+      expect(text).not.toMatch(/Math\.random/);
+    }
   });
 });

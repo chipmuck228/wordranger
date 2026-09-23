@@ -1,6 +1,6 @@
 # WordRanger Architecture
 
-WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 09 adds **Daily Training** (今日训练) as the product orchestration layer: one student-visible round, one `LearningSessionPlan`, lazy task generation, and a renderer selected after the public task exists. Ranger Trial, Word Bubble, Matching, and Snake remain interchangeable renderers and secondary free-play routes. There is still no student login.
+WordRanger is a game-based vocabulary learning platform for junior-high students. Phase 09 adds **Daily Training** (`/train`, student-visible as 自由练习) as the product orchestration layer: one student-visible round, one `LearningSessionPlan`, lazy task generation, and a **direct** presentation after the public task exists. Ranger Trial, Word Bubble, Matching, and Snake remain interchangeable renderers and secondary free-play routes. There is still no student login.
 
 ## Formal layers
 
@@ -100,8 +100,8 @@ Responsibilities:
 - **Task Assignment** — which user/session owns the generated task
 - **Game Renderer** — how the public task is presented; emits only student action intent. Ranger Trial: CHOICE + TEXT_INPUT. Word Bubble: CHOICE single-tap. Matching: CHOICE via two ephemeral UI gestures. Snake: real-time ticks stay renderer-local; only option collision is a semantic event. Renderer-local interaction state is ephemeral and is not learning truth.
 - **Game Session Controller** — generic `LearningGameSessionController` plans once, filters playable needs after scheduling, generates one assigned task at a time, calls `submitTaskAction`, returns a safe feedback DTO. Free-play routes still use this path.
-- **Daily Training Controller** — product orchestration above any one `LearningGameDefinition`. One `LearningSessionPlan` per round, lazy one-task generation, renderer selected from `PublicLearningTask` compatibility, `submitTaskAction` with the **actual renderer** `gameId`. Not a fifth renderer.
-- **Renderer Selector** — deterministic application policy. Not Scheduler policy and not Core.
+- **Daily Training Controller** — product orchestration above any one `LearningGameDefinition`. One `LearningSessionPlan` per round, lazy one-task generation, Daily Training renderer policy (`DIRECT_PRACTICE` presentation), `submitTaskAction` with Evidence.gameId `RANGER_TRIAL` for new items. Not a fifth renderer.
+- **Renderer Selector** — deterministic application policy for the generic game registry. Daily Training uses a separate direct-practice policy and does not ask this selector to pick Bubble / Matching / Snake. Not Scheduler policy and not Core.
 - **Submission Service** (`submitTaskAction`) — loads the server-side answer key, verifies ownership, then grades
 - **TaskEvaluator** — what the student action means
 - **LearningEvidence** — the immutable fact
@@ -224,7 +224,7 @@ browser
   → Learning Core
 ```
 
-Daily Training is where WordRanger changes from a collection of games to a learning engine that uses interchangeable games. Free-play `/play/ranger-trial`, `/play/word-bubble`, `/play/matching`, and `/play/snake` remain. Both paths write the same `LearningEvidence` / `StudentLexemeModel`. Daily Training rows in `game_sessions` use `game_type = DAILY_TRAINING` as **orchestration identity only**. `Evidence.gameId` is still `RANGER_TRIAL`, `WORD_BUBBLE`, `MATCHING`, or `SNAKE`.
+Daily Training is where WordRanger changes from a collection of games to a learning engine that uses interchangeable games. Student-facing `/train` is 自由练习: Scheduler still plans the words; the student only answers directly. “自由练习” is not free word selection. Free-play `/play/ranger-trial`, `/play/word-bubble`, `/play/matching`, and `/play/snake` remain reachable by URL and are not Homepage or `/train` entries. Both paths write the same `LearningEvidence` / `StudentLexemeModel`. Daily Training rows in `game_sessions` use `game_type = DAILY_TRAINING` as **orchestration identity only**. New `/train` items present as `DIRECT_PRACTICE` and write `Evidence.gameId = RANGER_TRIAL`. In-progress items that already stored Bubble / Matching / Snake keep that renderer until the item completes. `DIRECT_PRACTICE` is presentation identity, not a fifth Evidence gameId. Context Lab is not wired from Homepage.
 
 Student-facing `/train` and the four free-play routes share `SupabaseLearningRepository`, `SupabaseLearningStateQueryRepository`, `SupabaseLearningTaskRepository`, bundled vocabulary, and `game_sessions`. Session writes are `INSERT` on create and revision CAS on update. There is no production in-memory Map for learning state, assigned tasks, or session orchestration.
 
@@ -234,5 +234,5 @@ Debug Labs and unit tests may still use in-memory repositories. Explicit `RANGER
 
 There is no auth; student pages use `V1_PLACEHOLDER_USER_ID` (a UUID placeholder). Auth/RLS is future work. Server actions must not accept `userId` from the browser.
 
-The home primary CTA is 继续今天的学习 → `/train`. Free-play game routes remain reachable by URL but are not first-level home entries. See `docs/DAILY_TRAINING_EXPERIENCE.md`.
+The home primary CTA is 开始自由练习 → `/train`. Scene learning stays 场景学习正在准备中. Free-play game routes remain reachable by URL but are not first-level home entries. See `docs/DAILY_TRAINING_EXPERIENCE.md`.
 
