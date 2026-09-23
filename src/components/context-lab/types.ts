@@ -167,6 +167,12 @@ export const CONTEXT_LAB_BUILD_QUEUE_COMPLETE_MESSAGE =
 export const CONTEXT_LAB_BUILD_NEXT_LABEL = "继续下一个";
 export const CONTEXT_LAB_RETURN_TO_SUMMARY_LABEL = "回到这次检查";
 export const CONTEXT_LAB_PROBE_RECORDED_MESSAGE = "这次回答已记录，请继续。";
+export const CONTEXT_LAB_PROBE_UNIT = "个目标词";
+export const CONTEXT_LAB_BUILD_UNIT = "个需要建立的词";
+export const CONTEXT_LAB_STRENGTHEN_UNIT = "个需要强化的词";
+export const CONTEXT_LAB_INLINE_RECORDED_STATUS = "已记录";
+export const CONTEXT_LAB_AUTO_CONTINUE_FAILED_MESSAGE =
+  "已记录，但暂时没能进入下一词，请重试";
 export const CONTEXT_LAB_BOUNDARY_MESSAGE =
   "语境体验已到达现有学习任务的交接点。\n下一阶段会通过 WordRanger 原有提交与证据流程完成这道题。";
 
@@ -177,3 +183,32 @@ export const CONTEXT_LAB_STALE_MESSAGE =
   "这一步已经更新，请重新同步当前进度。";
 export const CONTEXT_LAB_NETWORK_MESSAGE = "暂时没能继续这一步，请再试一次。";
 export const CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE = "这次提交无法完成，请再试一次。";
+
+export function formatContextLabProgress(progress: ContextLabProgress): string {
+  if (progress.current <= 0) {
+    return progress.unit ? `共 ${progress.total} ${progress.unit}` : `共 ${progress.total}`;
+  }
+  return progress.unit
+    ? `第 ${progress.current} / ${progress.total} ${progress.unit}`
+    : `${progress.current} / ${progress.total}`;
+}
+
+export function formatContextLabProgressLabel(progress: ContextLabProgress): string {
+  return `进度 ${formatContextLabProgress(progress)}`;
+}
+
+export function shouldAutoAdvanceRecorded(
+  screen: ContextLabCurrentScreen,
+): boolean {
+  if (screen.kind === "PROBE_TASK_RECORDED") {
+    return true;
+  }
+  if (screen.kind !== "FROZEN_TASK_RECORDED") {
+    return false;
+  }
+  return (
+    screen.continueAvailable === true &&
+    screen.continueLabel === CONTEXT_LAB_BUILD_NEXT_LABEL &&
+    !screen.queueCompleteMessage
+  );
+}

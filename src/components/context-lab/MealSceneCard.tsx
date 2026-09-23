@@ -44,17 +44,35 @@ export function MealSceneCard({
           className="bg-muted/50 rounded-2xl px-3 py-3 text-sm leading-relaxed"
         >
           <p className="text-muted-foreground">{context.supportReveal.note}</p>
-          {context.supportReveal.lexicalForm ? (
-            <p className="mt-2 text-lg font-semibold">{context.supportReveal.lexicalForm}</p>
-          ) : null}
-          {context.supportReveal.meaningGloss ? (
-            <p className="mt-1">{context.supportReveal.meaningGloss}</p>
-          ) : null}
-          {context.supportReveal.phonetic ? (
-            <p className="text-muted-foreground mt-1">{context.supportReveal.phonetic}</p>
-          ) : null}
-          {context.supportReveal.inflectionNote ? (
-            <p className="text-muted-foreground mt-1">{context.supportReveal.inflectionNote}</p>
+          {context.supportReveal.kind === "LEXICAL_FORM" ? (
+            <dl className="mt-2 space-y-2">
+              {context.supportReveal.lexicalForm ? (
+                <div data-support-field="english">
+                  <dt className="text-muted-foreground text-xs">英文</dt>
+                  <dd className="text-lg font-semibold">{context.supportReveal.lexicalForm}</dd>
+                </div>
+              ) : null}
+              {context.supportReveal.meaningGloss ? (
+                <div data-support-field="meaning">
+                  <dt className="text-muted-foreground text-xs">意思</dt>
+                  <dd>{context.supportReveal.meaningGloss}</dd>
+                </div>
+              ) : null}
+              {context.supportReveal.phonetic ? (
+                <div data-support-field="phonetic">
+                  <dt className="text-muted-foreground text-xs">读音</dt>
+                  <dd className="text-muted-foreground">{context.supportReveal.phonetic}</dd>
+                </div>
+              ) : null}
+              {context.supportReveal.inflectionNote ? (
+                <div data-support-field="inflection">
+                  <dt className="text-muted-foreground text-xs">词形</dt>
+                  <dd className="text-muted-foreground">
+                    {context.supportReveal.inflectionNote}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
           ) : null}
           {context.supportReveal.spellingCue ? (
             <p aria-label="拼写提示" className="mt-2 font-mono text-lg tracking-widest">

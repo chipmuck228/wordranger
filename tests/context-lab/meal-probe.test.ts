@@ -154,6 +154,10 @@ describe("Meal cold Probe orchestration", () => {
     const screen = await controller.start();
     assertKind(screen, "PROBE_INTRO");
     expect(screen.context.instruction).toContain("教学还没开始");
+    expect(screen.context.instruction).toContain("辅助物品");
+    expect(screen.context.instruction).toContain("6 个目标词");
+    expect(screen.progress).toEqual({ current: 0, total: 6, unit: "个目标词" });
+    expect(screen.context.instruction).not.toMatch(/entity|frame-only|Probe target/i);
     expect(JSON.stringify(screen)).not.toContain("勺子 → 适合舀汤");
     expect(visibleProbeText(screen)).not.toMatch(/spoon|fork|soup|bowl|\/spuːn\//i);
     for (const field of FORBIDDEN_CLIENT_FIELDS) {
@@ -176,6 +180,8 @@ describe("Meal cold Probe orchestration", () => {
       text: "写出当前物品的英文单词",
     });
     expect(first.progress.current).toBe(1);
+    expect(first.progress.total).toBe(6);
+    expect(first.progress.unit).toBe("个目标词");
     expect(visibleProbeText(first)).not.toMatch(/\bsoup\b|\bbowl\b|\bspoon\b|\bfork\b|\bcup\b|\bplate\b/i);
     expect(collectKeys(first).has("targets")).toBe(false);
     for (const field of FORBIDDEN_CLIENT_FIELDS) {

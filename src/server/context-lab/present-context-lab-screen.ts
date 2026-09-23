@@ -10,11 +10,14 @@ import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
 import type { ResolvedContextSnapshot } from "@/contextual-learning/candidate-v0/domain/types";
 import type { ExperienceRun } from "@/contextual-learning/candidate-v0/execution/types";
 import {
+  CONTEXT_LAB_BUILD_UNIT,
   CONTEXT_LAB_ERROR_CODES,
   CONTEXT_LAB_PROBE_RECORDED_MESSAGE,
+  CONTEXT_LAB_PROBE_UNIT,
   CONTEXT_LAB_RECORDED_MESSAGE,
   CONTEXT_LAB_STRENGTHEN_ASSISTED_MESSAGE,
   CONTEXT_LAB_STRENGTHEN_RECORDED_MESSAGE,
+  CONTEXT_LAB_STRENGTHEN_UNIT,
   type ContextLabCurrentScreen,
   type ContextLabErrorCode,
   type ContextLabProgress,
@@ -29,10 +32,12 @@ import type { MealLexicalBuildProfile } from "@/contextual-learning/candidate-v0
 import type { MealLexicalStrengthenProfile } from "@/contextual-learning/candidate-v0/strengthen/types";
 import type { ContextualSceneContentPack } from "@/contextual-learning/candidate-v0/content/types";
 import { spellingCueFromAnswerForm } from "@/contextual-learning/candidate-v0/strengthen/spelling-cue";
+import type { MealProbeOrchestration } from "./meal-probe-orchestration";
 import { errorScreen } from "./context-lab-errors";
 import {
   buildTitleFor,
   buildVerifyInstruction,
+  approvedRelationCaptionForEntity,
   contrastCaptionFor,
   frozenPreviewInstruction,
   guidedInstructionFor,
@@ -95,6 +100,10 @@ export function presentGuidedScreen(input: {
             ? "完整英文已经收起。下面是提示，不是答案。"
             : strengthenReconnectInstruction(profile.displayLabel),
         highlightedEntityIds: [profile.entityId],
+        relationCaption:
+          strengthenPhase === "RECONNECT"
+            ? approvedRelationCaptionForEntity(profile.entityId, input.pack)
+            : undefined,
         supportReveal,
       },
       progress: input.progress,
@@ -262,7 +271,7 @@ export function presentProbeIntroScreen(input: {
     context: {
       title: frameCopy.title,
       settingLabel: "先看看你已经会了哪些词",
-      instruction: "桌上有几件早餐物品。先检查，教学还没开始。",
+      instruction: `场景里可能还有辅助物品。这次检查 ${input.progress.total} 个目标词。教学还没开始。`,
       entities: probeSceneEntities(input.pack),
       highlightedEntityIds: [],
     },
@@ -382,7 +391,41 @@ function probeSceneEntities(
 }
 
 function withProbeUnit(progress: ContextLabProgress): ContextLabProgress {
-  return { ...progress, unit: progress.unit ?? "个物品" };
+  return { ...progress, unit: progress.unit ?? CONTEXT_LAB_PROBE_UNIT };
+}
+
+export function experiencePresentationProgress(input: {
+  planMode?: "BUILD" | "STRENGTHEN";
+  probe?: MealProbeOrchestration | null;
+  recorded?: boolean;
+}): ContextLabProgress {
+  if (input.planMode === "BUILD") {
+    const queue = input.probe?.buildQueue;
+    if (queue && queue.items.length > 0) {
+      return {
+        current: input.recorded
+          ? Math.max(queue.completed.length, 1)
+          : Math.min(queue.currentIndex + 1, queue.items.length),
+        total: queue.items.length,
+        unit: CONTEXT_LAB_BUILD_UNIT,
+      };
+    }
+    return { current: 1, total: 1, unit: CONTEXT_LAB_BUILD_UNIT };
+  }
+  if (input.planMode === "STRENGTHEN") {
+    const queue = input.probe?.strengthenQueue;
+    if (queue && queue.items.length > 0) {
+      return {
+        current: input.recorded
+          ? Math.max(queue.completed.length, 1)
+          : Math.min(queue.currentIndex + 1, queue.items.length),
+        total: queue.items.length,
+        unit: CONTEXT_LAB_STRENGTHEN_UNIT,
+      };
+    }
+    return { current: 1, total: 1, unit: CONTEXT_LAB_STRENGTHEN_UNIT };
+  }
+  return { current: 1, total: 1 };
 }
 
 export function strengthenSupportReveal(

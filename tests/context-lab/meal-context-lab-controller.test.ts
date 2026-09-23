@@ -27,7 +27,11 @@ describe("Meal Context Lab controller", () => {
     const { controller } = createMealLabHarness();
     const screen = await controller.start();
     assertGuided(screen);
-    expect(screen.progress).toEqual({ current: 1, total: 6 });
+    expect(screen.progress).toEqual({
+      current: 1,
+      total: 1,
+      unit: "个需要建立的词",
+    });
     expect(screen.activity.kind).toBe("PRESENT_CONTEXT");
     expect(screen.context.entities.map((entity) => entity.label)).toEqual([
       "汤",
@@ -62,7 +66,11 @@ describe("Meal Context Lab controller", () => {
       activityId: first.activity.id,
     });
     assertGuided(second);
-    expect(second.progress).toEqual({ current: 2, total: 6 });
+    expect(second.progress).toEqual({
+      current: 1,
+      total: 1,
+      unit: "个需要建立的词",
+    });
     expect(second.context.relationCaption).toBe("碗里装着汤");
     expect(second.handle.revision).toBe(1);
   });
@@ -142,7 +150,12 @@ describe("Meal Context Lab controller", () => {
     expect(replay.kind).toBe("ERROR");
     const current = await controller.loadCurrent({ runId: second.handle.runId });
     assertGuided(current);
-    expect(current.progress.current).toBe(2);
+    expect(current.progress).toEqual({
+      current: 1,
+      total: 1,
+      unit: "个需要建立的词",
+    });
+    expect(current.activity.id).not.toBe(first.activity.id);
   });
 
   it("two concurrent acknowledgements produce one successful mutation", async () => {
@@ -167,7 +180,12 @@ describe("Meal Context Lab controller", () => {
     expect(successes).toHaveLength(1);
     expect(conflicts).toHaveLength(1);
     if (successes[0]?.kind === "GUIDED") {
-      expect(successes[0].progress.current).toBe(2);
+      expect(successes[0].progress).toEqual({
+        current: 1,
+        total: 1,
+        unit: "个需要建立的词",
+      });
+      expect(successes[0].activity.id).not.toBe(first.activity.id);
     }
   });
 
@@ -183,7 +201,11 @@ describe("Meal Context Lab controller", () => {
       });
     }
     assertFrozen(screen);
-    expect(screen.progress).toEqual({ current: 6, total: 6 });
+    expect(screen.progress).toEqual({
+      current: 1,
+      total: 1,
+      unit: "个需要建立的词",
+    });
     expect(screen.task.taskType).toBe(LearningTaskType.ACTIVE_RECALL_TYPING);
     expect("answerKey" in screen).toBe(false);
     expect("answerKey" in screen.task).toBe(false);
@@ -209,7 +231,11 @@ describe("Meal Context Lab controller", () => {
     assertGuided(restarted);
     expect(restarted.handle.runId).not.toBe(first.handle.runId);
     expect(restarted.handle.revision).toBe(0);
-    expect(restarted.progress).toEqual({ current: 1, total: 6 });
+    expect(restarted.progress).toEqual({
+      current: 1,
+      total: 1,
+      unit: "个需要建立的词",
+    });
   });
 
   it("disabled feature gate performs no repository write", async () => {

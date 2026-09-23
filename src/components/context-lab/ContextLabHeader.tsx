@@ -1,4 +1,9 @@
-import { CONTEXT_LAB_HEADING_ID, type ContextLabProgress } from "./types";
+import {
+  CONTEXT_LAB_HEADING_ID,
+  formatContextLabProgress,
+  formatContextLabProgressLabel,
+  type ContextLabProgress,
+} from "./types";
 
 export function ContextLabHeader({
   title,
@@ -27,10 +32,9 @@ export function ContextLabHeader({
         </div>
         <p
           className="text-muted-foreground shrink-0 pt-1 text-sm tabular-nums"
-          aria-label={`进度 ${progress.current} / ${progress.total}${progress.unit ? ` ${progress.unit}` : ""}`}
+          aria-label={formatContextLabProgressLabel(progress)}
         >
-          {progress.current} / {progress.total}
-          {progress.unit ? ` ${progress.unit}` : ""}
+          {formatContextLabProgress(progress)}
         </p>
       </div>
     </header>

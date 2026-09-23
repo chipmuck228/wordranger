@@ -198,6 +198,19 @@ export function relationCaptionFor(
   return projected.relationCaptions[relationCaptionKey(predicate, entityIds)];
 }
 
+export function approvedRelationCaptionForEntity(
+  entityId: string,
+  pack?: ContextualSceneContentPack,
+): string | undefined {
+  const projected = pack ? projectMealPresentation(pack) : DEFAULT_PRESENTATION;
+  for (const [key, caption] of Object.entries(projected.relationCaptions)) {
+    if (key.split("|").includes(entityId) && caption.trim()) {
+      return caption;
+    }
+  }
+  return undefined;
+}
+
 export function contrastCaptionFor(
   entityId: string,
   pack?: ContextualSceneContentPack,

@@ -141,6 +141,13 @@ describe("Meal Context Lab nine-word active-release routing", () => {
     expect(screen.kind).toBe("PROBE_INTRO");
     assertKind(screen, "PROBE_INTRO");
     expect(screen.progress.total).toBe(9);
+    expect(screen.progress.unit).toBe("个目标词");
+    expect(screen.context.entities).toHaveLength(10);
+    expect(screen.context.entities.some((entity) => entity.id === "home-water-vessel")).toBe(
+      true,
+    );
+    expect(screen.context.instruction).toContain("9 个目标词");
+    expect(screen.context.instruction).toContain("辅助物品");
     expect(JSON.stringify(screen)).not.toContain("PLAN_NO_COMPATIBLE_VARIANT");
     expect(screen.handle.contentReleaseId).toBe(published.releaseId);
     const keys = collectKeys(screen);
@@ -210,8 +217,18 @@ describe("Meal Context Lab nine-word active-release routing", () => {
       }
       if (screen.buildPhase === "TEACH") {
         expect(screen.context.supportReveal?.lexicalForm).toBe("knife");
+        expect(screen.context.supportReveal?.meaningGloss).toBe("小刀");
+        expect(screen.context.supportReveal?.phonetic).toBeTruthy();
         expect(screen.context.supportReveal?.inflectionNote).toBe("复数 knives");
         expect(screen.context.supportReveal?.lexicalForm).not.toContain("(");
+      }
+      if (screen.buildPhase === "CONNECT") {
+        expect(screen.context.relationCaption).toBe("这把小刀适合切开面包");
+      }
+      if (screen.buildPhase === "CONTRAST") {
+        expect(screen.context.contrastCaptions?.some((item) => item.caption.includes("小刀"))).toBe(
+          true,
+        );
       }
       if (screen.buildPhase === "FADE") {
         expect(screen.context.supportReveal?.spellingCue).toBe("k _ _ _ _");

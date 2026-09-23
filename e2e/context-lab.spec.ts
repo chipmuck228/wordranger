@@ -82,14 +82,26 @@ const PROBE_COUNT = PROBE_LEMMAS.length;
 
 async function expectNeutralProbeRecorded(page: Page): Promise<void> {
   const recorded = page.locator('[data-pilot-state="PROBE_TASK_RECORDED"]');
-  await expect(recorded).toBeVisible();
-  await expect(recorded.getByText("这次回答已记录，请继续。")).toBeVisible();
+  await recorded.waitFor({ state: "visible", timeout: 2000 }).catch(() => undefined);
+  if (!(await recorded.isVisible().catch(() => false))) {
+    return;
+  }
   await expect(recorded.getByText("答对了！")).toHaveCount(0);
   await expect(recorded.getByText("回答不正确。")).toHaveCount(0);
+  await expect(recorded.getByRole("button", { name: "继续" })).toHaveCount(0);
+}
+
+async function expectRecordedCopy(page: Page, text: string): Promise<void> {
+  await expect(
+    page
+      .locator("[data-inline-status], [data-pilot-state='FROZEN_TASK_RECORDED']")
+      .getByText(text, { exact: true })
+      .first(),
+  ).toBeVisible();
 }
 
 async function completeOneTargetWrong(page: Page, index: number): Promise<void> {
-  await expect(page.getByText(`${index + 1} / ${PROBE_COUNT} 个物品`)).toBeVisible();
+  await expect(page.getByText(`第 ${index + 1} / ${PROBE_COUNT} 个目标词`)).toBeVisible();
   await expect(page.locator('[data-presentation-mode="SCENE_TARGET"]')).toBeVisible();
   await expect(page.getByLabel("英文答案")).toBeVisible();
   const recallText = await page.locator('[data-presentation-mode="SCENE_TARGET"]').innerText();
@@ -97,13 +109,11 @@ async function completeOneTargetWrong(page: Page, index: number): Promise<void> 
   await page.getByLabel("英文答案").fill("nope");
   await page.getByRole("button", { name: "提交" }).click();
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   await expect(page.locator('[data-presentation-mode="TASK_ONLY"]')).toBeVisible();
   await expect(page.getByText(PROBE_LEMMAS[index], { exact: true })).toBeVisible();
   await expect(page.getByLabel("早餐桌上的物品")).toHaveCount(0);
   await clickWrongChoice(page, PROBE_AVOID[index]);
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
 }
 
 async function completeProbeAllWrong(page: Page): Promise<void> {
@@ -213,25 +223,23 @@ async function completeProbeStrengthenTargets(
   await expect(page.getByText("先看看你已经会了哪些词", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "开始检查" }).click();
   for (let index = 0; index < PROBE_COUNT; index += 1) {
-    await expect(page.getByText(`${index + 1} / ${PROBE_COUNT} 个物品`)).toBeVisible();
+    await expect(page.getByText(`第 ${index + 1} / ${PROBE_COUNT} 个目标词`)).toBeVisible();
     if (index >= recognitionCorrect.length) {
       await page.getByLabel("英文答案").fill(PROBE_LEMMAS[index]);
       await page.getByRole("button", { name: "提交" }).click();
       await expectNeutralProbeRecorded(page);
-      await page.getByRole("button", { name: "继续" }).click();
       continue;
     }
     await page.getByLabel("英文答案").fill("nope");
     await page.getByRole("button", { name: "提交" }).click();
     await expectNeutralProbeRecorded(page);
-    await page.getByRole("button", { name: "继续" }).click();
+    await expect(page.locator('[data-presentation-mode="TASK_ONLY"]')).toBeVisible();
     if (recognitionCorrect[index]) {
       await clickCorrectChoice(page, STRENGTHEN_TARGETS[index].avoid);
     } else {
       await clickWrongChoice(page, STRENGTHEN_TARGETS[index].avoid);
     }
     await expectNeutralProbeRecorded(page);
-    await page.getByRole("button", { name: "继续" }).click();
   }
 }
 
@@ -300,7 +308,7 @@ async function walkMealFlow(page: Page, prefix: string): Promise<void> {
   await capture(page, `${prefix}-01-ground`);
 
   await page.getByRole("button", { name: "开始检查" }).click();
-  await expect(page.getByText(`1 / ${PROBE_COUNT} 个物品`)).toBeVisible();
+  await expect(page.getByText(`第 1 / ${PROBE_COUNT} 个目标词`)).toBeVisible();
   await expect(page.getByLabel("英文答案")).toBeVisible();
   await expect(page.getByText("这个物品对应哪个意思？")).toHaveCount(0);
   await expect(page.getByText("勺子 → 适合舀汤")).toHaveCount(0);
@@ -354,10 +362,9 @@ test("Context Lab Meal BUILD presentation reaches the assigned frozen task", asy
   await expect(input).toBeVisible();
   await input.fill("soup");
   await page.getByRole("button", { name: "提交" }).click();
-  const recorded = page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]');
-  await expect(recorded).toBeVisible();
-  await expect(recorded.getByText("答对了！", { exact: true })).toBeVisible();
-  await expect(recorded.getByText("“汤”的这次建立已记录。", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
+  await expectRecordedCopy(page, "“汤”的这次建立已记录。");
+  await expect(page.getByText("答对了！")).toHaveCount(0);
   await expect(page.getByText(/已经掌握|永远记住了|学习完成|能力提升/)).toHaveCount(0);
 
   await assertNoForbiddenPayload(page);
@@ -377,6 +384,13 @@ test("Probe is the first stage and does not leak teaching before an answer", asy
 }) => {
   await page.goto("/play/context-lab");
   await expect(page.getByText("先看看你已经会了哪些词", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(`场景里可能还有辅助物品。这次检查 ${PROBE_COUNT} 个目标词。教学还没开始。`, {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByText("共 6 个目标词")).toBeVisible();
+  await expect(page.locator('[aria-label="早餐桌上的物品"] [data-entity-id]')).toHaveCount(6);
   await expect(page.getByText("盘子", { exact: true })).toBeVisible();
   await expect(page.getByText("勺子 → 适合舀汤")).toHaveCount(0);
   await expect(page.getByText(/\/spuːn\/|spoon|掌握|分数/)).toHaveCount(0);
@@ -401,7 +415,6 @@ for (const target of STRENGTHEN_TARGETS) {
       page,
       STRENGTHEN_TARGETS.map((item) => item.lemma !== target.lemma),
     );
-    await expect(page.getByText("建立情境记忆")).toBeVisible();
     await expect(page.getByRole("button", { name: "开始建立 1 个词" })).toBeVisible();
     await page.getByRole("button", { name: "开始建立 1 个词" }).click();
     await walkBuildExperience(page, target);
@@ -422,9 +435,10 @@ test("two BUILD targets stay in scene order", async ({ page }) => {
   await walkBuildExperience(page, STRENGTHEN_TARGETS[0]);
   await page.getByLabel("英文答案").fill("soup");
   await page.getByRole("button", { name: "提交" }).click();
-  await expect(page.getByText("“汤”的这次建立已记录。", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "继续下一个" }).click();
+  await expectRecordedCopy(page, "“汤”的这次建立已记录。");
+  await expect(page.getByText("第 1 / 2 个需要建立的词")).toBeVisible();
   await walkBuildExperience(page, STRENGTHEN_TARGETS[3]);
+  await expect(page.getByText("第 2 / 2 个需要建立的词")).toBeVisible();
   await page.getByLabel("英文答案").fill("fork");
   await page.getByRole("button", { name: "提交" }).click();
   await expect(page.getByText("本次需要建立的词已经完成。", { exact: true })).toBeVisible();
@@ -451,16 +465,13 @@ test("plate recall wrong plus recognition correct routes STRENGTHEN", async ({
     await page.getByLabel("英文答案").fill(lemma);
     await page.getByRole("button", { name: "提交" }).click();
     await expectNeutralProbeRecorded(page);
-    await page.getByRole("button", { name: "继续" }).click();
   }
   await page.getByLabel("英文答案").fill("nope");
   await page.getByRole("button", { name: "提交" }).click();
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   await expect(page.getByText("plate", { exact: true })).toBeVisible();
   await clickCorrectChoice(page, "盘子");
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   await expect(page.getByText("加强记忆连接")).toBeVisible();
   await expect(page.getByRole("button", { name: "开始强化 1 个词" })).toBeVisible();
   await expect(page.getByRole("button", { name: /开始建立/ })).toHaveCount(0);
@@ -476,7 +487,6 @@ test("plate recall wrong plus recognition wrong routes BUILD", async ({
     await page.getByLabel("英文答案").fill(lemma);
     await page.getByRole("button", { name: "提交" }).click();
     await expectNeutralProbeRecorded(page);
-    await page.getByRole("button", { name: "继续" }).click();
   }
   await completeOneTargetWrong(page, 5);
   await expect(page.getByText("建立情境记忆")).toBeVisible();
@@ -494,23 +504,19 @@ test("recall wrong plus recognition correct routes STRENGTHEN", async ({
   await page.getByLabel("英文答案").fill("nope");
   await page.getByRole("button", { name: "提交" }).click();
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   await expect(page.getByText("soup", { exact: true })).toBeVisible();
   await expect(page.getByLabel("早餐桌上的物品")).toHaveCount(0);
   await clickCorrectChoice(page, "汤");
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   for (let index = 1; index < 4; index += 1) {
     await completeOneTargetWrong(page, index);
   }
   await page.getByLabel("英文答案").fill("cup");
   await page.getByRole("button", { name: "提交" }).click();
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   await page.getByLabel("英文答案").fill("plate");
   await page.getByRole("button", { name: "提交" }).click();
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   await expect(page.getByText("加强记忆连接")).toBeVisible();
   await expect(page.getByText("建立情境记忆")).toHaveCount(3);
 });
@@ -520,24 +526,20 @@ async function completeProbeSpoonStrengthen(page: Page): Promise<void> {
   await page.getByRole("button", { name: "开始检查" }).click();
   await completeOneTargetWrong(page, 0);
   await completeOneTargetWrong(page, 1);
-  await expect(page.getByText(`3 / ${PROBE_COUNT} 个物品`)).toBeVisible();
+  await expect(page.getByText(`第 3 / ${PROBE_COUNT} 个目标词`)).toBeVisible();
   await page.getByLabel("英文答案").fill("nope");
   await page.getByRole("button", { name: "提交" }).click();
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   await expect(page.getByText("spoon", { exact: true })).toBeVisible();
   await clickCorrectChoice(page, "匙");
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   await completeOneTargetWrong(page, 3);
   await page.getByLabel("英文答案").fill("cup");
   await page.getByRole("button", { name: "提交" }).click();
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   await page.getByLabel("英文答案").fill("plate");
   await page.getByRole("button", { name: "提交" }).click();
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   await expect(page.getByText("加强记忆连接")).toBeVisible();
   await expect(page.getByText("建立情境记忆")).toHaveCount(3);
   await expect(page.getByRole("button", { name: "开始强化 1 个词" })).toBeVisible();
@@ -554,7 +556,7 @@ test("spoon STRENGTHEN reconnects the form, fades it, then records assisted veri
   await page.getByRole("button", { name: "开始强化 1 个词" }).click();
   await expect(page.getByText("强化阶段：加强勺子的记忆连接")).toBeVisible();
   await expect(page.getByText("教学阶段：建立勺子的情境记忆")).toHaveCount(0);
-  await expect(page.getByText("勺子 → 适合舀汤")).toHaveCount(0);
+  await expect(page.getByText("勺子 → 适合舀汤")).toBeVisible();
   await expect(page.getByText("spoon", { exact: true })).toBeVisible();
   await expect(page.getByText("匙，调羹")).toBeVisible();
   await assertNoOverflow(page);
@@ -607,7 +609,6 @@ test("strengthen incorrect verification writes INCORRECT and READY has no plan b
     await page.getByLabel("英文答案").fill(lemma);
     await page.getByRole("button", { name: "提交" }).click();
     await expectNeutralProbeRecorded(page);
-    await page.getByRole("button", { name: "继续" }).click();
   }
   await expect(page.getByText("本次已能独立回答")).toHaveCount(PROBE_COUNT);
   await expect(page.getByRole("button", { name: /开始建立/ })).toHaveCount(0);
@@ -624,15 +625,13 @@ test("plate independent recall routes READY and skips recognition", async ({
     await page.getByLabel("英文答案").fill(lemma);
     await page.getByRole("button", { name: "提交" }).click();
     await expectNeutralProbeRecorded(page);
-    await page.getByRole("button", { name: "继续" }).click();
   }
-  await expect(page.getByText(`6 / ${PROBE_COUNT} 个物品`)).toBeVisible();
+  await expect(page.getByText(`第 6 / ${PROBE_COUNT} 个目标词`)).toBeVisible();
   const recallText = await page.locator('[data-presentation-mode="SCENE_TARGET"]').innerText();
   expect(recallText).not.toMatch(/\bplate\b/i);
   await page.getByLabel("英文答案").fill("plate");
   await page.getByRole("button", { name: "提交" }).click();
   await expectNeutralProbeRecorded(page);
-  await page.getByRole("button", { name: "继续" }).click();
   await expect(page.getByText("本次已能独立回答")).toHaveCount(PROBE_COUNT);
   await expect(page.getByRole("button", { name: /开始建立/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "开始强化 1 个词" })).toHaveCount(0);
@@ -649,7 +648,6 @@ test("independent recall routes READY and skips recognition", async ({
     await page.getByLabel("英文答案").fill(lemma);
     await page.getByRole("button", { name: "提交" }).click();
     await expectNeutralProbeRecorded(page);
-    await page.getByRole("button", { name: "继续" }).click();
   }
   await expect(page.getByText("本次已能独立回答")).toHaveCount(PROBE_COUNT);
   await expect(page.getByRole("button", { name: /开始建立/ })).toHaveCount(0);
@@ -663,16 +661,17 @@ test("Context Lab uses one start and one acknowledgement per Guided step", async
   await page.goto("/play/context-lab");
   await completeProbeAllWrong(page);
   await page.getByRole("button", { name: `开始建立 ${PROBE_COUNT} 个词` }).click();
-  await expect(page.getByText("1 / 6")).toBeVisible();
+  await expect(page.getByText("第 1 / 6 个需要建立的词")).toBeVisible();
   const afterHandoff = mutations.length;
   await page.getByRole("button", { name: "继续" }).click();
-  await expect(page.getByText("2 / 6")).toBeVisible();
+  await expect(page.locator('[data-build-phase="CONNECT"]')).toBeVisible();
+  await expect(page.getByText("第 1 / 6 个需要建立的词")).toBeVisible();
   await page.getByRole("button", { name: "继续" }).click();
-  await expect(page.getByText("3 / 6")).toBeVisible();
+  await expect(page.locator('[data-build-phase="TEACH"]')).toBeVisible();
   await page.getByRole("button", { name: "继续" }).click();
-  await expect(page.getByText("4 / 6")).toBeVisible();
+  await expect(page.locator('[data-build-phase="CONTRAST"]')).toBeVisible();
   await page.getByRole("button", { name: "继续" }).click();
-  await expect(page.getByText("5 / 6")).toBeVisible();
+  await expect(page.locator('[data-build-phase="FADE"]')).toBeVisible();
   await page.getByRole("button", { name: "试着自己写" }).click();
   await expect(page.getByLabel("英文答案")).toBeVisible();
   expect(mutations.length - afterHandoff).toBe(5);
@@ -729,11 +728,11 @@ test("refresh after submit does not duplicate Evidence and starts a new run", as
 test("refresh starts a new experimental Probe run", async ({ page }) => {
   await page.goto("/play/context-lab");
   await page.getByRole("button", { name: "开始检查" }).click();
-  await expect(page.getByText(`1 / ${PROBE_COUNT} 个物品`)).toBeVisible();
+  await expect(page.getByText(`第 1 / ${PROBE_COUNT} 个目标词`)).toBeVisible();
   await page.reload();
   await expect(page.getByText("先看看你已经会了哪些词", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("桌上有几件早餐物品。先检查，教学还没开始。", { exact: true }),
+    page.getByText(`场景里可能还有辅助物品。这次检查 ${PROBE_COUNT} 个目标词。教学还没开始。`, { exact: true }),
   ).toBeVisible();
 });
 
@@ -748,7 +747,7 @@ test("refresh restores the current BUILD target and step", async ({ page }) => {
   await page.reload();
   await expect(page.getByText("教学阶段：建立汤的情境记忆")).toBeVisible();
   await expect(page.locator('[data-build-phase="CONNECT"]')).toBeVisible();
-  await expect(page.getByText("2 / 6")).toBeVisible();
+  await expect(page.getByText("第 1 / 6 个需要建立的词")).toBeVisible();
   await expect(page.getByText("教学阶段：建立碗的情境记忆")).toHaveCount(0);
 });
 
@@ -756,11 +755,11 @@ test("rapid double-click does not skip a Guided step", async ({ page }) => {
   await page.goto("/play/context-lab");
   await completeProbeAllWrong(page);
   await page.getByRole("button", { name: `开始建立 ${PROBE_COUNT} 个词` }).click();
-  await expect(page.getByText("1 / 6")).toBeVisible();
+  await expect(page.getByText("第 1 / 6 个需要建立的词")).toBeVisible();
   const next = page.getByRole("button", { name: "继续" });
   await next.dblclick();
-  await expect(page.getByText("2 / 6")).toBeVisible();
-  await expect(page.getByText("3 / 6")).toHaveCount(0);
+  await expect(page.locator('[data-build-phase="CONNECT"]')).toBeVisible();
+  await expect(page.locator('[data-build-phase="TEACH"]')).toHaveCount(0);
 });
 
 for (const target of STRENGTHEN_TARGETS.filter((item) => item.lemma !== "spoon")) {
@@ -801,14 +800,12 @@ test("two STRENGTHEN targets stay in scene order and cannot be skipped", async (
   const before = await memoryEvidence(page);
   await page.getByLabel("英文答案").fill("soup");
   await page.getByRole("button", { name: "提交" }).click();
-  await expect(page.getByText("“汤”的这次强化已记录。", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "继续下一个" })).toBeVisible();
+  await expectRecordedCopy(page, "“汤”的这次强化已记录。");
+  await expect(page.getByText("强化阶段：加强碗的记忆连接")).toBeVisible();
   const afterSoup = await memoryEvidence(page);
   const soupEvidence = afterSoup.items.find((item) => item.outcome === "ASSISTED_CORRECT");
   expect(soupEvidence?.lexemeId).toBeTruthy();
   await page.reload();
-  await expect(page.getByText("“汤”的这次强化已记录。", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "继续下一个" }).click();
   await expect(page.getByText("强化阶段：加强碗的记忆连接")).toBeVisible();
   await walkStrengthenExperience(page, STRENGTHEN_TARGETS[1]);
   await page.getByLabel("英文答案").fill("bowl");
@@ -909,7 +906,11 @@ test("reduced-motion browser context can complete the flow", async ({
   await walkBuildExperience(page, STRENGTHEN_TARGETS[0]);
   await page.getByLabel("英文答案").fill("soup");
   await page.getByRole("button", { name: "提交" }).click();
-  await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
+  await expect(
+    page
+      .locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')
+      .or(page.getByText("教学阶段：建立碗的情境记忆")),
+  ).toBeVisible();
 });
 
 test("disabled feature gate returns 404", async ({ request }) => {

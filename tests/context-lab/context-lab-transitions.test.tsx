@@ -47,16 +47,16 @@ describe("Context Lab transition races", () => {
     fireEvent.click(next);
     fireEvent.click(next);
     fireEvent.click(next);
-    expect(screen.getByText("1 / 6")).toBeTruthy();
+    expect(screen.getByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.queryByText("3 / 6")).toBeNull();
+    expect(screen.queryByText("碗里装着汤")).toBeNull();
     act(() => {
       vi.advanceTimersByTime(160);
     });
-    expect(screen.getByText("2 / 6")).toBeTruthy();
     expect(screen.getByText("碗里装着汤")).toBeTruthy();
+    expect(screen.getByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     if (initialScreen.kind === "GUIDED") {
       expect(initialScreen.progress.current).toBe(1);
     }
@@ -108,7 +108,7 @@ describe("Context Lab reduced-motion and restart", () => {
   it("reduced motion advances immediately without a timer", async () => {
     await renderFirstScreen(true);
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("2 / 6")).toBeTruthy();
+    expect(await screen.findByText("碗里装着汤")).toBeTruthy();
     expect(
       document.querySelector('[data-presentation-state="TRANSITIONING"]'),
     ).toBeNull();
@@ -135,38 +135,38 @@ describe("Context Lab reduced-motion and restart", () => {
     fireEvent.change(input, { target: { value: "soup" } });
     expect(input.value).toBe("soup");
     fireEvent.click(screen.getByRole("button", { name: "提交" }));
-    expect(await screen.findByText("这次练习已记录。")).toBeTruthy();
+    expect(await screen.findAllByText("这次练习已记录。")).not.toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "重新体验" }));
-    expect(await screen.findByText("1 / 6")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("2 / 6")).toBeTruthy();
+    expect(await screen.findByText("碗里装着汤")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("3 / 6")).toBeTruthy();
+    expect(await screen.findByText((_, node) => node?.getAttribute("data-build-phase") === "TEACH")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("4 / 6")).toBeTruthy();
+    expect(await screen.findByLabelText("用途对比")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("5 / 6")).toBeTruthy();
+    expect(await screen.findByLabelText("拼写提示")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "试着自己写" }));
     expect(
       (await screen.findByLabelText("英文答案") as HTMLInputElement).value,
     ).toBe("");
   });
 
-  it("progress stays within 1 / 6 through 6 / 6", async () => {
+  it("progress stays on the current BUILD word through guided steps", async () => {
     await renderFirstScreen(true);
-    expect(screen.getByLabelText("进度 1 / 6")).toBeTruthy();
+    expect(screen.getByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByLabelText("进度 2 / 6")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByLabelText("进度 3 / 6")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByLabelText("进度 4 / 6")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByLabelText("进度 5 / 6")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "试着自己写" }));
-    expect(await screen.findByLabelText("进度 6 / 6")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "提交" }));
-    expect(screen.getByLabelText("进度 6 / 6")).toBeTruthy();
-    expect(screen.queryByText("7 / 6")).toBeNull();
+    expect(screen.getByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
+    expect(screen.queryByText("第 2 / 1 个需要建立的词")).toBeNull();
   });
 });

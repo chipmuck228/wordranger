@@ -10,6 +10,7 @@ import {
   CONTEXT_LAB_ERROR_CODES,
   CONTEXT_LAB_BUILD_NEXT_LABEL,
   CONTEXT_LAB_BUILD_QUEUE_COMPLETE_MESSAGE,
+  CONTEXT_LAB_PROBE_UNIT,
   CONTEXT_LAB_RETURN_TO_SUMMARY_LABEL,
   CONTEXT_LAB_STRENGTHEN_NEXT_LABEL,
   CONTEXT_LAB_STRENGTHEN_QUEUE_COMPLETE_MESSAGE,
@@ -85,6 +86,7 @@ import { bindGeneratedTaskToVocabulary } from "./bind-generated-task-to-vocabula
 import { ensureAssignedGeneratedTask } from "./ensure-assigned-generated-task";
 import { HOME_BREAKFAST_FRAME_ID } from "./meal-presentation-map";
 import {
+  experiencePresentationProgress,
   presentFrozenTaskScreen,
   presentGuidedScreen,
   presentProbeFrozenTaskScreen,
@@ -92,7 +94,6 @@ import {
   presentProbeRecordedScreen,
   presentProbeSummaryScreen,
   presentRecordedScreen,
-  progressForIssuedRun,
 } from "./present-context-lab-screen";
 import { generateMealProbeTask } from "./generate-meal-probe-task";
 import { mealColdProbeTargets } from "./meal-probe-targets";
@@ -363,6 +364,7 @@ export class MealContextLabController {
       },
       loaded.content.pack,
       record.releaseId,
+      record.probe,
     );
   }
 
@@ -694,7 +696,11 @@ export class MealContextLabController {
     return presentRecordedScreen({
       handle: this.handleFor(input.record.id, saved.revision, input.record.releaseId),
       feedback: input.feedback,
-      progress: progressForIssuedRun(recorded.run),
+      progress: experiencePresentationProgress({
+        planMode: planModeOf(recorded.run),
+        probe: nextProbe ?? input.record.probe,
+        recorded: true,
+      }),
       planMode: planModeOf(recorded.run),
       ...experienceRecordedCopy(
         nextProbe ?? input.record.probe,
@@ -723,7 +729,11 @@ export class MealContextLabController {
       return presentRecordedScreen({
         handle: this.handleFor(record.id, record.revision, record.releaseId),
         feedback: contextLabFeedbackFromEvidence(evidence),
-        progress: progressForIssuedRun(record.experienceRun),
+        progress: experiencePresentationProgress({
+          planMode: planModeOf(record.experienceRun),
+          probe: record.probe,
+          recorded: true,
+        }),
         planMode: planModeOf(record.experienceRun),
         ...experienceRecordedCopy(
           record.probe,
@@ -766,7 +776,11 @@ export class MealContextLabController {
     return presentRecordedScreen({
       handle: this.handleFor(record.id, record.revision, record.releaseId),
       feedback: contextLabFeedbackFromEvidence(evidence),
-      progress: progressForIssuedRun(record.experienceRun),
+      progress: experiencePresentationProgress({
+        planMode: planModeOf(record.experienceRun),
+        probe: record.probe,
+        recorded: true,
+      }),
       planMode: planModeOf(record.experienceRun),
       ...experienceRecordedCopy(
         record.probe,
@@ -940,7 +954,10 @@ export class MealContextLabController {
     }
     const run = record.experienceRun;
     const current = run.stepRuns[run.currentStepIndex];
-    const progress = progressForIssuedRun(run);
+    const progress = experiencePresentationProgress({
+      planMode: planModeOf(run),
+      probe: record.probe,
+    });
     const handle = this.handleFor(
       run.id,
       record.revision,
@@ -997,9 +1014,13 @@ export class MealContextLabController {
     issued: IssuedPayload,
     pack: ContextualSceneContentPack,
     releaseId?: string | null,
+    probe?: MealProbeOrchestration | null,
   ): ContextLabCurrentScreen {
     const handle = this.handleFor(run.id, revision, releaseId ?? run.releaseId);
-    const progress = progressForIssuedRun(run);
+    const progress = experiencePresentationProgress({
+      planMode: planModeOf(run),
+      probe,
+    });
     if (issued.issuedActivity) {
       return presentGuidedScreen({
         handle,
@@ -1077,7 +1098,7 @@ export class MealContextLabController {
     const progress = {
       current: Math.min(probe.currentTargetIndex + 1, probe.targets.length),
       total: probe.targets.length,
-      unit: "个物品",
+      unit: CONTEXT_LAB_PROBE_UNIT,
     };
     if (probe.phase === "PROBE_INTRO") {
       return presentProbeIntroScreen({
@@ -1581,6 +1602,7 @@ export class MealContextLabController {
       prepared.issued,
       content.pack,
       content.releaseId,
+      nextProbe,
     );
   }
 
@@ -1701,6 +1723,7 @@ export class MealContextLabController {
       prepared.issued,
       content.pack,
       content.releaseId,
+      nextProbe,
     );
   }
 

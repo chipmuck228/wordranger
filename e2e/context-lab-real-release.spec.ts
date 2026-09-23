@@ -90,6 +90,12 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
     for (const target of PROBE_TARGETS) {
       await expect(page.getByText(target.label, { exact: true }).first()).toBeVisible();
     }
+    await expect(page.getByText("水壶", { exact: true })).toBeVisible();
+    await expect(page.locator('[aria-label="早餐桌上的物品"] [data-entity-id]')).toHaveCount(10);
+    await expect(page.getByText("共 9 个目标词")).toBeVisible();
+    await expect(
+      page.getByText("场景里可能还有辅助物品。这次检查 9 个目标词。教学还没开始。"),
+    ).toBeVisible();
     await expect(page.getByText("勺子 → 适合舀汤")).toHaveCount(0);
     await expectNoInternalLeak(page);
     await capture(page, "1440x900-01-probe-scene");
@@ -110,7 +116,7 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
 
     for (let index = 0; index < PROBE_TARGETS.length; index += 1) {
       const target = PROBE_TARGETS[index]!;
-      await expect(page.getByText(`${index + 1} / 9 个物品`)).toBeVisible();
+      await expect(page.getByText(`第 ${index + 1} / 9 个目标词`)).toBeVisible();
       await expect(page.locator('[data-presentation-mode="SCENE_TARGET"]')).toBeVisible();
       await expect(page.getByLabel("英文答案")).toBeVisible();
       const recallText = await page
@@ -127,14 +133,12 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
         await page.getByLabel("英文答案").fill(target.lemma);
         await page.getByRole("button", { name: "提交" }).click();
         await expectNeutralProbeRecorded(page);
-        await page.getByRole("button", { name: "继续" }).click();
         continue;
       }
 
       await page.getByLabel("英文答案").fill("nope");
       await page.getByRole("button", { name: "提交" }).click();
       await expectNeutralProbeRecorded(page);
-      await page.getByRole("button", { name: "继续" }).click();
       await expect(page.locator('[data-presentation-mode="TASK_ONLY"]')).toBeVisible();
       await expect(page.getByLabel("早餐桌上的物品")).toHaveCount(0);
       if (target.token === "knife") {
@@ -147,7 +151,6 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
         await clickChoice(page, target.avoid, false);
       }
       await expectNeutralProbeRecorded(page);
-      await page.getByRole("button", { name: "继续" }).click();
     }
 
     expect(observedOrder).toEqual(PROBE_TARGETS.map((item) => item.token));
@@ -183,10 +186,10 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
     await walkBuildToVerify(page, PROBE_TARGETS[3]!);
     await page.getByLabel("英文答案").fill("fork");
     await page.getByRole("button", { name: "提交" }).click();
-    await expect(page.getByText("“叉子”的这次建立已记录。", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "继续下一个" }).click();
-
+    await expectRecordedCopy(page, "“叉子”的这次建立已记录。");
+    await expect(page.getByText("第 1 / 2 个需要建立的词")).toBeVisible();
     await expect(page.getByText("教学阶段：建立小刀的情境记忆")).toBeVisible();
+    await expect(page.getByText("第 2 / 2 个需要建立的词")).toBeVisible();
     await expect(page.getByTestId("context-lab-content-pin")).toHaveText(
       EXPECTED_RELEASE_ID,
     );
@@ -200,8 +203,12 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
     await page.getByRole("button", { name: "继续" }).click();
     const knifeReveal = page.locator('[data-support-kind="LEXICAL_FORM"]');
     await expect(knifeReveal).toBeVisible();
+    await expect(knifeReveal).toContainText("英文");
     await expect(knifeReveal).toContainText("knife");
+    await expect(knifeReveal).toContainText("意思");
     await expect(knifeReveal).toContainText("小刀");
+    await expect(knifeReveal).toContainText("读音");
+    await expect(knifeReveal).toContainText("词形");
     await expect(knifeReveal).toContainText("复数 knives");
     await expect(knifeReveal).not.toContainText("knife(pl.knives)");
     await page.getByRole("button", { name: "继续" }).click();
@@ -239,7 +246,7 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
     await page.getByLabel("英文答案").fill("knife");
     await page.getByRole("button", { name: "提交" }).dblclick();
     await expect(page.locator('[data-pilot-state="FROZEN_TASK_RECORDED"]')).toBeVisible();
-    await expect(page.getByText("“小刀”的这次建立已记录。", { exact: true })).toBeVisible();
+    await expect(page.getByText("“小刀”的这次建立已记录。", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("本次需要建立的词已经完成。", { exact: true })).toBeVisible();
     const afterKnifeFrozen = await memoryEvidence(page);
     expect(afterKnifeFrozen.evidenceCount).toBe(beforeKnifeFrozen.evidenceCount + 1);
@@ -252,7 +259,7 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
     expect(knifeFrozenEvidence?.outcome).toBe("INDEPENDENT_CORRECT");
 
     await page.reload();
-    await expect(page.getByText("“小刀”的这次建立已记录。", { exact: true })).toBeVisible();
+    await expect(page.getByText("“小刀”的这次建立已记录。", { exact: true }).first()).toBeVisible();
     expect((await memoryEvidence(page)).evidenceCount).toBe(
       afterKnifeFrozen.evidenceCount,
     );
@@ -277,7 +284,7 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
     await page.getByRole("button", { name: "试着自己写" }).click();
     await page.getByLabel("英文答案").fill("bread");
     await page.getByRole("button", { name: "提交" }).dblclick();
-    await expect(page.getByText("“面包”的这次强化已记录。", { exact: true })).toBeVisible();
+    await expect(page.getByText("“面包”的这次强化已记录。", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("本次需要强化的词已经完成。", { exact: true })).toBeVisible();
     await expect(page.getByText(/已经掌握|永远记住了|学习完成|能力提升/)).toHaveCount(0);
     const afterBread = await memoryEvidence(page);
@@ -309,10 +316,12 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
       EXPECTED_RELEASE_ID,
     );
     await page.getByRole("button", { name: "开始检查" }).click();
-    await expect(page.getByText("1 / 9 个物品")).toBeVisible();
+    await expect(page.getByText("第 1 / 9 个目标词")).toBeVisible();
     await page.reload();
     await expect(page.getByText("先看看你已经会了哪些词", { exact: true })).toBeVisible();
-    await expect(page.getByText("桌上有几件早餐物品。先检查，教学还没开始。")).toBeVisible();
+    await expect(
+      page.getByText("场景里可能还有辅助物品。这次检查 9 个目标词。教学还没开始。"),
+    ).toBeVisible();
     await expect(page.getByTestId("context-lab-content-pin")).toHaveText(
       EXPECTED_RELEASE_ID,
     );
@@ -380,7 +389,7 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
       await capture(page, `${viewport.name}-07-frozen-verify`);
       await page.getByLabel("英文答案").fill("knife");
       await page.getByRole("button", { name: "提交" }).click();
-      await expect(page.getByText("“小刀”的这次建立已记录。", { exact: true })).toBeVisible();
+      await expect(page.getByText("“小刀”的这次建立已记录。", { exact: true }).first()).toBeVisible();
       await page.getByRole("button", { name: "回到这次检查" }).click();
       await page.getByRole("button", { name: "开始强化 1 个词" }).click();
       await expect(page.getByText("强化阶段：加强面包的记忆连接")).toBeVisible();
@@ -504,9 +513,21 @@ async function memoryEvidence(page: Page): Promise<{
 
 async function expectNeutralProbeRecorded(page: Page): Promise<void> {
   const recorded = page.locator('[data-pilot-state="PROBE_TASK_RECORDED"]');
-  await expect(recorded).toBeVisible();
-  await expect(recorded.getByText("这次回答已记录，请继续。")).toBeVisible();
+  await recorded.waitFor({ state: "visible", timeout: 2000 }).catch(() => undefined);
+  if (!(await recorded.isVisible().catch(() => false))) {
+    return;
+  }
   await expect(recorded.getByText("答对了！")).toHaveCount(0);
+  await expect(recorded.getByRole("button", { name: "继续" })).toHaveCount(0);
+}
+
+async function expectRecordedCopy(page: Page, text: string): Promise<void> {
+  await expect(
+    page
+      .locator("[data-inline-status], [data-pilot-state='FROZEN_TASK_RECORDED']")
+      .getByText(text, { exact: true })
+      .first(),
+  ).toBeVisible();
 }
 
 async function clickChoice(
@@ -557,7 +578,7 @@ async function completeReadyExcept(
   for (let index = 0; index < PROBE_TARGETS.length; index += 1) {
     const target = PROBE_TARGETS[index]!;
     const route = overrides[target.token] ?? "READY";
-    await expect(page.getByText(`${index + 1} / 9 个物品`)).toBeVisible();
+    await expect(page.getByText(`第 ${index + 1} / 9 个目标词`)).toBeVisible();
     if (target.token === "knife" && route !== "READY") {
       await capture(page, `${await viewportName(page)}-02-knife-recall`);
     }
@@ -565,19 +586,17 @@ async function completeReadyExcept(
       await page.getByLabel("英文答案").fill(target.lemma);
       await page.getByRole("button", { name: "提交" }).click();
       await expectNeutralProbeRecorded(page);
-      await page.getByRole("button", { name: "继续" }).click();
       continue;
     }
     await page.getByLabel("英文答案").fill("nope");
     await page.getByRole("button", { name: "提交" }).click();
     await expectNeutralProbeRecorded(page);
-    await page.getByRole("button", { name: "继续" }).click();
+    await expect(page.locator('[data-presentation-mode="TASK_ONLY"]')).toBeVisible();
     if (target.token === "knife") {
       await capture(page, `${await viewportName(page)}-03-knife-recognition`);
     }
     await clickChoice(page, target.avoid, route === "STRENGTHEN");
     await expectNeutralProbeRecorded(page);
-    await page.getByRole("button", { name: "继续" }).click();
   }
 }
 

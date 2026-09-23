@@ -59,7 +59,7 @@ describe("Context Lab client presentation", () => {
   it("initially displays only the current server screen", async () => {
     await renderStarted();
     expect(screen.getByText("汤")).toBeTruthy();
-    expect(screen.getByText("1 / 6")).toBeTruthy();
+    expect(screen.getByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     expect(screen.queryByText("勺子 → 适合舀汤")).toBeNull();
     expect(screen.getByText("Context Lab · Experimental")).toBeTruthy();
   });
@@ -84,7 +84,7 @@ describe("Context Lab client presentation", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "继续" }));
-    expect(screen.getByText("1 / 6")).toBeTruthy();
+    expect(screen.getByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     expect(acknowledge).toHaveBeenCalledTimes(1);
     if (initialScreen.kind !== "GUIDED") {
       throw new Error("guided");
@@ -101,7 +101,7 @@ describe("Context Lab client presentation", () => {
         activityId: initialScreen.activity.id,
       }),
     );
-    expect(await screen.findByText("2 / 6")).toBeTruthy();
+    expect(await screen.findByText("碗里装着汤")).toBeTruthy();
   });
 
   it("server failure leaves the current screen visible", async () => {
@@ -118,7 +118,7 @@ describe("Context Lab client presentation", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("1 / 6")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     expect(screen.getByText("汤")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toMatch(/暂时没能继续|请再试/);
   });
@@ -154,8 +154,7 @@ describe("Context Lab client presentation", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("2 / 6")).toBeTruthy();
-    expect(screen.getByText("勺子 → 适合舀汤")).toBeTruthy();
+    expect(await screen.findByText("勺子 → 适合舀汤")).toBeTruthy();
   });
 
   it("rapid clicks send at most one mutation", async () => {
@@ -199,9 +198,9 @@ describe("Context Lab client presentation", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "继续" }));
-    expect(await screen.findByText("2 / 6")).toBeTruthy();
+    expect(await screen.findByText("碗里装着汤")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "重新体验" }));
-    expect(await screen.findByText("1 / 6")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
     expect(restart).toHaveBeenCalledTimes(1);
     expect(screen.getByText("桌上有汤。先看看它在场景里的位置。")).toBeTruthy();
   });
@@ -267,7 +266,7 @@ describe("Context Lab client presentation", () => {
     expect(submitFrozenTask.mock.calls[0]?.[0]).not.toHaveProperty("isCorrect");
     expect(acknowledge).not.toHaveBeenCalled();
     expect(await screen.findByText("答对了！")).toBeTruthy();
-    expect(screen.getByText("这次练习已记录。")).toBeTruthy();
+    expect(screen.getAllByText("这次练习已记录。").length).toBeGreaterThan(0);
     expect(screen.queryByText(/已经掌握|永远记住了|学习完成|能力提升/)).toBeNull();
   });
 
@@ -308,9 +307,9 @@ describe("Context Lab client presentation", () => {
     render(<ContextLabClient {...harness.ops} initialScreen={preview} />);
     await user.type(screen.getByLabelText("英文答案"), "soup");
     await user.click(screen.getByRole("button", { name: "提交" }));
-    expect(await screen.findByText("这次练习已记录。")).toBeTruthy();
+    expect(await screen.findAllByText("这次练习已记录。")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "重新体验" }));
-    expect(await screen.findByText("1 / 6")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 第 1 / 1 个需要建立的词")).toBeTruthy();
   });
 
   it("step 2 highlights only grounded entities", async () => {
@@ -372,7 +371,7 @@ describe("Context Lab client presentation", () => {
     expect(screen.queryByText("勺子 → 适合舀汤")).toBeNull();
     expect(screen.queryByText(/spoon|\/spuːn\/|掌握|分数|mastery/i)).toBeNull();
     await user.click(screen.getByRole("button", { name: "开始检查" }));
-    expect(await screen.findByText("1 / 6 个物品")).toBeTruthy();
+    expect(await screen.findByLabelText("进度 第 1 / 6 个目标词")).toBeTruthy();
     expect(screen.getByText("写出当前物品的英文单词")).toBeTruthy();
     expect(screen.queryByText("勺子 → 适合舀汤")).toBeNull();
     expect(document.body.textContent).not.toMatch(/\bsoup\b|\bspoon\b/);

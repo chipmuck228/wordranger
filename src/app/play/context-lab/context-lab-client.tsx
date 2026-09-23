@@ -3,23 +3,31 @@
 import { useEffect, useRef, useState } from "react";
 import { ContextLabErrorState } from "@/components/context-lab/ContextLabErrorState";
 import { ContextLabHeader } from "@/components/context-lab/ContextLabHeader";
+import {
+  ContextLabInlineStatus,
+  inlineRecordedCopy,
+} from "@/components/context-lab/ContextLabInlineStatus";
 import { ContextLabRecordedNotice } from "@/components/context-lab/ContextLabRecordedNotice";
 import { ContextLabShell } from "@/components/context-lab/ContextLabShell";
 import { FrozenTaskPreview } from "@/components/context-lab/FrozenTaskPreview";
 import { GuidedActivityPanel } from "@/components/context-lab/GuidedActivityPanel";
 import { ProbeIntroPanel } from "@/components/context-lab/ProbeIntroPanel";
-import { ProbeRecordedNotice } from "@/components/context-lab/ProbeRecordedNotice";
 import { ProbeSummaryPanel } from "@/components/context-lab/ProbeSummaryPanel";
 import { withClientGameTimeout } from "@/components/game/shared/bounded-game-operation";
 import {
+  CONTEXT_LAB_AUTO_CONTINUE_FAILED_MESSAGE,
   CONTEXT_LAB_ERROR_CODES,
   CONTEXT_LAB_HEADING_ID,
+  CONTEXT_LAB_INLINE_RECORDED_STATUS,
   CONTEXT_LAB_NETWORK_MESSAGE,
+  formatContextLabProgress,
+  shouldAutoAdvanceRecorded,
   type ContextLabCurrentScreen,
   type ContextLabHandoffIntent,
 } from "@/components/context-lab/types";
 
 const TRANSITION_MS = 160;
+const AUTO_CONTINUE_MS = 450;
 const STRENGTHEN_RUN_STORAGE_KEY = "context-lab-strengthen-run";
 
 type PresentationState =
@@ -32,6 +40,16 @@ type PresentationState =
   | "PROBE_INTRO"
   | "PROBE_SUMMARY"
   | "ERROR";
+
+type FrozenPreviewScreen = Extract<
+  ContextLabCurrentScreen,
+  { kind: "FROZEN_TASK_PREVIEW" }
+>;
+type AutoRecordedScreen = Extract<
+  ContextLabCurrentScreen,
+  { kind: "PROBE_TASK_RECORDED" | "FROZEN_TASK_RECORDED" }
+>;
+type InlineStatus = "RECORDED" | "CONTINUE_FAILED" | null;
 
 export interface ContextLabClientOps {
   start: () => Promise<ContextLabCurrentScreen>;
@@ -72,19 +90,31 @@ export function ContextLabClient({
   const [screen, setScreen] = useState<ContextLabCurrentScreen | null>(
     initialScreen ?? null,
   );
+  const [heldPreview, setHeldPreview] = useState<FrozenPreviewScreen | null>(
+    null,
+  );
+  const [inlineStatus, setInlineStatus] = useState<InlineStatus>(null);
   const [transitioning, setTransitioning] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const startedRef = useRef(Boolean(initialScreen));
   const requestIdRef = useRef(0);
   const timerRef = useRef<number | null>(null);
+  const autoAdvanceTimerRef = useRef<number | null>(null);
   const transitioningRef = useRef(false);
   const mutationRef = useRef(false);
+  const autoAdvancingRef = useRef(false);
+  const lastPreviewRef = useRef<FrozenPreviewScreen | null>(
+    initialScreen?.kind === "FROZEN_TASK_PREVIEW" ? initialScreen : null,
+  );
   const previewStartedAtRef = useRef<number | null>(null);
+  const mountedAutoRef = useRef(false);
 
   useEffect(() => {
     return () => {
       clearPendingTransition();
+      clearAutoAdvanceTimer();
+      requestIdRef.current += 1;
     };
   }, []);
 
@@ -109,6 +139,7 @@ export function ContextLabClient({
 
   useEffect(() => {
     if (screen?.kind === "FROZEN_TASK_PREVIEW") {
+      lastPreviewRef.current = screen;
       previewStartedAtRef.current = Date.now();
     }
   }, [screen]);
@@ -117,8 +148,26 @@ export function ContextLabClient({
     if (transitioning || !screen || screen.kind === "ERROR") {
       return;
     }
+    if (inlineStatus === "RECORDED" || inlineStatus === "CONTINUE_FAILED") {
+      return;
+    }
     document.getElementById(CONTEXT_LAB_HEADING_ID)?.focus();
-  }, [screen, transitioning]);
+  }, [screen, transitioning, inlineStatus]);
+
+  useEffect(() => {
+    if (mountedAutoRef.current) {
+      return;
+    }
+    if (screen && shouldAutoAdvanceRecorded(screen) && "handle" in screen) {
+      mountedAutoRef.current = true;
+      setHeldPreview(lastPreviewRef.current);
+      setInlineStatus("RECORDED");
+      autoAdvancingRef.current = true;
+      scheduleAutoContinue(screen.handle);
+    }
+    // initial recorded screen only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function clearPendingTransition(): void {
     if (timerRef.current !== null) {
@@ -126,6 +175,13 @@ export function ContextLabClient({
       timerRef.current = null;
     }
     transitioningRef.current = false;
+  }
+
+  function clearAutoAdvanceTimer(): void {
+    if (autoAdvanceTimerRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
   }
 
   function prefersReducedMotion(): boolean {
@@ -169,12 +225,34 @@ export function ContextLabClient({
         mutationRef.current = false;
         return;
       }
+      setHeldPreview(null);
+      setInlineStatus(null);
+      autoAdvancingRef.current = false;
       setScreen(next);
       setActionError(null);
       return;
     }
     persistStrengthenRun(next);
     setActionError(null);
+    if (next.kind === "FROZEN_TASK_PREVIEW") {
+      lastPreviewRef.current = next;
+      setHeldPreview(null);
+      setInlineStatus(null);
+      autoAdvancingRef.current = false;
+      setScreen(next);
+      return;
+    }
+    if (shouldAutoAdvanceRecorded(next) && "handle" in next) {
+      setHeldPreview(lastPreviewRef.current);
+      setInlineStatus("RECORDED");
+      autoAdvancingRef.current = true;
+      setScreen(next);
+      scheduleAutoContinue(next.handle);
+      return;
+    }
+    setHeldPreview(null);
+    setInlineStatus(null);
+    autoAdvancingRef.current = false;
     setScreen(next);
   }
 
@@ -195,11 +273,96 @@ export function ContextLabClient({
     }, TRANSITION_MS);
   }
 
+  function scheduleAutoContinue(handle: {
+    runId: string;
+    revision: number;
+  }): void {
+    clearAutoAdvanceTimer();
+    const delay = prefersReducedMotion() ? 0 : AUTO_CONTINUE_MS;
+    autoAdvanceTimerRef.current = window.setTimeout(() => {
+      autoAdvanceTimerRef.current = null;
+      void runAutoContinue(handle);
+    }, delay);
+  }
+
+  async function runAutoContinue(handle: {
+    runId: string;
+    revision: number;
+  }): Promise<void> {
+    if (!continueProbe || mutationRef.current) {
+      return;
+    }
+    mutationRef.current = true;
+    setBusy(true);
+    setActionError(null);
+    const requestId = ++requestIdRef.current;
+    try {
+      const outcome = await withClientGameTimeout(
+        continueProbe({
+          runId: handle.runId,
+          revision: handle.revision,
+        }),
+      );
+      if (requestId !== requestIdRef.current) {
+        mutationRef.current = false;
+        return;
+      }
+      if (outcome.timedOut) {
+        setBusy(false);
+        mutationRef.current = false;
+        autoAdvancingRef.current = false;
+        setInlineStatus("CONTINUE_FAILED");
+        return;
+      }
+      if (outcome.value.kind === "ERROR") {
+        setBusy(false);
+        mutationRef.current = false;
+        autoAdvancingRef.current = false;
+        if (outcome.value.recoverable) {
+          setInlineStatus("CONTINUE_FAILED");
+          return;
+        }
+        applyScreen(outcome.value);
+        return;
+      }
+      setBusy(false);
+      mutationRef.current = false;
+      autoAdvancingRef.current = false;
+      setHeldPreview(null);
+      setInlineStatus(null);
+      revealScreen(outcome.value);
+    } catch {
+      if (requestId !== requestIdRef.current) {
+        mutationRef.current = false;
+        return;
+      }
+      setBusy(false);
+      mutationRef.current = false;
+      autoAdvancingRef.current = false;
+      setInlineStatus("CONTINUE_FAILED");
+    }
+  }
+
+  function retryAutoContinue(): void {
+    if (
+      !screen ||
+      !("handle" in screen) ||
+      !shouldAutoAdvanceRecorded(screen) ||
+      mutationRef.current
+    ) {
+      return;
+    }
+    setInlineStatus("RECORDED");
+    autoAdvancingRef.current = true;
+    void runAutoContinue(screen.handle);
+  }
+
   async function acknowledgeGuided(): Promise<void> {
     if (
       busy ||
       mutationRef.current ||
       transitioningRef.current ||
+      autoAdvancingRef.current ||
       screen?.kind !== "GUIDED"
     ) {
       return;
@@ -264,6 +427,7 @@ export function ContextLabClient({
       busy ||
       mutationRef.current ||
       transitioningRef.current ||
+      autoAdvancingRef.current ||
       !continueProbe ||
       !screen ||
       (screen.kind !== "PROBE_INTRO" &&
@@ -320,6 +484,7 @@ export function ContextLabClient({
       busy ||
       mutationRef.current ||
       transitioningRef.current ||
+      autoAdvancingRef.current ||
       screen?.kind !== "FROZEN_TASK_PREVIEW"
     ) {
       return;
@@ -356,6 +521,10 @@ export function ContextLabClient({
         applyScreen(outcome.value);
         return;
       }
+      if (shouldAutoAdvanceRecorded(outcome.value)) {
+        applyScreen(outcome.value);
+        return;
+      }
       revealScreen(outcome.value);
     } catch {
       if (requestId !== requestIdRef.current) {
@@ -370,7 +539,12 @@ export function ContextLabClient({
 
   function onRestart(): void {
     clearPendingTransition();
+    clearAutoAdvanceTimer();
     setTransitioning(false);
+    setHeldPreview(null);
+    setInlineStatus(null);
+    lastPreviewRef.current = null;
+    autoAdvancingRef.current = false;
     setScreen(null);
     startedRef.current = true;
     mutationRef.current = false;
@@ -381,15 +555,19 @@ export function ContextLabClient({
     void begin(restart);
   }
 
+  const autoRecorded = Boolean(screen && shouldAutoAdvanceRecorded(screen));
   const headerContext =
-    screen?.kind === "GUIDED" ||
+    heldPreview?.context ??
+    (screen?.kind === "GUIDED" ||
     screen?.kind === "FROZEN_TASK_PREVIEW" ||
     screen?.kind === "PROBE_INTRO" ||
     screen?.kind === "PROBE_SUMMARY"
       ? screen.context
-      : undefined;
-
-  const presentationState = stateFor(screen, transitioning, busy);
+      : undefined);
+  const headerProgress =
+    screen && "progress" in screen ? screen.progress : heldPreview?.progress;
+  const presentationState = stateFor(screen, transitioning, busy, autoRecorded);
+  const controlsLocked = busy || transitioning || autoAdvancingRef.current;
 
   return (
     <ContextLabShell
@@ -402,7 +580,9 @@ export function ContextLabClient({
         className="flex min-w-0 flex-1 flex-col gap-6"
       >
         <p className="sr-only" aria-live="polite" aria-atomic="true">
-          {transitioning || busy ? "" : liveAnnouncement(screen)}
+          {transitioning && !inlineStatus
+            ? ""
+            : liveAnnouncement(screen, inlineStatus)}
         </p>
         {screen && "handle" in screen && screen.handle.contentReleaseId ? (
           <p className="sr-only" data-testid="context-lab-content-pin">
@@ -429,7 +609,7 @@ export function ContextLabClient({
             />
             <ProbeIntroPanel
               screen={screen}
-              disabled={busy || transitioning}
+              disabled={controlsLocked}
               onContinue={() => {
                 void continueProbeIntent();
               }}
@@ -445,7 +625,7 @@ export function ContextLabClient({
             />
             <ProbeSummaryPanel
               screen={screen}
-              disabled={busy || transitioning}
+              disabled={controlsLocked}
               onHandoff={(intent) => {
                 void continueProbeIntent(intent);
               }}
@@ -461,7 +641,7 @@ export function ContextLabClient({
             />
             <GuidedActivityPanel
               screen={screen}
-              disabled={busy || transitioning}
+              disabled={controlsLocked}
               onAcknowledge={() => {
                 void acknowledgeGuided();
               }}
@@ -477,30 +657,68 @@ export function ContextLabClient({
             />
             <FrozenTaskPreview
               screen={screen}
-              disabled={busy || transitioning}
+              disabled={controlsLocked}
               onAction={(intent) => {
                 void submitFrozenIntent(intent);
               }}
             />
           </>
         ) : null}
-        {screen?.kind === "PROBE_TASK_RECORDED" ? (
+        {autoRecorded && screen ? (
+          <>
+            <ContextLabHeader
+              title={headerContext?.title ?? "早餐时间"}
+              settingLabel={
+                headerContext?.settingLabel ??
+                (screen.kind === "PROBE_TASK_RECORDED"
+                  ? "先看看你已经会了哪些词"
+                  : "看看桌上的食物和餐具。")
+              }
+              progress={
+                headerProgress ??
+                ("progress" in screen
+                  ? screen.progress
+                  : { current: 0, total: 0 })
+              }
+            />
+            {heldPreview ? (
+              <FrozenTaskPreview
+                screen={heldPreview}
+                disabled
+                onAction={() => undefined}
+              />
+            ) : null}
+            <ContextLabInlineStatus
+              status={inlineStatus ?? "RECORDED"}
+              message={inlineRecordedCopy({
+                kind: screen.kind as AutoRecordedScreen["kind"],
+                recordedMessage:
+                  screen.kind === "FROZEN_TASK_RECORDED"
+                    ? screen.recordedMessage
+                    : undefined,
+              })}
+              screenKind={screen.kind as AutoRecordedScreen["kind"]}
+              onRetry={
+                inlineStatus === "CONTINUE_FAILED" ? retryAutoContinue : undefined
+              }
+            />
+          </>
+        ) : null}
+        {screen?.kind === "PROBE_TASK_RECORDED" && !autoRecorded ? (
           <>
             <ContextLabHeader
               title="早餐时间"
               settingLabel="先看看你已经会了哪些词"
               progress={screen.progress}
             />
-            <ProbeRecordedNotice
-              screen={screen}
-              disabled={busy || transitioning}
-              onContinue={() => {
-                void continueProbeIntent();
-              }}
+            <ContextLabInlineStatus
+              status="RECORDED"
+              message={CONTEXT_LAB_INLINE_RECORDED_STATUS}
+              screenKind="PROBE_TASK_RECORDED"
             />
           </>
         ) : null}
-        {screen?.kind === "FROZEN_TASK_RECORDED" ? (
+        {screen?.kind === "FROZEN_TASK_RECORDED" && !autoRecorded ? (
           <>
             <ContextLabHeader
               title={headerContext?.title ?? "早餐时间"}
@@ -511,7 +729,7 @@ export function ContextLabClient({
             />
             <ContextLabRecordedNotice
               screen={screen}
-              disabled={busy || transitioning}
+              disabled={controlsLocked}
               onContinue={
                 screen.continueAvailable
                   ? () => {
@@ -527,7 +745,21 @@ export function ContextLabClient({
   );
 }
 
-function liveAnnouncement(screen: ContextLabCurrentScreen | null): string {
+function liveAnnouncement(
+  screen: ContextLabCurrentScreen | null,
+  inlineStatus: InlineStatus,
+): string {
+  if (inlineStatus === "CONTINUE_FAILED") {
+    return CONTEXT_LAB_AUTO_CONTINUE_FAILED_MESSAGE;
+  }
+  if (inlineStatus === "RECORDED" && screen) {
+    if (screen.kind === "PROBE_TASK_RECORDED") {
+      return CONTEXT_LAB_INLINE_RECORDED_STATUS;
+    }
+    if (screen.kind === "FROZEN_TASK_RECORDED") {
+      return screen.recordedMessage;
+    }
+  }
   if (!screen) {
     return "正在准备体验。";
   }
@@ -540,16 +772,35 @@ function liveAnnouncement(screen: ContextLabCurrentScreen | null): string {
   if (screen.kind === "PROBE_SUMMARY") {
     return "这次检查的下一步建议。";
   }
-  if (screen.kind === "FROZEN_TASK_PREVIEW") {
-    return `第 ${screen.progress.current} 个物品，共 ${screen.progress.total} 个物品。`;
+  if (screen.kind === "FROZEN_TASK_PREVIEW" || screen.kind === "GUIDED") {
+    return spokenProgress(screen.progress);
   }
   if (screen.kind === "PROBE_TASK_RECORDED") {
-    return screen.message;
+    return CONTEXT_LAB_INLINE_RECORDED_STATUS;
   }
-  if (screen.kind === "FROZEN_TASK_RECORDED") {
-    return `${screen.feedback.message} ${screen.recordedMessage}`;
+  return screen.queueCompleteMessage
+    ? `${screen.recordedMessage} ${screen.queueCompleteMessage}`
+    : screen.recordedMessage;
+}
+
+function spokenProgress(progress: {
+  current: number;
+  total: number;
+  unit?: string;
+}): string {
+  if (progress.current <= 0) {
+    return `这次检查共 ${progress.total} 个目标词。`;
   }
-  return `第 ${screen.progress.current} 步，共 ${screen.progress.total} 步。`;
+  if (progress.unit === "个目标词") {
+    return `正在检查第 ${progress.current} 个词，共 ${progress.total} 个。`;
+  }
+  if (progress.unit === "个需要建立的词") {
+    return `正在建立第 ${progress.current} 个词，共 ${progress.total} 个。`;
+  }
+  if (progress.unit === "个需要强化的词") {
+    return `正在强化第 ${progress.current} 个词，共 ${progress.total} 个。`;
+  }
+  return formatContextLabProgress(progress);
 }
 
 function persistStrengthenRun(screen: ContextLabCurrentScreen): void {
@@ -580,8 +831,9 @@ function stateFor(
   screen: ContextLabCurrentScreen | null,
   transitioning: boolean,
   busy: boolean,
+  autoRecorded: boolean | null,
 ): PresentationState {
-  if (transitioning || (busy && screen?.kind === "GUIDED")) {
+  if (transitioning || (busy && screen?.kind === "GUIDED" && !autoRecorded)) {
     return "TRANSITIONING";
   }
   if (!screen) {

@@ -156,7 +156,7 @@ describe("Meal spoon active-recall STRENGTHEN", () => {
     expect(reconnect.activity.kind).toBe("RECONNECT_FORM");
     expect(reconnect.context.supportReveal?.lexicalForm).toBe("spoon");
     expect(reconnect.context.supportReveal?.meaningGloss).toBe("匙，调羹");
-    expect(reconnect.context.relationCaption).toBeUndefined();
+    expect(reconnect.context.relationCaption).toBe("勺子 → 适合舀汤");
     expect(reconnect.context.contrastCaptions).toBeUndefined();
     expect(JSON.stringify(reconnect)).not.toContain("教学阶段");
     for (const field of FORBIDDEN_CLIENT_FIELDS) {
