@@ -938,12 +938,23 @@ official Supabase Auth cookies.
 
 ### Slice 2 — Free Practice plan / read model
 
+**Implementation note (still Candidate / not a Standard):** a
+server-only planner exists under `src/server/free-practice/planning/`.
+It does not persist, does not create `game_sessions`, and does not
+wire `/practice`, Homepage, or `/train`.
+
 - **Does:** `FreePracticeRequest` → eligible pool →
   `FreePracticePlanResult`. UNSEEN first; `RECENTLY_INCORRECT` uses
   the latest-terminal-per-skill algorithm in §5.4.
-- **Files expected:** `src/server/free-practice/plan-free-practice.ts`,
-  types, query port that returns a bounded terminal Evidence window
-  (all outcomes), not Core.
+- **Files:** `src/server/free-practice/planning/**`; tests under
+  `tests/free-practice/planning/`.
+- **Read port:** `FreePracticePlanReadPort` is independent of the
+  frozen `LearningRepository`. In-memory test adapter plus a dedicated
+  Supabase read adapter: `user_id` filter, `occurred_at` desc, `id`
+  desc, limit 40, all outcomes. No migration.
+- **Identity:** `userId` is a server-internal planner argument. Future
+  public callers must pass `requireFreePracticeIdentity`. This slice
+  has no browser/server action.
 - **Frozen forbidden:** Scheduler policy, Need Generator, Evidence
   schema, `LearningNeedReason`.
 - **Tests:** 100 unseen → 10 `READY`; Case 2 A–F; 0 eligible →

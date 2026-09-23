@@ -185,6 +185,45 @@ Public Free Practice must not use `V1_PLACEHOLDER_USER_ID`. A server-only port (
   middleware before relying on long-lived anonymous sessions. Expired
   access tokens currently fail closed.
 
+## Free Practice plan read queries (Candidate Slice 2)
+
+This is a Candidate read-model note, not a schema change and not a
+Standard. No migration is required: existing `learning_evidence` and
+`student_lexeme_models` columns already support the queries.
+
+`src/server/free-practice/planning` owns a dedicated read port. It does
+**not** extend frozen `LearningRepository`. Every query is bound to a
+trusted server `userId`. Service-role clients are not a license to omit
+the `user_id` filter or to read another user's rows.
+
+**UNSEEN**
+
+```
+student_lexeme_models
+  select lexeme_id, mastery_stage
+  eq user_id
+```
+
+Skill-state and weakness rows are not loaded. Eligibility is “no
+snapshot or `mastery_stage = UNSEEN`” plus usable `meaningsZh` from
+bundled vocabulary.
+
+**RECENTLY_INCORRECT**
+
+```
+learning_evidence
+  select id, lexeme_id, skill, outcome, occurred_at
+  eq user_id
+  order occurred_at descending
+  order id descending
+  limit 40
+```
+
+All outcomes. This is not “last 40 `INCORRECT` rows”. The planner then
+keeps the latest terminal row per `lexeme_id + skill`. The planner is
+read-only: it does not insert Evidence, snapshots, tasks, or
+`game_sessions`.
+
 ## RLS TODO
 
 There is no student auth context yet. Current V1 uses trusted server actions and `V1_PLACEHOLDER_USER_ID`. Do not add `using (true)` write policies. When Supabase Auth lands:
