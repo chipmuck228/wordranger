@@ -13,10 +13,12 @@ describe("Homepage / Settings debug navigation", () => {
     expect(home).not.toContain("Open Task Protocol Debug Lab");
     expect(home).not.toContain("Open Scheduler Debug Lab");
     expect(home).not.toContain("Open Learning Core Debug Lab");
-    expect(home).toContain("HomeSettingsMenu");
-    expect(home).toContain("开始今天的训练");
-    expect(home).toContain("/train");
-    expect(home).toContain("/play/ranger-trial");
+    expect(home).toContain("HomePage");
+    expect(home).not.toContain("开始今天的训练");
+    expect(home).not.toContain("/play/ranger-trial");
+    expect(home).not.toContain("/play/matching");
+    expect(home).not.toContain("/play/snake");
+    expect(home).not.toContain("/play/word-bubble");
   });
 
   it("keeps a Settings Debug 工具 group with six paths", () => {

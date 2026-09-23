@@ -17,7 +17,7 @@ export function HomeSettingsMenu({
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
-        className="border-border bg-background hover:bg-muted inline-flex h-10 min-h-10 items-center rounded-lg border px-3 text-sm"
+        className="border-border bg-background hover:bg-muted inline-flex h-10 min-h-10 items-center rounded-lg border px-3 text-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         onClick={() => setOpen((current) => !current)}
       >
         设置
@@ -38,7 +38,7 @@ export function HomeSettingsMenu({
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      className="hover:bg-muted block rounded-lg px-2 py-2 text-sm"
+                      className="hover:bg-muted block rounded-lg px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                     >
                       {item.label}
                     </Link>

@@ -234,5 +234,5 @@ Debug Labs and unit tests may still use in-memory repositories. Explicit `RANGER
 
 There is no auth; student pages use `V1_PLACEHOLDER_USER_ID` (a UUID placeholder). Auth/RLS is future work. Server actions must not accept `userId` from the browser.
 
-The home primary CTA is 开始今天的训练 → `/train`. Free-play cards stay secondary. See `docs/DAILY_TRAINING_EXPERIENCE.md`.
+The home primary CTA is 继续今天的学习 → `/train`. Free-play game routes remain reachable by URL but are not first-level home entries. See `docs/DAILY_TRAINING_EXPERIENCE.md`.
 

@@ -137,14 +137,28 @@ describe("Context Lab import boundary", () => {
     }
   });
 
-  it("does not appear in production home or train navigation", () => {
-    const home = readFileSync(join(process.cwd(), "src/app/page.tsx"), "utf8");
+  it("does not appear in production train navigation", () => {
     const train = readFileSync(
       join(process.cwd(), "src/app/train/daily-training-play-client.tsx"),
       "utf8",
     );
-    expect(home).not.toContain("/play/context-lab");
     expect(train).not.toContain("/play/context-lab");
     expect(train).not.toContain("Context Lab");
+  });
+
+  it("lets Homepage link Context Lab only through the gated projection", () => {
+    const home = readFileSync(join(process.cwd(), "src/app/page.tsx"), "utf8");
+    const projection = readFileSync(
+      join(process.cwd(), "src/server/home/resolve-home-learning-paths.ts"),
+      "utf8",
+    );
+    expect(home).toContain("resolveHomeLearningPaths");
+    expect(home).not.toContain("loadContextLabContent");
+    expect(projection).toContain("isContextLabEnabled");
+    expect(projection).toContain("resolveContextLabContentSourceMode");
+    expect(projection).toContain("resolveContextLabRuntimeMode");
+    expect(projection).not.toContain("loadContextLabContent");
+    expect(projection).not.toContain("loadActiveRelease");
+    expect(projection).not.toContain("createContextLabRuntime");
   });
 });

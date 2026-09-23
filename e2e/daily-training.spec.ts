@@ -95,7 +95,7 @@ async function answerCurrentItem(page: Page): Promise<void> {
 async function startDailyTraining(page: Page): Promise<void> {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  await page.getByRole("link", { name: "开始今天的训练" }).click();
+  await page.getByRole("link", { name: "继续今天的学习" }).click();
   await expect(page).toHaveURL(/\/train/);
   await page.getByRole("button", { name: "开始" }).click();
   await expect(page.locator("[data-renderer]")).toBeVisible({ timeout: 30_000 });

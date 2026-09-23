@@ -16,7 +16,17 @@ npm run generate:provisional-placement
 
 Open [http://localhost:3000](http://localhost:3000).
 
-`npm run dev` uses whatever is in `.env.local`. The **code default is durable Supabase**. In-memory fixtures are opt-in via `RANGER_TRIAL_RUNTIME=memory` (legacy name; also `GAME_RUNTIME=memory`). Playwright sets the memory fixture itself. Production must leave both unset.
+Copy `.env.example` to `.env.local` for local development. The file is split into **Production** (Vercel + Supabase) and **Development** (local flags).
+
+Vercel Production needs only:
+
+```
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+Leave every Candidate / memory / write-gate flag unset on Vercel. Setting `CONTEXT_LAB_ENABLED=1` alone does not start Context Lab and does not make Homepage show 进入场景; `CONTEXT_LAB_RUNTIME` must also be a legal local value. Homepage only treats local static + memory as startable. active-release is not enterable from Homepage. `npm run dev` uses `.env.local`. The **code default is durable Supabase**. In-memory fixtures are opt-in via `RANGER_TRIAL_RUNTIME=memory` (legacy name; also `GAME_RUNTIME=memory`). Playwright sets the memory fixture itself.
 
 `npm test` does not write to Supabase. The live Daily Training persistence check is opt-in:
 

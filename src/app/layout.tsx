@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "WordRanger",
-  description: "Game-based vocabulary learning engine",
+  description: "通过辨义、回忆和拼写练习，发现哪些词已经记住，哪些词还需要建立或强化记忆。",
 };
 
 export default function RootLayout({

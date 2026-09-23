@@ -38,7 +38,7 @@ test.describe("default host without debug flags", () => {
     page,
   }) => {
     await page.goto("/");
-    await expect(page.getByRole("link", { name: "开始今天的训练" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "继续今天的学习" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Open Vocabulary Debug Lab" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Open Task Protocol Debug Lab" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Open Scheduler Debug Lab" })).toHaveCount(0);
