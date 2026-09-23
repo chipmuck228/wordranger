@@ -5,10 +5,12 @@ export function TaskFeedback({
   feedback,
   onContinue,
   disabled,
+  continueLabel = "继续",
 }: {
   feedback: GameSubmissionFeedback;
   onContinue: () => void;
   disabled?: boolean;
+  continueLabel?: string;
 }) {
   const correct =
     feedback.status === "CORRECT" || feedback.status === "ASSISTED";
@@ -44,7 +46,7 @@ export function TaskFeedback({
         onClick={onContinue}
         disabled={disabled || !feedback.continueAvailable}
       >
-        继续
+        {continueLabel}
       </Button>
     </div>
   );

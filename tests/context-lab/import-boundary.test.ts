@@ -146,17 +146,23 @@ describe("Context Lab import boundary", () => {
     expect(train).not.toContain("Context Lab");
   });
 
-  it("lets Homepage link Context Lab only through the gated projection", () => {
+  it("keeps Homepage off Context Lab availability and content", () => {
     const home = readFileSync(join(process.cwd(), "src/app/page.tsx"), "utf8");
     const projection = readFileSync(
       join(process.cwd(), "src/server/home/resolve-home-learning-paths.ts"),
       "utf8",
     );
+    const page = readFileSync(
+      join(process.cwd(), "src/components/home/home-page.tsx"),
+      "utf8",
+    );
     expect(home).toContain("resolveHomeLearningPaths");
     expect(home).not.toContain("loadContextLabContent");
-    expect(projection).toContain("isContextLabEnabled");
-    expect(projection).toContain("resolveContextLabContentSourceMode");
-    expect(projection).toContain("resolveContextLabRuntimeMode");
+    expect(page).not.toContain("/play/context-lab");
+    expect(page).not.toContain("进入场景");
+    expect(projection).not.toContain("isContextLabEnabled");
+    expect(projection).not.toContain("resolveContextLabContentSourceMode");
+    expect(projection).not.toContain("resolveContextLabRuntimeMode");
     expect(projection).not.toContain("loadContextLabContent");
     expect(projection).not.toContain("loadActiveRelease");
     expect(projection).not.toContain("createContextLabRuntime");

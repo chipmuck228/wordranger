@@ -1,0 +1,40 @@
+"use client";
+
+import Link from "next/link";
+import { useSyncExternalStore } from "react";
+import { HomeDailyStatus } from "@/components/training/home-daily-status";
+import {
+  readCompletedDailyTrainingRounds,
+  subscribeDailyTrainingStatus,
+} from "@/components/training/training-session-storage";
+import type { HomeLearningPaths } from "@/server/home/resolve-home-learning-paths";
+
+const FOCUS =
+  "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:border-ring";
+
+function serverSnapshot(): number {
+  return 0;
+}
+
+export function HomePracticeEntry({ href }: { href: HomeLearningPaths["primaryHref"] }) {
+  const rounds = useSyncExternalStore(
+    subscribeDailyTrainingStatus,
+    readCompletedDailyTrainingRounds,
+    serverSnapshot,
+  );
+  const label = rounds >= 1 ? "继续自由练习" : "开始自由练习";
+  return (
+    <div className="mt-8 flex max-w-md flex-col gap-3">
+      <Link
+        href={href}
+        className={`bg-primary text-primary-foreground hover:bg-primary/80 inline-flex min-h-14 items-center justify-center rounded-xl px-6 text-lg font-medium ${FOCUS}`}
+      >
+        {label}
+      </Link>
+      <p className="text-muted-foreground text-sm">
+        单词由系统根据当前学习情况安排。
+      </p>
+      <HomeDailyStatus />
+    </div>
+  );
+}

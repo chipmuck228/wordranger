@@ -26,4 +26,11 @@ export const SNAKE_GAME_TYPE = "SNAKE";
 export const DAILY_TRAINING_ORCHESTRATION_TYPE = "DAILY_TRAINING";
 export const DAILY_TRAINING_TASK_COUNT = 8;
 
+/**
+ * Daily Training presentation identity. Not Evidence.gameId and not a
+ * fifth learning renderer. New `/train` sessions present Ranger Trial
+ * task contracts under this label. Evidence.gameId stays RANGER_TRIAL.
+ */
+export const DIRECT_PRACTICE_PRESENTATION_TYPE = "DIRECT_PRACTICE";
+
 export const GAME_SESSION_STATE_VERSION = "v1";

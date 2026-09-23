@@ -27,8 +27,10 @@ async function assertHomeStructure(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "自由练习" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "场景学习" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "学习会怎样进行？" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "继续今天的学习" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "进入场景" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "开始自由练习" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "继续今天的学习" })).toHaveCount(0);
+  await expect(page.getByText("场景学习正在准备中")).toBeVisible();
+  await expect(page.getByRole("link", { name: "进入场景" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "连连看" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "贪食蛇" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "单词泡泡" })).toHaveCount(0);
@@ -38,22 +40,33 @@ async function assertHomeStructure(page: Page): Promise<void> {
   await expect(page.getByText(/fingerprint|AnswerKey|ExperienceRun/i)).toHaveCount(0);
 }
 
-test("Homepage learning-path information architecture", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
-  await assertHomeStructure(page);
-  await page.getByRole("link", { name: "继续今天的学习" }).click();
-  await expect(page).toHaveURL(/\/train/);
-});
-
-test("Homepage scene entry opens Context Lab when the ordinary lab is startable", async ({
+test("Homepage switches to 继续自由练习 after a completed group", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  await page.getByRole("link", { name: "进入场景" }).click();
-  await expect(page).toHaveURL(/\/play\/context-lab/);
-  await expect(page.getByText("页面不存在")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "开始自由练习" })).toBeVisible();
+  await page.evaluate(() => {
+    sessionStorage.setItem("wordranger.daily-training.completedRounds", "1");
+  });
+  await page.reload();
+  await expect(page.getByRole("link", { name: "继续自由练习" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "开始自由练习" })).toHaveCount(0);
+});
+
+test("Homepage learning-path information architecture", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await assertHomeStructure(page);
+  await page.getByRole("link", { name: "开始自由练习" }).click();
+  await expect(page).toHaveURL(/\/train/);
+});
+
+test("Homepage does not open Context Lab", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "进入场景" })).toHaveCount(0);
+  await expect(page.locator('a[href="/play/context-lab"]')).toHaveCount(0);
 });
 
 test("Homepage keeps Settings-only Debug tools and no student Debug links", async ({
@@ -78,19 +91,15 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
-test("Homepage primary and scene actions are keyboard reachable", async ({
-  page,
-}) => {
+test("Homepage primary action is keyboard reachable", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "设置" })).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "继续今天的学习" })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "进入场景" })).toBeFocused();
+  await expect(page.getByRole("link", { name: "开始自由练习" })).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/play\/context-lab/);
+  await expect(page).toHaveURL(/\/train/);
 });
 
 test("old free-play routes remain directly reachable", async ({ page }) => {

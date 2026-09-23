@@ -16,7 +16,7 @@ test("student home does not link to vocabulary placement review", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "继续今天的学习" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "开始自由练习" })).toBeVisible();
   await expect(page.locator('a[href="/debug/vocabulary-placement"]')).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "Open Vocabulary Placement Review" }),

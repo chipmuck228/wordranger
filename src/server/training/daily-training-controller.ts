@@ -49,12 +49,15 @@ import {
   rendererByGameType,
   type TrainingRendererDefinition,
 } from "./renderer-registry";
+import { selectDailyTrainingRenderer } from "./daily-training-renderer-policy";
 import { selectRendererForTask } from "./renderer-selector";
 
 /**
  * Product orchestrator for one Daily Training round.
- * Plans once, generates one task at a time, selects a renderer after generation,
- * and submits through `submitTaskAction` with the actual renderer gameId.
+ * Plans once, generates one task at a time, applies the Daily Training
+ * direct-practice presentation policy, and submits through `submitTaskAction`
+ * with Evidence.gameId RANGER_TRIAL for new items. In-progress items that
+ * already store a game renderer keep that renderer until the item completes.
  * Start retry after a client timeout may still create a second session
  * (inherited limitation; not redesigned in Phase 09).
  */
@@ -180,7 +183,7 @@ export class DailyTrainingController {
       deps.createTaskRandom ??
       ((sessionId, needId) =>
         createTaskRandom(DAILY_TRAINING_ORCHESTRATION_TYPE, sessionId, needId));
-    this.selectRenderer = deps.selectRenderer ?? selectRendererForTask;
+    this.selectRenderer = deps.selectRenderer ?? selectDailyTrainingRenderer;
   }
 
   private async bounded<T>(operation: Promise<T>): Promise<T> {
@@ -396,13 +399,7 @@ export class DailyTrainingController {
       };
     }
     if (record.phase === "awaiting_continue") {
-      return {
-        completed: false,
-        progress: publicProgress(record),
-        stats: { ...record.stats },
-        feedback: record.lastFeedback ?? undefined,
-        rendererGameType: publicProgress(record).rendererGameType ?? undefined,
-      };
+      return this.resumeAwaitingContinue(record);
     }
     if (record.currentTaskId) {
       return this.resumeCurrentTask(record);
@@ -583,6 +580,25 @@ export class DailyTrainingController {
     return this.recoverCompletedSubmit(latest, taskId);
   }
 
+  private async resumeAwaitingContinue(
+    record: DailyTrainingSessionRecord,
+  ): Promise<ResumeDailyTrainingResult> {
+    const current = record.currentTaskId
+      ? await this.resumeCurrentTask(record)
+      : null;
+    return {
+      completed: false,
+      progress: publicProgress(record),
+      stats: { ...record.stats },
+      feedback: record.lastFeedback ?? undefined,
+      task: current?.task,
+      rendererGameType:
+        current?.rendererGameType ??
+        publicProgress(record).rendererGameType ??
+        undefined,
+    };
+  }
+
   private async resumeCurrentTask(
     record: DailyTrainingSessionRecord,
   ): Promise<ResumeDailyTrainingResult> {
@@ -616,13 +632,7 @@ export class DailyTrainingController {
       };
     }
     if (latest.phase === "awaiting_continue") {
-      return {
-        completed: false,
-        progress: publicProgress(latest),
-        stats: { ...latest.stats },
-        feedback: latest.lastFeedback ?? undefined,
-        rendererGameType: publicProgress(latest).rendererGameType ?? undefined,
-      };
+      return this.resumeAwaitingContinue(latest);
     }
     if (latest.currentTaskId) {
       return this.resumeCurrentTask(latest);

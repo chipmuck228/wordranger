@@ -492,6 +492,12 @@ Human review writes sparse CURATED records (`wordranger-human-review/v1`) keyed 
 
 Free-practice `/play/ranger-trial` may have a distinct light, mobile-first shell, explicit feedback, subtle motion, and a Settings panel. Settings are currently visible to everyone and are intended to become admin-only later. They persist only in `localStorage` and must not write Evidence, `StudentLexemeModel`, or Scheduler input. Round length remains the existing ~8-need Free Practice plan. Daily Training may reuse Ranger Trial task renderers without adopting the free-practice chrome.
 
+## ADR-083 — Daily Training uses direct presentation
+
+**Status:** accepted
+
+Student-facing `/train` is 自由练习: a scheduled small set of direct questions. It is not free word selection and does not bypass Scheduler, TaskEvaluator, or Evidence. New Daily Training items use presentation identity `DIRECT_PRACTICE` and reuse Ranger Trial task contracts. `Evidence.gameId` stays `RANGER_TRIAL`. `DIRECT_PRACTICE` is not a fifth learning renderer. In-progress sessions that already stored Bubble / Matching / Snake keep that renderer until the current item completes; the next generated item uses direct presentation. Homepage does not link Context Lab. Free-play `/play/*` routes stay reachable by URL.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

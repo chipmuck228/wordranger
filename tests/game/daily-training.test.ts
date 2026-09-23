@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GameSessionError } from "@/server/game-session/ranger-trial-errors";
 import {
+  DIRECT_PRACTICE_PRESENTATION_TYPE,
   MATCHING_GAME_ID,
   MATCHING_GAME_TYPE,
   RANGER_TRIAL_GAME_ID,
@@ -91,6 +92,56 @@ describe("Daily Training controller", () => {
     expect(renderer).toBeTruthy();
     expect(renderer?.canRenderTask(started.task)).toBe(true);
     expect(started.session.rendererGameType).toBe(started.rendererGameType);
+    expect(started.rendererGameType).toBe(DIRECT_PRACTICE_PRESENTATION_TYPE);
+  });
+
+  it("new sessions always assign DIRECT_PRACTICE and Evidence.gameId RANGER_TRIAL", async () => {
+    const world = createDailyTrainingWorld();
+    const started = await world.controller.start();
+    expect(started.rendererGameType).toBe(DIRECT_PRACTICE_PRESENTATION_TYPE);
+    expect(started.session.rendererGameType).toBe(DIRECT_PRACTICE_PRESENTATION_TYPE);
+    await world.controller.submit({
+      sessionId: started.session.sessionId,
+      taskId: started.task.id,
+      intent: trainingIntent(started.task),
+      responseTimeMs: 400,
+    });
+    const evidence = world.learning.listEvidenceForUser(world.userId);
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0].gameId).toBe(RANGER_TRIAL_GAME_ID);
+    expect(evidence[0].gameId).not.toBe("DIRECT_PRACTICE");
+    expect(evidence[0].gameId).not.toBe("DAILY_TRAINING");
+  });
+
+  it("resumes an old game renderer then assigns direct on the next item", async () => {
+    const legacy = createDailyTrainingWorld("legacy-direct-user", {
+      selectRenderer: queuedRendererSelector([WORD_BUBBLE_GAME_TYPE]),
+    });
+    const started = await legacy.controller.start();
+    expect(started.rendererGameType).toBe(WORD_BUBBLE_GAME_TYPE);
+    const fresh = createDailyTrainingWorld("legacy-direct-user", {
+      learning: legacy.learning,
+      tasks: legacy.tasks,
+      sessions: legacy.sessions,
+    });
+    const resumed = await fresh.controller.resume(started.session.sessionId);
+    expect(resumed.task?.id).toBe(started.task.id);
+    expect(resumed.rendererGameType).toBe(WORD_BUBBLE_GAME_TYPE);
+    expect(fresh.learning.listEvidenceForUser(fresh.userId)).toHaveLength(0);
+    await fresh.controller.submit({
+      sessionId: started.session.sessionId,
+      taskId: started.task.id,
+      intent: trainingIntent(started.task),
+      responseTimeMs: 300,
+    });
+    expect(fresh.learning.listEvidenceForUser(fresh.userId)).toHaveLength(1);
+    expect(fresh.learning.listEvidenceForUser(fresh.userId)[0].gameId).toBe(
+      WORD_BUBBLE_GAME_ID,
+    );
+    const continued = await fresh.controller.continue(started.session.sessionId);
+    expect(continued.completed).toBe(false);
+    expect(continued.rendererGameType).toBe(DIRECT_PRACTICE_PRESENTATION_TYPE);
+    expect(continued.task?.id).not.toBe(started.task.id);
   });
 
   it("D4: TEXT_INPUT routes to Ranger Trial", () => {

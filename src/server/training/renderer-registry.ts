@@ -1,5 +1,6 @@
 import type { GameCapability } from "@/domain/learning/game-capability";
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
+import { DIRECT_PRACTICE_PRESENTATION_TYPE } from "@/server/auth/v1-user";
 import { MATCHING_GAME_DEFINITION } from "@/server/game-session/matching-capability";
 import { RANGER_TRIAL_GAME_DEFINITION } from "@/server/game-session/ranger-trial-capability";
 import { SNAKE_GAME_DEFINITION } from "@/server/game-session/snake-capability";
@@ -32,6 +33,22 @@ function withPresentation(
   };
 }
 
+/**
+ * Daily Training presentation only. Reuses Ranger Trial capability and
+ * Evidence.gameId. Not registered in TRAINING_RENDERERS so free-play
+ * selector tests and game routes stay unchanged.
+ */
+export const DAILY_TRAINING_DIRECT_RENDERER: TrainingRendererDefinition =
+  withPresentation(
+    {
+      ...RANGER_TRIAL_GAME_DEFINITION,
+      gameType: DIRECT_PRACTICE_PRESENTATION_TYPE,
+    },
+    "DIRECT",
+    "",
+    "",
+  );
+
 export const TRAINING_RENDERERS: TrainingRendererDefinition[] = [
   withPresentation(
     WORD_BUBBLE_GAME_DEFINITION,
@@ -62,6 +79,9 @@ export const TRAINING_RENDERERS: TrainingRendererDefinition[] = [
 export function rendererByGameType(
   gameType: string,
 ): TrainingRendererDefinition | undefined {
+  if (gameType === DIRECT_PRACTICE_PRESENTATION_TYPE) {
+    return DAILY_TRAINING_DIRECT_RENDERER;
+  }
   return TRAINING_RENDERERS.find((item) => item.gameType === gameType);
 }
 

@@ -12,7 +12,7 @@ A Game Renderer is a consumer of Core V1. It displays a `PublicLearningTask` and
 | TaskEvaluator | Correctness | Display |
 | Learning Core | `StudentLexemeModel` | Games |
 
-Ranger Trial (单词闯关), Word Bubble (单词泡泡), Matching (连连看), and Snake (贪食蛇) are the four reference renderers. Daily Training selects among them. Later games should replace only rendering. They must keep the same submission path.
+Ranger Trial (单词闯关), Word Bubble (单词泡泡), Matching (连连看), and Snake (贪食蛇) are the four reference renderers. Daily Training (`/train`, 自由练习) uses a **direct** presentation (`DIRECT_PRACTICE`) that reuses Ranger Trial CHOICE / TEXT_INPUT components. It does not select Bubble, Matching, or Snake for new items. Those three remain free-play routes. Later games should replace only rendering. They must keep the same submission path.
 
 Renderers are selected by product orchestration. They remain passive consumers of `PublicLearningTask`. Renderer selection does not change task semantics.
 
