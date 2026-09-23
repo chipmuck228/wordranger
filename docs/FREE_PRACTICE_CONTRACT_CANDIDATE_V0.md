@@ -918,11 +918,16 @@ Do not implement these slices in this task.
 
 ### Slice 1 — Identity boundary
 
+Implementation note: a server-only port now exists at
+`src/server/free-practice/identity`. It is not a Standard, not a
+`/practice` route, and does not change `/train`. Anonymous sessions
+are not created here; later slices must establish them through
+official Supabase Auth cookies.
+
 - **Does:** server-authoritative `userId` for student actions; refuse
   client `userId`; keep placeholder off public Free Practice.
-- **Files expected:** `src/server/auth/*`, student action wrappers,
-  `docs/DATABASE.md` RLS notes, tests under `tests/auth/` or
-  `tests/server/`.
+- **Files expected:** `src/server/free-practice/identity/*`,
+  `docs/DATABASE.md` identity notes, tests under `tests/free-practice/`.
 - **Frozen forbidden:** `src/domain/learning/**`,
   `src/domain/scheduler/**`, evaluator, EvidenceFactory.
 - **Tests:** actions ignore/reject injected `userId`; public route

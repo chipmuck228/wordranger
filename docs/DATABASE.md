@@ -168,6 +168,23 @@ The scheduler reads:
 
 `LearningStateQueryRepository` is the read port. It is not the Learning Core mutation port.
 
+## Free Practice identity prerequisite (Candidate Slice 1)
+
+Public Free Practice must not use `V1_PLACEHOLDER_USER_ID`. A server-only port (`src/server/free-practice/identity`) resolves identity from a Supabase Auth cookie session via `auth.getUser()` and the **anon** key. The service-role key is never used for this lookup and must never be sent to the browser.
+
+- Browser `userId` fields, `localStorage`, and `sessionStorage` UUIDs are not trusted.
+- Missing, expired, or corrupt sessions fail closed (`NO_SERVER_SESSION`).
+- Missing `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` fails closed (`AUTH_NOT_CONFIGURED`). There is no placeholder, random UUID, or memory fallback.
+- The shared placeholder id is rejected (`PLACEHOLDER_FORBIDDEN`).
+- Daily Training (`/train`) and Context Lab still use the placeholder. This section does not migrate them and does not change RLS yet.
+- Anonymous Auth is single-browser: clearing cookies loses continuity. Cross-device recovery is not supported. Email/magic-link is a later identity option.
+- `WORD_RANGER_FREE_PRACTICE_TEST_IDENTITY=1` enables a test-only reader factory. It is ignored on Vercel / `NODE_ENV=production`.
+- This is not a Standard and does not authorize a `/practice` route.
+- Cookie refresh middleware is **not** added in Slice 1, so `/train` is
+  unchanged. A later public `/practice` slice must add `@supabase/ssr`
+  middleware before relying on long-lived anonymous sessions. Expired
+  access tokens currently fail closed.
+
 ## RLS TODO
 
 There is no student auth context yet. Current V1 uses trusted server actions and `V1_PLACEHOLDER_USER_ID`. Do not add `using (true)` write policies. When Supabase Auth lands:
