@@ -4,13 +4,13 @@ Student-facing flow for 今日训练. Internal architecture lives in `docs/ARCHI
 
 ## Home
 
-WordRanger
+让学过的单词，在需要时想得起来
 
-今天练一点？
+[继续今天的学习] → `/train`
 
-[开始今天的训练]
+自由练习 is an explanation on the homepage. Game routes stay available by direct URL and are not first-level home entries.
 
-自由练习 stays below: 单词闯关, 单词泡泡, 连连看, 贪食蛇.
+场景学习 may link to `/play/context-lab` only when the Context Lab gate is on and Homepage can treat the content source as startable. Otherwise it shows 场景学习正在准备中.
 
 After a round, home may show: 今天已经完成 1 轮训练.
 
