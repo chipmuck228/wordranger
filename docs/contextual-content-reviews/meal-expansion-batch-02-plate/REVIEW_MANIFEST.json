@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "candidate-v0",
+  "packId": "meal-scene-expansion-batch-02",
+  "registryStatus": "APPROVED_FOR_EXPERIMENT",
+  "contentFingerprint": "4ce843238a0b5b4ca570b335e75ed2549b9af94acf536144812ecc1c86ed032b",
+  "target": {
+    "lexemeId": "4ca2bd15-e50d-531b-a379-30eebab1c9c2",
+    "senseId": "plate#food-support",
+    "canonicalKey": "lex-1036-1",
+    "roleId": "FOOD_SUPPORT",
+    "meaningGloss": "盘子"
+  },
+  "frameIds": [
+    "home-breakfast-v0",
+    "restaurant-meal-v0"
+  ],
+  "machineChecks": [
+    {
+      "id": "CONTENT_VALID",
+      "ok": true,
+      "detail": "Scene Content validator passed."
+    },
+    {
+      "id": "REGISTRY_STATUS",
+      "ok": true,
+      "detail": "Registry status is APPROVED_FOR_EXPERIMENT."
+    },
+    {
+      "id": "EXPERIMENT_RUNTIME",
+      "ok": true,
+      "detail": "Expansion pack is APPROVED_FOR_EXPERIMENT only."
+    },
+    {
+      "id": "ORIGINAL_FOUR_WORD_PACK_UNCHANGED",
+      "ok": true,
+      "detail": "Original four-word Meal pack remains identifiable."
+    },
+    {
+      "id": "PROBE_NO_FORM_LEAK",
+      "ok": true,
+      "detail": "Probe student copy does not include the target form."
+    }
+  ],
+  "reviewStatus": "APPROVED",
+  "staleState": "CURRENT"
+}

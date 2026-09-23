@@ -1,12 +1,16 @@
 import type {
+  AssessableExperienceStepSpec,
   ContextFrame,
   ExperienceStepSpec,
   LearningExperiencePlan,
 } from "../../domain/types";
+import type { GuidedExperienceStepSpec } from "../../domain/types";
 import {
   FIXTURE_PROVENANCE,
   MINIMAL_SUPPORT,
+  assessable,
   completeAll,
+  explicitChoice,
   nextOrEnd,
   pred,
   roleArg,
@@ -25,6 +29,11 @@ function borrowTargets(includeShare: boolean) {
         focus: "DISCRIMINATION" as const,
         requiredRelationIds: ["OWNS"],
       },
+      {
+        id: "target-share-form",
+        sense: BORROW_SENSE.share,
+        focus: "MEANING_TO_FORM" as const,
+      },
     ];
   }
   return [
@@ -39,6 +48,11 @@ function borrowTargets(includeShare: boolean) {
       sense: BORROW_SENSE.lend,
       focus: "RELATION_USE" as const,
       requiredRelationIds: ["OWNS"],
+    },
+    {
+      id: "target-borrow-form",
+      sense: BORROW_SENSE.borrow,
+      focus: "MEANING_TO_FORM" as const,
     },
   ];
 }
@@ -58,7 +72,7 @@ function borrowChoiceSteps(
     }),
   };
 
-  const requesterView: ExperienceStepSpec = {
+  const requesterView: ExperienceStepSpec = assessable({
     id: `${prefix}-${mode.toLowerCase()}-requester-view`,
     purpose: "DISCRIMINATE",
     targetIds: ["target-borrow"],
@@ -70,14 +84,36 @@ function borrowChoiceSteps(
     },
     expectedResponse: {
       kind: "RELATION_CHOICE",
-      allowedRelationIds: ["rel-borrow", "rel-lend", "rel-give"],
+      ...explicitChoice(
+        [
+          {
+            id: `${prefix}-opt-borrow`,
+            value: "rel-borrow",
+            displayText: "temporary receive",
+            lexemeRef: BORROW_SENSE.borrow,
+          },
+          {
+            id: `${prefix}-opt-lend`,
+            value: "rel-lend",
+            displayText: "temporary provide",
+            lexemeRef: BORROW_SENSE.lend,
+          },
+          {
+            id: `${prefix}-opt-give`,
+            value: "rel-give",
+            displayText: "transfer ownership",
+            lexemeRef: BORROW_SENSE.give,
+          },
+        ],
+        [`${prefix}-opt-borrow`],
+      ),
     },
     supportPolicy: mode === "BUILD" ? MINIMAL_SUPPORT : strengthenPolicy,
     requiredCapabilities: ["frozen-choice:SELECT"],
     transition: nextOrEnd(false),
-  };
+  });
 
-  const ownerView: ExperienceStepSpec = {
+  const ownerView: ExperienceStepSpec = assessable({
     id: `${prefix}-${mode.toLowerCase()}-owner-view`,
     purpose: "DISCRIMINATE",
     targetIds: ["target-lend"],
@@ -89,17 +125,39 @@ function borrowChoiceSteps(
     },
     expectedResponse: {
       kind: "RELATION_CHOICE",
-      allowedRelationIds: ["rel-borrow", "rel-lend", "rel-give"],
+      ...explicitChoice(
+        [
+          {
+            id: `${prefix}-opt-borrow-owner`,
+            value: "rel-borrow",
+            displayText: "temporary receive",
+            lexemeRef: BORROW_SENSE.borrow,
+          },
+          {
+            id: `${prefix}-opt-lend-owner`,
+            value: "rel-lend",
+            displayText: "temporary provide",
+            lexemeRef: BORROW_SENSE.lend,
+          },
+          {
+            id: `${prefix}-opt-give-owner`,
+            value: "rel-give",
+            displayText: "transfer ownership",
+            lexemeRef: BORROW_SENSE.give,
+          },
+        ],
+        [`${prefix}-opt-lend-owner`],
+      ),
     },
     supportPolicy: mode === "BUILD" ? MINIMAL_SUPPORT : strengthenPolicy,
     requiredCapabilities: ["frozen-choice:DISTINGUISH"],
     transition: nextOrEnd(false),
-  };
+  });
 
-  const recall: ExperienceStepSpec = {
+  const recall: ExperienceStepSpec = assessable({
     id: `${prefix}-${mode.toLowerCase()}-recall`,
     purpose: "RECALL",
-    targetIds: includeShare ? ["target-share"] : ["target-borrow"],
+    targetIds: includeShare ? ["target-share-form"] : ["target-borrow-form"],
     semanticAction: "TYPE",
     promptIntent: {
       instructionKey: includeShare
@@ -115,7 +173,7 @@ function borrowChoiceSteps(
     supportPolicy: MINIMAL_SUPPORT,
     requiredCapabilities: ["frozen-text-input:TYPE"],
     transition: nextOrEnd(true),
-  };
+  });
 
   if (includeShare) {
     return [
@@ -124,7 +182,29 @@ function borrowChoiceSteps(
         targetIds: ["target-share"],
         expectedResponse: {
           kind: "RELATION_CHOICE",
-          allowedRelationIds: ["rel-share", "rel-give", "rel-borrow"],
+          ...explicitChoice(
+            [
+              {
+                id: `${prefix}-opt-share`,
+                value: "rel-share",
+                displayText: "joint access",
+                lexemeRef: BORROW_SENSE.share,
+              },
+              {
+                id: `${prefix}-opt-give-share`,
+                value: "rel-give",
+                displayText: "transfer ownership",
+                lexemeRef: BORROW_SENSE.give,
+              },
+              {
+                id: `${prefix}-opt-borrow-share`,
+                value: "rel-borrow",
+                displayText: "temporary receive",
+                lexemeRef: BORROW_SENSE.borrow,
+              },
+            ],
+            [`${prefix}-opt-share`],
+          ),
         },
       },
       recall,
@@ -177,8 +257,8 @@ export function createBorrowStrengthenPlan(
 }
 
 /** Documented gap: ORDER has no frozen PublicLearningTask contract. */
-export function createUnsupportedOrderStep(): ExperienceStepSpec {
-  return {
+export function createUnsupportedOrderStep(): AssessableExperienceStepSpec {
+  return assessable({
     id: "borrow-order-observe-gap",
     purpose: "OBSERVE",
     targetIds: ["target-borrow"],
@@ -196,5 +276,47 @@ export function createUnsupportedOrderStep(): ExperienceStepSpec {
     supportPolicy: MINIMAL_SUPPORT,
     requiredCapabilities: [],
     transition: nextOrEnd(true),
+  });
+}
+
+/**
+ * Two observer views of one transfer. No correct option is recorded.
+ */
+export function createBorrowGuidedPerspectivePlan(
+  frame: ContextFrame,
+): LearningExperiencePlan {
+  const prefix = borrowPrefixForFrame(frame.id);
+  const observe: GuidedExperienceStepSpec = {
+    id: `${prefix}-guided-two-perspectives`,
+    purpose: "OBSERVE",
+    targetIds: ["target-borrow", "target-lend"],
+    semanticAction: "OBSERVE",
+    executionIntent: {
+      kind: "GUIDED",
+      guidedActivityKind: "OBSERVE_RELATION",
+      completionMode: "ACKNOWLEDGE_ONLY",
+      rationale:
+        "Show requester and owner views of the same transfer without asking which relation is correct.",
+    },
+    presentation: {
+      instruction:
+        "The same temporary transfer can be seen from the requester and from the owner.",
+      presentedEntityIds: [`${prefix}-owner`, `${prefix}-requester`, `${prefix}-item`],
+      presentedFactPredicates: ["owns"],
+    },
+    transition: nextOrEnd(true),
+  };
+  return {
+    id: `borrow-guided-perspectives-${frame.id}`,
+    schemaVersion: "candidate-v0",
+    mode: "BUILD",
+    sourceLearningNeedRef: "need-borrow-lend",
+    targets: borrowTargets(false),
+    skeletonId: BORROW_SKELETON_ID,
+    contextFrameId: frame.id,
+    activeGoalId: "REQUESTER_CAN_USE_ITEM_WITHOUT_CHANGING_OWNERSHIP",
+    steps: [observe],
+    completionPolicy: completeAll([observe]),
+    provenance: FIXTURE_PROVENANCE,
   };
 }

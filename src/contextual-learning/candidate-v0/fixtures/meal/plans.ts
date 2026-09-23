@@ -1,13 +1,46 @@
 import type {
   ContextFrame,
   ExperienceStepSpec,
+  ExperienceTarget,
   LearningExperiencePlan,
 } from "../../domain/types";
 import {
+  HOME_BREAKFAST_FRAME_ID,
+  MEAL_SCENE_CONTENT_PACK,
+} from "../../content/packs/meal/meal-scene-content";
+import { experimentalMealContextLabPack } from "../../content/experimental-meal-runtime-pack";
+import { MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET } from "../../content/packs/meal/meal-scene-expansion-batch-01";
+import { MEAL_SCENE_EXPANSION_BATCH_01_PACK } from "../../content/packs/meal/meal-scene-expansion-batch-01";
+import { MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID } from "../../content/packs/meal/meal-scene-expansion-batch-02";
+import { MEAL_SCENE_EXPANSION_BATCH_03_PACK } from "../../content/packs/meal/meal-scene-expansion-batch-03";
+import { resolveSceneContent } from "../../content/resolve-scene-content";
+import { snapshotSceneContentFromPack } from "../../content/snapshot-from-pack";
+import type { SceneLexemeLoader } from "../../content/types";
+import { sameLexemeSense } from "../../domain/lexeme-sense";
+import type { LexemeSenseRef } from "../../domain/types";
+import {
+  resolveMealRuntimeContext,
+  type MealRuntimeContextId,
+} from "../../planning/meal-runtime-context";
+import type { PlannerAuthoredRuntime } from "../../planning/types";
+import { MEAL_SCENE_CLUSTER } from "../../memory-routing/scene-catalog";
+import {
+  createContextualLexicalBuildPlan,
+  createContextualLexicalStrengthenPlan,
+} from "../../planning/create-contextual-lexical-plans";
+import { projectResolvedMealContentOntoFrame } from "./project-resolved-onto-frame";
+import {
+  identityForBundledTarget,
+  identityForFixtureSense,
+} from "../../strengthen/meal-lexical-profiles";
+import type { MealLexicalStrengthenIdentity } from "../../strengthen/meal-lexical-profiles";
+import {
   FIXTURE_PROVENANCE,
   MINIMAL_SUPPORT,
+  assessable,
   completeAll,
   entityArg,
+  explicitChoice,
   nextOrEnd,
   pred,
   strengthenLadder,
@@ -16,7 +49,7 @@ import { mealPrefixForFrame } from "./contexts";
 import { MEAL_SENSE } from "./knowledge";
 import { MEAL_SKELETON_ID } from "./skeleton";
 
-function spoonTarget() {
+function spoonInterpretationTarget() {
   return {
     id: "target-spoon",
     sense: MEAL_SENSE.spoon,
@@ -26,9 +59,38 @@ function spoonTarget() {
   };
 }
 
-function mealSteps(prefix: string, mode: "BUILD" | "STRENGTHEN"): ExperienceStepSpec[] {
-  const spoon = `${prefix}-spoon`;
-  const fork = `${prefix}-fork`;
+function spoonFormTarget() {
+  return {
+    id: "target-spoon-form",
+    sense: MEAL_SENSE.spoon,
+    focus: "MEANING_TO_FORM" as const,
+  };
+}
+
+function mealRecallStep(
+  prefix: string,
+  mode: "BUILD" | "STRENGTHEN",
+): ExperienceStepSpec {
+  return assessable({
+    id: `${prefix}-${mode.toLowerCase()}-recall`,
+    purpose: "RECALL",
+    targetIds: ["target-spoon-form"],
+    semanticAction: "TYPE",
+    promptIntent: {
+      instructionKey: "Produce the English word for the required tool.",
+      semanticQuestion: pred("name_required_tool", [
+        entityArg(`${prefix}-spoon`),
+      ]),
+      mustNotRevealTargetForm: true,
+    },
+    expectedResponse: { kind: "LEXICAL_FORM", sense: MEAL_SENSE.spoon },
+    supportPolicy: MINIMAL_SUPPORT,
+    requiredCapabilities: [`frozen-text-input:TYPE`],
+    transition: nextOrEnd(true),
+  });
+}
+
+function mealAssessableStrengthenSteps(prefix: string): ExperienceStepSpec[] {
   const strengthenPolicy = {
     initialSupportBlockIds: [],
     ladder: strengthenLadder({
@@ -39,91 +101,322 @@ function mealSteps(prefix: string, mode: "BUILD" | "STRENGTHEN"): ExperienceStep
     }),
   };
 
-  const identify: ExperienceStepSpec = {
-    id: `${prefix}-${mode.toLowerCase()}-identify`,
-    purpose: "GROUND",
-    targetIds: ["target-spoon"],
-    semanticAction: "IDENTIFY",
-    promptIntent: {
-      instructionKey: "Which object makes the active meal goal possible?",
-      semanticQuestion: pred("makes_goal_possible", [entityArg(spoon)]),
-    },
-    expectedResponse: {
-      kind: "ENTITY_REF",
-      allowedEntityIds: [spoon, fork],
-    },
-    supportPolicy: mode === "BUILD" ? MINIMAL_SUPPORT : strengthenPolicy,
-    requiredCapabilities: [`frozen-choice:IDENTIFY`],
-    transition: nextOrEnd(false),
-  };
+  const spoon = `${prefix}-spoon`;
+  const fork = `${prefix}-fork`;
 
-  const distinguish: ExperienceStepSpec = {
-    id: `${prefix}-${mode.toLowerCase()}-distinguish`,
-    purpose: "DISCRIMINATE",
-    targetIds: ["target-spoon"],
-    semanticAction: "DISTINGUISH",
-    promptIntent: {
-      instructionKey:
-        "Which tool is suitable for soup rather than for piercing food?",
-      semanticQuestion: pred("suitable_for_soup", [entityArg(spoon)]),
-    },
-    expectedResponse: {
-      kind: "ENTITY_REF",
-      allowedEntityIds: [spoon, fork],
-    },
-    supportPolicy: mode === "BUILD" ? MINIMAL_SUPPORT : strengthenPolicy,
-    requiredCapabilities: [`frozen-choice:DISTINGUISH`],
-    transition: nextOrEnd(false),
-  };
-
-  const recall: ExperienceStepSpec = {
-    id: `${prefix}-${mode.toLowerCase()}-recall`,
-    purpose: "RECALL",
-    targetIds: ["target-spoon"],
-    semanticAction: "TYPE",
-    promptIntent: {
-      instructionKey: "Produce the English word for the required tool.",
-      semanticQuestion: pred("name_required_tool", [entityArg(spoon)]),
-      mustNotRevealTargetForm: true,
-    },
-    expectedResponse: { kind: "LEXICAL_FORM", sense: MEAL_SENSE.spoon },
-    supportPolicy: MINIMAL_SUPPORT,
-    requiredCapabilities: [`frozen-text-input:TYPE`],
-    transition: nextOrEnd(true),
-  };
-
-  return [identify, distinguish, recall];
+  return [
+    assessable({
+      id: `${prefix}-strengthen-identify`,
+      purpose: "GROUND",
+      targetIds: ["target-spoon"],
+      semanticAction: "IDENTIFY",
+      promptIntent: {
+        instructionKey: "Which object makes the active meal goal possible?",
+        semanticQuestion: pred("makes_goal_possible", [entityArg(spoon)]),
+      },
+      expectedResponse: {
+        kind: "ENTITY_REF",
+        ...explicitChoice(
+          [
+            {
+              id: `${prefix}-opt-spoon`,
+              value: spoon,
+              displayText: "spoon",
+              lexemeRef: MEAL_SENSE.spoon,
+            },
+            {
+              id: `${prefix}-opt-fork`,
+              value: fork,
+              displayText: "fork",
+              lexemeRef: MEAL_SENSE.fork,
+            },
+          ],
+          [`${prefix}-opt-spoon`],
+        ),
+      },
+      supportPolicy: strengthenPolicy,
+      requiredCapabilities: [`frozen-choice:IDENTIFY`],
+      transition: nextOrEnd(false),
+    }),
+    assessable({
+      id: `${prefix}-strengthen-distinguish`,
+      purpose: "DISCRIMINATE",
+      targetIds: ["target-spoon"],
+      semanticAction: "DISTINGUISH",
+      promptIntent: {
+        instructionKey:
+          "Which tool is suitable for soup rather than for piercing food?",
+        semanticQuestion: pred("suitable_for_soup", [entityArg(spoon)]),
+      },
+      expectedResponse: {
+        kind: "ENTITY_REF",
+        ...explicitChoice(
+          [
+            {
+              id: `${prefix}-opt-spoon-fit`,
+              value: spoon,
+              displayText: "spoon",
+              lexemeRef: MEAL_SENSE.spoon,
+            },
+            {
+              id: `${prefix}-opt-fork-fit`,
+              value: fork,
+              displayText: "fork",
+              lexemeRef: MEAL_SENSE.fork,
+            },
+          ],
+          [`${prefix}-opt-spoon-fit`],
+        ),
+      },
+      supportPolicy: strengthenPolicy,
+      requiredCapabilities: [`frozen-choice:DISTINGUISH`],
+      transition: nextOrEnd(false),
+    }),
+    mealRecallStep(prefix, "STRENGTHEN"),
+  ];
 }
 
-export function createMealBuildPlan(frame: ContextFrame): LearningExperiencePlan {
-  const prefix = mealPrefixForFrame(frame.id);
-  const steps = mealSteps(prefix, "BUILD");
+function packForMealPlan(
+  runtimeContextId: MealRuntimeContextId,
+  target?: LexemeSenseRef,
+  authoredPack?: PlannerAuthoredRuntime["pack"],
+) {
+  if (authoredPack) {
+    return authoredPack;
+  }
+  if (runtimeContextId === "MEAL_BATCH_03") {
+    return MEAL_SCENE_EXPANSION_BATCH_03_PACK;
+  }
+  if (runtimeContextId === "MEAL_BATCH_02") {
+    const pack = experimentalMealContextLabPack();
+    return pack.id === MEAL_SCENE_EXPANSION_BATCH_02_PACK_ID ? pack : null;
+  }
+  if (target && sameLexemeSense(target, MEAL_SCENE_EXPANSION_BATCH_01_CUP_TARGET)) {
+    return MEAL_SCENE_EXPANSION_BATCH_01_PACK;
+  }
+  return MEAL_SCENE_CONTENT_PACK;
+}
+
+function packForMealIdentities(
+  runtimeContextId?: MealRuntimeContextId,
+  authoredPack?: PlannerAuthoredRuntime["pack"],
+) {
+  if (authoredPack) {
+    return authoredPack;
+  }
+  return runtimeContextId === "MEAL_BATCH_03"
+    ? MEAL_SCENE_EXPANSION_BATCH_03_PACK
+    : experimentalMealContextLabPack();
+}
+
+function mealContentForFrame(
+  frame: ContextFrame,
+  loadLexeme?: SceneLexemeLoader,
+  target?: LexemeSenseRef,
+  runtimeContextId: MealRuntimeContextId = "MEAL_BASE",
+  authoredRuntime?: PlannerAuthoredRuntime,
+) {
+  const runtimePack = packForMealPlan(runtimeContextId, target, authoredRuntime?.pack);
+  if (!runtimePack) {
+    return null;
+  }
+  const runtime = authoredRuntime
+    ? {
+        id: runtimeContextId,
+        frames: authoredRuntime.frames,
+        skeleton: authoredRuntime.skeleton,
+      }
+    : resolveMealRuntimeContext(runtimeContextId);
+  const authored = runtimePack.frames.some(
+    (item) => item.frameId === frame.id,
+  );
+  if (authored) {
+    if (!loadLexeme) {
+      return null;
+    }
+    const resolved = resolveSceneContent({
+      pack: runtimePack,
+      frame,
+      frames: [...runtime.frames],
+      skeleton: runtime.skeleton,
+      cluster: MEAL_SCENE_CLUSTER,
+      loadLexeme,
+    });
+    return resolved.ok ? resolved.content : null;
+  }
+  const homeCatalog = snapshotSceneContentFromPack(
+    runtimePack,
+    HOME_BREAKFAST_FRAME_ID,
+  );
+  return homeCatalog
+    ? projectResolvedMealContentOntoFrame(homeCatalog, frame)
+    : null;
+}
+
+function emptyMealBuildPlan(frame: ContextFrame): LearningExperiencePlan {
   return {
-    id: `meal-build-${frame.id}`,
+    id: `meal-build-${frame.id}-unresolved`,
     schemaVersion: "candidate-v0",
     mode: "BUILD",
-    sourceLearningNeedRef: "need-meal-spoon",
-    targets: [spoonTarget()],
+    sourceLearningNeedRef: "need-opaque-ref",
+    targets: [],
     skeletonId: MEAL_SKELETON_ID,
     contextFrameId: frame.id,
     activeGoalId: "EATER_CAN_EAT_FOOD",
-    steps,
-    completionPolicy: completeAll(steps),
+    steps: [],
+    completionPolicy: completeAll([]),
     provenance: FIXTURE_PROVENANCE,
   };
+}
+
+export function createMealLexicalBuildPlan(input: {
+  frame: ContextFrame;
+  profile: MealLexicalStrengthenIdentity;
+  loadLexeme?: SceneLexemeLoader;
+  runtimeContextId?: MealRuntimeContextId;
+  authoredRuntime?: PlannerAuthoredRuntime;
+}): LearningExperiencePlan {
+  const content = mealContentForFrame(
+    input.frame,
+    input.loadLexeme,
+    input.profile.target,
+    input.runtimeContextId,
+    input.authoredRuntime,
+  );
+  if (!content) {
+    return emptyMealBuildPlan(input.frame);
+  }
+  return createContextualLexicalBuildPlan({
+    frame: input.frame,
+    content,
+    target: input.profile.target,
+    stepIdPrefix: mealPrefixForFrame(input.frame.id),
+  });
+}
+
+export function createMealBuildPlan(
+  frame: ContextFrame,
+  request?: {
+    targets?: readonly ExperienceTarget[];
+    loadLexeme?: SceneLexemeLoader;
+    runtimeContextId?: MealRuntimeContextId;
+    authoredRuntime?: PlannerAuthoredRuntime;
+  },
+): LearningExperiencePlan {
+  const requested = request?.targets?.[0]?.sense;
+  const identityPack = packForMealIdentities(
+    request?.runtimeContextId,
+    request?.authoredRuntime?.pack,
+  );
+  const identity = requested
+    ? identityForFixtureSense(requested, identityPack) ??
+      identityForBundledTarget(requested, identityPack)
+    : identityForFixtureSense(MEAL_SENSE.spoon, identityPack);
+  if (!identity || (request && request.targets && request.targets.length !== 1)) {
+    return emptyMealBuildPlan(frame);
+  }
+  return createMealLexicalBuildPlan({
+    frame,
+    profile: identity,
+    loadLexeme: request?.loadLexeme,
+    runtimeContextId: request?.runtimeContextId,
+    authoredRuntime: request?.authoredRuntime,
+  });
+}
+
+export function createMealActiveRecallStrengthenPlan(input: {
+  frame: ContextFrame;
+  profile: MealLexicalStrengthenIdentity;
+  loadLexeme?: SceneLexemeLoader;
+  runtimeContextId?: MealRuntimeContextId;
+  authoredRuntime?: PlannerAuthoredRuntime;
+}): LearningExperiencePlan {
+  const content = mealContentForFrame(
+    input.frame,
+    input.loadLexeme,
+    input.profile.target,
+    input.runtimeContextId,
+    input.authoredRuntime,
+  );
+  if (!content) {
+    return {
+      id: `meal-strengthen-recall-${input.frame.id}-unresolved`,
+      schemaVersion: "candidate-v0",
+      mode: "STRENGTHEN",
+      sourceLearningNeedRef: "need-opaque-ref",
+      targets: [],
+      skeletonId: MEAL_SKELETON_ID,
+      contextFrameId: input.frame.id,
+      activeGoalId: "EATER_CAN_EAT_FOOD",
+      steps: [],
+      completionPolicy: completeAll([]),
+      provenance: FIXTURE_PROVENANCE,
+    };
+  }
+  return createContextualLexicalStrengthenPlan({
+    frame: input.frame,
+    content,
+    target: input.profile.target,
+    stepIdPrefix: mealPrefixForFrame(input.frame.id),
+  });
+}
+
+export function createMealRecallStrengthenPlan(
+  frame: ContextFrame,
+  request?: {
+    targets?: readonly ExperienceTarget[];
+    loadLexeme?: SceneLexemeLoader;
+    runtimeContextId?: MealRuntimeContextId;
+    authoredRuntime?: PlannerAuthoredRuntime;
+  },
+): LearningExperiencePlan {
+  const requested = request?.targets?.[0]?.sense;
+  const identityPack = packForMealIdentities(
+    request?.runtimeContextId,
+    request?.authoredRuntime?.pack,
+  );
+  const identity = requested
+    ? identityForFixtureSense(requested, identityPack) ??
+      identityForBundledTarget(requested, identityPack)
+    : null;
+  if (!identity || (request?.targets?.length ?? 0) !== 1) {
+    return {
+      id: `meal-strengthen-recall-${frame.id}-unresolved`,
+      schemaVersion: "candidate-v0",
+      mode: "STRENGTHEN",
+      sourceLearningNeedRef: "need-opaque-ref",
+      targets: [],
+      skeletonId: MEAL_SKELETON_ID,
+      contextFrameId: frame.id,
+      activeGoalId: "EATER_CAN_EAT_FOOD",
+      steps: [],
+      completionPolicy: completeAll([]),
+      provenance: FIXTURE_PROVENANCE,
+    };
+  }
+  return createMealActiveRecallStrengthenPlan({
+    frame,
+    profile: identity,
+    loadLexeme: request?.loadLexeme,
+    runtimeContextId: request?.runtimeContextId,
+    authoredRuntime: request?.authoredRuntime,
+  });
 }
 
 export function createMealStrengthenPlan(
   frame: ContextFrame,
 ): LearningExperiencePlan {
   const prefix = mealPrefixForFrame(frame.id);
-  const steps = mealSteps(prefix, "STRENGTHEN");
+  const steps = mealAssessableStrengthenSteps(prefix);
   return {
     id: `meal-strengthen-${frame.id}`,
     schemaVersion: "candidate-v0",
     mode: "STRENGTHEN",
     sourceLearningNeedRef: "need-meal-spoon",
-    targets: [{ ...spoonTarget(), focus: "DISCRIMINATION" }],
+    targets: [
+      { ...spoonInterpretationTarget(), focus: "DISCRIMINATION" },
+      spoonFormTarget(),
+    ],
     skeletonId: MEAL_SKELETON_ID,
     contextFrameId: frame.id,
     activeGoalId: "EATER_CAN_EAT_FOOD",

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "./content/helpers";
 import { listFrozenRuntimeCapabilities } from "@/contextual-learning/candidate-v0/capabilities/capability-registry";
 import { MEAL_FRAMES } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
@@ -40,7 +41,7 @@ describe("Candidate V0 cross-context reuse", () => {
     for (const frame of MEAL_FRAMES) {
       expect(validateContextFrame({ frame, skeleton: mealSkeleton }).ok).toBe(true);
       const build = validateExperiencePlan({
-        plan: createMealBuildPlan(frame),
+        plan: createMealBuildPlan(frame, { loadLexeme: mealTestLexemeLoader }),
         frame,
         skeleton: mealSkeleton,
         capabilities,

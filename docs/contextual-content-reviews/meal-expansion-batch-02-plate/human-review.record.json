@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "candidate-v0",
+  "reviewKey": "meal-expansion-batch-02-plate",
+  "packId": "meal-scene-expansion-batch-02",
+  "target": {
+    "lexemeId": "4ca2bd15-e50d-531b-a379-30eebab1c9c2",
+    "senseId": "plate#food-support"
+  },
+  "contentFingerprint": "4ce843238a0b5b4ca570b335e75ed2549b9af94acf536144812ecc1c86ed032b",
+  "decision": "APPROVED",
+  "notes": [],
+  "reviewedAt": "2026-09-21T16:11:21.138Z",
+  "revision": 1,
+  "reviewer": "LOCAL_INTERNAL_REVIEWER"
+}

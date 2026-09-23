@@ -11,6 +11,7 @@ WordRanger stores five different kinds of data. They must not be collapsed into 
 | Generated tasks | `learning_tasks` | Public payload + server-only answer key + generation trace. |
 | Learning snapshot | `student_lexeme_models` + skill states + weaknesses | Derived projection. Rebuildable from evidence. |
 | Game orchestration | `game_sessions` | Resume/navigation only. Not learning truth. |
+| Experimental Context Lab orchestration | `context_lab_runs` | Candidate V0 run JSON only. Not learning truth and not a Standard. |
 
 ## Vocabulary tables
 
@@ -128,6 +129,30 @@ V1 uses trusted server actions + the placeholder user. Do not treat RLS as solve
 `vocabulary_placement_reviews` enables RLS immediately and grants only `service_role`. That is an admin/reference lock, not student auth. Hiding `/debug/vocabulary-placement` is not authorization; review writes also require `PLACEMENT_REVIEW_WRITE_ENABLED=1`.
 
 Cleanup/TTL is future work. A failed session save after `learning_tasks` insert can leave an orphan assigned task; do not delete it.
+
+## Experimental Context Lab runs
+
+`context_lab_runs` is **Candidate V0 / Experimental / Not a Standard**. It is not a learning table and not a product game session.
+
+Why a separate table: `game_sessions` is the product orchestration store for LearningNeed plans, `currentTaskId`, and renderer stats. Context Lab stores a Candidate `ExperienceRun` and must not reuse another game’s repository instance or `GAME_RUNTIME`. Mixing that JSON into `game_sessions.state` would collapse experimental Candidate orchestration into the product session contract.
+
+| Column | Role |
+| --- | --- |
+| `id` | Run id (uuid, server-generated) |
+| `user_id` | Owner. V1 is `V1_PLACEHOLDER_USER_ID` |
+| `schema_version` | Candidate envelope (`candidate-v0`). Unknown versions are rejected |
+| `experience_id` | Plan/experience identity from the stored run |
+| `run_state` | Candidate `ExperienceRun` JSON. Orchestration only |
+| `revision` | CAS token. Insert at `0`; update `WHERE revision = N` writes `N+1` |
+| `created_at` / `updated_at` | `updated_at` changes only on successful create/CAS |
+
+`run_state` must not contain AnswerKey, Evidence, mastery, or submitted typed text. There is no Evidence foreign key and no client-writable path. RLS is enabled with no anon/authenticated policies; `service_role` only. Abandoned experimental runs have no expiry job yet.
+
+Context Lab frozen-task assignment writes the existing `learning_tasks` row (`user_id` = server `V1_PLACEHOLDER_USER_ID`, `session_id` = Context Lab run id). Submission goes through `submitTaskAction` into existing `learning_evidence` / learner snapshots. Do not add a Context Lab Evidence table.
+
+Live Supabase writes also require the existing `learning_tasks` / `learning_evidence` migrations. Context Lab binds the Meal BUILD typing fixture `lex-spoon` onto bundled canonical `lex-1311-1` before `saveGeneratedTask`. Candidate plan JSON may still contain fixture IDs; Evidence uses the vocabulary UUID.
+
+Rollback implication: dropping `context_lab_runs` discards experimental Context Lab orchestration only. It does not affect `learning_tasks`, `learning_evidence`, `student_lexeme_models`, or `game_sessions`.
 
 ## Phase 04 persistence
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { scienceTowerFrame } from "@/contextual-learning/candidate-v0/fixtures/school-challenge/contexts";
 import { SCHOOL_SENSE } from "@/contextual-learning/candidate-v0/fixtures/school-challenge/knowledge";
 import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
+import { sameLexemeSense } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
 import { schoolChallengeSkeleton } from "@/contextual-learning/candidate-v0/fixtures/school-challenge/skeleton";
 import { validateContextFrame } from "@/contextual-learning/candidate-v0/validation/validate-context-frame";
 
@@ -13,14 +14,14 @@ describe("Candidate V0 school-challenge case", () => {
     });
     expect(result.ok).toBe(true);
 
-    const possible = scienceTowerFrame.claimGroundings?.find(
-      (item) => item.sense.senseId === SCHOOL_SENSE.possible.senseId,
+    const possible = scienceTowerFrame.claimGroundings?.find((item) =>
+      sameLexemeSense(item.sense, SCHOOL_SENSE.possible),
     );
-    const difficult = scienceTowerFrame.claimGroundings?.find(
-      (item) => item.sense.senseId === SCHOOL_SENSE.difficult.senseId,
+    const difficult = scienceTowerFrame.claimGroundings?.find((item) =>
+      sameLexemeSense(item.sense, SCHOOL_SENSE.difficult),
     );
-    const success = scienceTowerFrame.claimGroundings?.find(
-      (item) => item.sense.senseId === SCHOOL_SENSE.success.senseId,
+    const success = scienceTowerFrame.claimGroundings?.find((item) =>
+      sameLexemeSense(item.sense, SCHOOL_SENSE.success),
     );
     expect(possible?.supportingFacts.length).toBeGreaterThan(0);
     expect(difficult?.supportingFacts.some((fact) => fact.predicate === "skill_level")).toBe(
@@ -35,7 +36,7 @@ describe("Candidate V0 school-challenge case", () => {
   it("binds ability as a scoped property, not a fake object", () => {
     const abilityBinding = scienceTowerFrame.entityBindings
       .flatMap((binding) => binding.lexemeSenseBindings ?? [])
-      .find((binding) => binding.sense.senseId === SCHOOL_SENSE.ability.senseId);
+      .find((binding) => sameLexemeSense(binding.sense, SCHOOL_SENSE.ability));
     expect(abilityBinding?.bindingKind).toBe("NAMES_PROPERTY");
   });
 

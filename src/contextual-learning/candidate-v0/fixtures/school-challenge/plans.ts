@@ -1,14 +1,18 @@
 import type {
   ContextFrame,
   ExperienceStepSpec,
+  GuidedExperienceStepSpec,
   LearningExperiencePlan,
 } from "../../domain/types";
+import { serializePredicate } from "../../domain/predicates";
 import {
   FIXTURE_PROVENANCE,
   MINIMAL_SUPPORT,
+  assessable,
   completeAll,
   conceptArg,
   entityArg,
+  explicitChoice,
   nextOrEnd,
   pred,
   strengthenLadder,
@@ -29,6 +33,11 @@ function schoolTargets() {
       sense: SCHOOL_SENSE.success,
       focus: "CONTEXT_INTERPRETATION" as const,
     },
+    {
+      id: "target-try-form",
+      sense: SCHOOL_SENSE.try,
+      focus: "MEANING_TO_FORM" as const,
+    },
   ];
 }
 
@@ -46,7 +55,22 @@ function schoolSteps(
     }),
   };
 
-  const discriminate: ExperienceStepSpec = {
+  const tryClaim = pred("attempt_is", [
+    entityArg(`${prefix}-attempt-1`),
+    conceptArg("concept-attempt"),
+  ]);
+  const successMisread = pred("attempt_is", [
+    entityArg(`${prefix}-attempt-1`),
+    conceptArg("concept-success-outcome"),
+  ], false);
+  const goalSatisfied = pred("goal_satisfied", [
+    entityArg(`${prefix}-attempt-2`),
+  ]);
+  const generalAbility = pred("has_general_ability", [
+    entityArg(`${prefix}-challenger`),
+  ], false);
+
+  const discriminate: ExperienceStepSpec = assessable({
     id: `${prefix}-${mode.toLowerCase()}-try-vs-success`,
     purpose: "DISCRIMINATE",
     targetIds: ["target-try"],
@@ -54,30 +78,34 @@ function schoolSteps(
     promptIntent: {
       instructionKey:
         "Attempt 1 fell. Which claim is supported: try, or success?",
-      semanticQuestion: pred("attempt_is", [
-        entityArg(`${prefix}-attempt-1`),
-        conceptArg("concept-attempt"),
-      ]),
+      semanticQuestion: tryClaim,
     },
     expectedResponse: {
       kind: "CLAIM_CHOICE",
-      allowedPredicates: [
-        pred("attempt_is", [
-          entityArg(`${prefix}-attempt-1`),
-          conceptArg("concept-attempt"),
-        ]),
-        pred("attempt_is", [
-          entityArg(`${prefix}-attempt-1`),
-          conceptArg("concept-success-outcome"),
-        ], false),
-      ],
+      ...explicitChoice(
+        [
+          {
+            id: `${prefix}-claim-try`,
+            value: tryClaim,
+            displayText: serializePredicate(tryClaim),
+            lexemeRef: SCHOOL_SENSE.try,
+          },
+          {
+            id: `${prefix}-claim-success-misread`,
+            value: successMisread,
+            displayText: serializePredicate(successMisread),
+            lexemeRef: SCHOOL_SENSE.success,
+          },
+        ],
+        [`${prefix}-claim-try`],
+      ),
     },
     supportPolicy: mode === "BUILD" ? MINIMAL_SUPPORT : strengthenPolicy,
     requiredCapabilities: ["frozen-choice:DISTINGUISH"],
     transition: nextOrEnd(false),
-  };
+  });
 
-  const successClaim: ExperienceStepSpec = {
+  const successClaim: ExperienceStepSpec = assessable({
     id: `${prefix}-${mode.toLowerCase()}-success`,
     purpose: "CONNECT",
     targetIds: ["target-success"],
@@ -91,20 +119,32 @@ function schoolSteps(
     },
     expectedResponse: {
       kind: "CLAIM_CHOICE",
-      allowedPredicates: [
-        pred("goal_satisfied", [entityArg(`${prefix}-attempt-2`)]),
-        pred("has_general_ability", [entityArg(`${prefix}-challenger`)], false),
-      ],
+      ...explicitChoice(
+        [
+          {
+            id: `${prefix}-claim-goal-satisfied`,
+            value: goalSatisfied,
+            displayText: serializePredicate(goalSatisfied),
+            lexemeRef: SCHOOL_SENSE.success,
+          },
+          {
+            id: `${prefix}-claim-general-ability`,
+            value: generalAbility,
+            displayText: serializePredicate(generalAbility),
+          },
+        ],
+        [`${prefix}-claim-goal-satisfied`],
+      ),
     },
     supportPolicy: mode === "BUILD" ? MINIMAL_SUPPORT : strengthenPolicy,
     requiredCapabilities: ["frozen-choice:SELECT"],
     transition: nextOrEnd(false),
-  };
+  });
 
-  const recall: ExperienceStepSpec = {
+  const recall: ExperienceStepSpec = assessable({
     id: `${prefix}-${mode.toLowerCase()}-recall`,
     purpose: "RECALL",
-    targetIds: ["target-try"],
+    targetIds: ["target-try-form"],
     semanticAction: "TYPE",
     promptIntent: {
       instructionKey:
@@ -118,7 +158,7 @@ function schoolSteps(
     supportPolicy: MINIMAL_SUPPORT,
     requiredCapabilities: ["frozen-text-input:TYPE"],
     transition: nextOrEnd(true),
-  };
+  });
 
   return [discriminate, successClaim, recall];
 }
@@ -159,6 +199,48 @@ export function createSchoolStrengthenPlan(
     activeGoalId: "COMPLETE_CHALLENGE",
     steps,
     completionPolicy: completeAll(steps),
+    provenance: FIXTURE_PROVENANCE,
+  };
+}
+
+/**
+ * Presentation only. Not a substitute for assessable CLAIM_CHOICE.
+ */
+export function createSchoolGuidedPresentationPlan(
+  frame: ContextFrame,
+): LearningExperiencePlan {
+  const prefix = schoolPrefixForFrame(frame.id);
+  const present: GuidedExperienceStepSpec = {
+    id: `${prefix}-guided-present-attempt`,
+    purpose: "OBSERVE",
+    targetIds: ["target-try"],
+    semanticAction: "OBSERVE",
+    executionIntent: {
+      kind: "GUIDED",
+      guidedActivityKind: "PRESENT_CONTEXT",
+      completionMode: "ACKNOWLEDGE_ONLY",
+      rationale:
+        "Show that the first attempt fell. Acknowledgement does not judge try vs success.",
+    },
+    presentation: {
+      instruction:
+        "Watch the first attempt fall. This scene is shown, not scored.",
+      presentedEntityIds: [`${prefix}-attempt-1`, `${prefix}-challenger`],
+      presentedFactPredicates: ["attempt_status"],
+    },
+    transition: nextOrEnd(true),
+  };
+  return {
+    id: `school-guided-present-${frame.id}`,
+    schemaVersion: "candidate-v0",
+    mode: "BUILD",
+    sourceLearningNeedRef: "need-school-try",
+    targets: schoolTargets(),
+    skeletonId: SCHOOL_SKELETON_ID,
+    contextFrameId: frame.id,
+    activeGoalId: "COMPLETE_CHALLENGE",
+    steps: [present],
+    completionPolicy: completeAll([present]),
     provenance: FIXTURE_PROVENANCE,
   };
 }

@@ -3,10 +3,14 @@
  */
 
 import { curatedFixtureProvenance } from "../domain/provenance";
+import { findProfile, lexemeSenseKey } from "../domain/lexeme-sense";
 import type {
+  AssessableExperienceStepSpec,
   ExperienceCompletionPolicy,
   ExperienceStepSpec,
+  ExplicitSemanticChoice,
   LexemeSenseRef,
+  SemanticChoiceCandidate,
   SemanticFact,
   SemanticPredicate,
   SenseSemanticProfile,
@@ -27,8 +31,11 @@ export function sense(lexemeId: string, senseId: string): LexemeSenseRef {
 export function fact(
   predicate: string,
   args: SemanticFact["arguments"],
+  id?: string,
 ): SemanticFact {
-  return { predicate, arguments: args, truth: true };
+  return id
+    ? { id, predicate, arguments: args, truth: true }
+    : { predicate, arguments: args, truth: true };
 }
 
 export function pred(
@@ -70,6 +77,15 @@ export function profile(
     expresses,
     provenance: FIXTURE_PROVENANCE,
     reviewStatus: "REVIEWED",
+  };
+}
+
+export function assessable(
+  step: Omit<AssessableExperienceStepSpec, "executionIntent">,
+): AssessableExperienceStepSpec {
+  return {
+    ...step,
+    executionIntent: { kind: "ASSESSABLE" },
   };
 }
 
@@ -167,5 +183,14 @@ export function supportMap(
 export function profileMap(
   profiles: SenseSemanticProfile[],
 ): Map<string, SenseSemanticProfile> {
-  return new Map(profiles.map((item) => [item.sense.senseId, item]));
+  return new Map(profiles.map((item) => [lexemeSenseKey(item.sense), item]));
+}
+
+export { findProfile };
+
+export function explicitChoice<TValue>(
+  candidates: SemanticChoiceCandidate<TValue>[],
+  correctCandidateIds: string[],
+): ExplicitSemanticChoice<TValue> {
+  return { candidates, correctCandidateIds };
 }

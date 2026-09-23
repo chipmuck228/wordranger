@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "candidate-v0",
+  "reviewKey": "meal-expansion-batch-01-cup",
+  "packId": "meal-scene-expansion-batch-01",
+  "target": {
+    "lexemeId": "16ea1697-0049-55fe-9181-03d129352a17",
+    "senseId": "cup#drink-container"
+  },
+  "contentFingerprint": "51dc51dc1a321f2af03126d75db1823e59eed61f7e3168c47f4b360611997a40",
+  "decision": "APPROVED",
+  "notes": [],
+  "reviewedAt": "2026-09-21T13:53:59.047Z",
+  "revision": 1,
+  "reviewer": "LOCAL_INTERNAL_REVIEWER"
+}

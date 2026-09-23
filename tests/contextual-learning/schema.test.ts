@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "./content/helpers";
 import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
 import { listFrozenRuntimeCapabilities } from "@/contextual-learning/candidate-v0/capabilities/capability-registry";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
 import { homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
-import { createMealBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
+import {
+  createMealBuildPlan,
+  createMealStrengthenPlan,
+} from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
+import { isAssessableExperienceStep } from "@/contextual-learning/candidate-v0/domain/types";
 import { MEAL_SUPPORTS } from "@/contextual-learning/candidate-v0/fixtures/meal/supports";
 import { classroomRulerFrame } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/contexts";
 import { borrowingSharingSkeleton } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/skeleton";
@@ -106,8 +111,13 @@ describe("Candidate V0 schema validators", () => {
   });
 
   it("rejects a support ladder that reveals the answer before weaker cues", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
-    plan.steps[0].supportPolicy = {
+    const plan = createMealStrengthenPlan(homeBreakfastFrame);
+    const first = plan.steps[0];
+    expect(isAssessableExperienceStep(first)).toBe(true);
+    if (!isAssessableExperienceStep(first)) {
+      return;
+    }
+    first.supportPolicy = {
       initialSupportBlockIds: [],
       ladder: [
         {
@@ -143,11 +153,36 @@ describe("Candidate V0 schema validators", () => {
     ).toBe(true);
   });
 
+  it("rejects a guided step that smuggles an answer spec", () => {
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
+    const guided = plan.steps[0];
+    Object.assign(guided, {
+      expectedResponse: {
+        kind: "ENTITY_REF",
+        candidates: [],
+        correctCandidateIds: ["secret-correct"],
+      },
+    });
+    const result = validateExperiencePlan({
+      plan,
+      frame: homeBreakfastFrame,
+      skeleton: mealSkeleton,
+      capabilities,
+      supportBlocks: mealSupports,
+      senseProfiles: mealProfiles,
+    });
+    expect(
+      result.issues.some(
+        (issue) => issue.code === DomainErrorCode.EXP_GUIDED_DECLARES_ASSESSMENT,
+      ),
+    ).toBe(true);
+  });
+
   it("rejects a RECALL prompt that leaks the target form", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const recall = plan.steps.find((step) => step.purpose === "RECALL");
-    expect(recall).toBeDefined();
-    if (!recall) {
+    expect(recall && isAssessableExperienceStep(recall)).toBe(true);
+    if (!recall || !isAssessableExperienceStep(recall)) {
       return;
     }
     recall.promptIntent.instructionKey = "Type spoon now";

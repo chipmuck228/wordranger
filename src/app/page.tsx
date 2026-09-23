@@ -1,12 +1,21 @@
 import Link from "next/link";
 import { HomeDailyStatus } from "@/components/training/home-daily-status";
+import { HomeSettingsMenu } from "@/components/home/home-settings-menu";
+import { DEBUG_TOOL_LINKS } from "@/server/debug-tools/debug-tool-links";
+import { isDebugToolsEnabled } from "@/server/debug-tools/is-debug-tools-enabled";
+
+export const dynamic = "force-dynamic";
 
 export default function Home() {
+  const debugTools = isDebugToolsEnabled() ? DEBUG_TOOL_LINKS : [];
   return (
     <main
       lang="zh-CN"
-      className="mx-auto flex min-h-full w-full max-w-xl flex-col justify-center gap-10 px-6 py-16"
+      className="relative mx-auto flex min-h-full w-full max-w-xl flex-col justify-center gap-10 px-6 py-16"
     >
+      <div className="absolute top-4 right-4">
+        <HomeSettingsMenu debugTools={debugTools} />
+      </div>
       <div className="space-y-3 text-center">
         <h1 className="text-4xl font-semibold tracking-tight">WordRanger</h1>
         <p className="text-lg">今天练一点？</p>
@@ -48,38 +57,6 @@ export default function Home() {
             className="text-muted-foreground text-sm underline-offset-4 hover:underline"
           >
             贪食蛇
-          </Link>
-        </div>
-      </section>
-      <section className="space-y-2">
-        <Link
-          href="/debug/vocabulary"
-          className="text-muted-foreground text-xs underline-offset-4 hover:underline"
-        >
-          Open Vocabulary Debug Lab
-        </Link>
-        <div>
-          <Link
-            href="/debug/tasks"
-            className="text-muted-foreground text-xs underline-offset-4 hover:underline"
-          >
-            Open Task Protocol Debug Lab
-          </Link>
-        </div>
-        <div>
-          <Link
-            href="/debug/scheduler"
-            className="text-muted-foreground text-xs underline-offset-4 hover:underline"
-          >
-            Open Scheduler Debug Lab
-          </Link>
-        </div>
-        <div>
-          <Link
-            href="/debug/learning"
-            className="text-muted-foreground text-xs underline-offset-4 hover:underline"
-          >
-            Open Learning Core Debug Lab
           </Link>
         </div>
       </section>

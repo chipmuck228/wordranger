@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "./content/helpers";
 import { compileExperienceStep } from "@/contextual-learning/candidate-v0/compilation/compile-experience-step";
+import { findSemanticProjection } from "@/contextual-learning/candidate-v0/compilation/semantic-projection";
 import { DomainErrorCode } from "@/contextual-learning/candidate-v0/domain/errors";
 import { homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { MEAL_PROFILES } from "@/contextual-learning/candidate-v0/fixtures/meal/knowledge";
-import { createMealBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
+import {
+  createMealBuildPlan,
+  createMealStrengthenPlan,
+} from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
+import {
+  isAssessableExperienceStep,
+  type AssessableExperienceStepSpec,
+  type ExperienceStepSpec,
+} from "@/contextual-learning/candidate-v0/domain/types";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
 import { MEAL_SUPPORTS } from "@/contextual-learning/candidate-v0/fixtures/meal/supports";
 import { scienceTowerFrame } from "@/contextual-learning/candidate-v0/fixtures/school-challenge/contexts";
@@ -27,6 +37,16 @@ import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
 import { compilationRequest } from "./helpers";
 
 const evaluator = new DefaultTaskEvaluator();
+
+function expectAssessable(
+  step: ExperienceStepSpec | undefined,
+): AssessableExperienceStepSpec {
+  expect(step !== undefined && isAssessableExperienceStep(step)).toBe(true);
+  if (!step || !isAssessableExperienceStep(step)) {
+    throw new Error("expected assessable step");
+  }
+  return step;
+}
 
 function expectFrozenTask(task: PublicLearningTask): void {
   expect(task.protocolVersion).toBe("v1");
@@ -52,9 +72,13 @@ function runEvidence(task: PublicLearningTask, answerKey: Parameters<DefaultTask
 }
 
 describe("Candidate V0 compilation contract", () => {
-  it("compiles the meal spoon IDENTIFY step to a frozen CHOICE task", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+  it("rejects meal IDENTIFY as situational reasoning, not meaning recognition", () => {
+    const plan = createMealStrengthenPlan(homeBreakfastFrame);
     const step = plan.steps[0];
+    expect(isAssessableExperienceStep(step)).toBe(true);
+    if (!isAssessableExperienceStep(step)) {
+      return;
+    }
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,
@@ -65,34 +89,16 @@ describe("Candidate V0 compilation contract", () => {
       }),
       { supportBlocks: supportMap(MEAL_SUPPORTS) },
     );
-    expect(compiled.ok).toBe(true);
-    if (!compiled.ok) {
+    expect(compiled.ok).toBe(false);
+    if (compiled.ok) {
       return;
     }
-    const task = compiled.value.publicLearningTask;
-    expectFrozenTask(task);
-    expect(task.taskType).toBe(LearningTaskType.MEANING_CHOICE);
-    expect(task.targetSkill).toBe(VocabularySkill.MEANING_RECOGNITION);
-    expect(task.answerMode).toBe(AnswerMode.MULTIPLE_CHOICE);
-    expect(task.promptMode).toBe(PromptMode.CONTEXT_TO_WORD);
-    expect(task.responseContract.kind).toBe("CHOICE");
-
-    const optionId = compiled.value.answerKey.correctOptionIds[0];
-    const { evaluation, evidence } = runEvidence(task, compiled.value.answerKey, {
-      kind: "CHOICE",
-      taskId: task.id,
-      optionId,
-      hintCount: 0,
-      responseTimeMs: 800,
-      occurredAt: "2026-09-17T12:00:00.000Z",
-    });
-    expect(evaluation.outcome).toBe(EvidenceOutcome.INDEPENDENT_CORRECT);
-    expect(evidence.skill).toBe(VocabularySkill.MEANING_RECOGNITION);
+    expect(compiled.error.code).toBe(DomainErrorCode.COMPILATION_SEMANTIC_MISMATCH);
   });
 
-  it("compiles the school try/success CLAIM_CHOICE step", () => {
+  it("rejects school CLAIM_CHOICE instead of emitting MEANING_RECOGNITION Evidence", () => {
     const plan = createSchoolBuildPlan(scienceTowerFrame);
-    const step = plan.steps[0];
+    const step = expectAssessable(plan.steps[0]);
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,
@@ -102,27 +108,17 @@ describe("Candidate V0 compilation contract", () => {
         profiles: profileMap(SCHOOL_PROFILES),
       }),
     );
-    expect(compiled.ok).toBe(true);
-    if (!compiled.ok) {
+    expect(compiled.ok).toBe(false);
+    if (compiled.ok) {
       return;
     }
-    const task = compiled.value.publicLearningTask;
-    expectFrozenTask(task);
-    expect(task.responseContract.kind).toBe("CHOICE");
-    const { evaluation } = runEvidence(task, compiled.value.answerKey, {
-      kind: "CHOICE",
-      taskId: task.id,
-      optionId: compiled.value.answerKey.correctOptionIds[0],
-      hintCount: 0,
-      responseTimeMs: 900,
-      occurredAt: "2026-09-17T12:00:00.000Z",
-    });
-    expect(evaluation.isCorrect).toBe(true);
+    expect(compiled.error.code).toBe(DomainErrorCode.COMPILATION_SEMANTIC_MISMATCH);
+    expect(step.expectedResponse.kind).toBe("CLAIM_CHOICE");
   });
 
-  it("compiles borrow/lend RELATION_CHOICE and scores it with the frozen evaluator", () => {
+  it("rejects borrow/lend RELATION_CHOICE instead of mapping it to MEANING_CHOICE", () => {
     const plan = createBorrowBuildPlan(classroomRulerFrame);
-    const step = plan.steps[0];
+    const step = expectAssessable(plan.steps[0]);
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,
@@ -132,33 +128,19 @@ describe("Candidate V0 compilation contract", () => {
         profiles: profileMap(BORROW_PROFILES),
       }),
     );
-    expect(compiled.ok).toBe(true);
-    if (!compiled.ok) {
+    expect(compiled.ok).toBe(false);
+    if (compiled.ok) {
       return;
     }
-    expectFrozenTask(compiled.value.publicLearningTask);
-    const { evidence } = runEvidence(
-      compiled.value.publicLearningTask,
-      compiled.value.answerKey,
-      {
-        kind: "CHOICE",
-        taskId: compiled.value.publicLearningTask.id,
-        optionId: compiled.value.answerKey.correctOptionIds[0],
-        hintCount: 1,
-        responseTimeMs: 1100,
-        occurredAt: "2026-09-17T12:00:00.000Z",
-      },
-    );
-    expect(evidence.outcome).toBe(EvidenceOutcome.ASSISTED_CORRECT);
+    expect(compiled.error.code).toBe(DomainErrorCode.COMPILATION_SEMANTIC_MISMATCH);
+    expect(step.expectedResponse.kind).toBe("RELATION_CHOICE");
   });
 
-  it("compiles meal RECALL to frozen TEXT_INPUT", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
-    const step = plan.steps.find((item) => item.purpose === "RECALL");
-    expect(step).toBeDefined();
-    if (!step) {
-      return;
-    }
+  it("compiles meal RECALL through the lexical-form whitelist and frozen evaluator", () => {
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
+    const step = expectAssessable(
+      plan.steps.find((item) => item.purpose === "RECALL"),
+    );
     const compiled = compileExperienceStep(
       compilationRequest({
         plan,
@@ -172,15 +154,35 @@ describe("Candidate V0 compilation contract", () => {
     if (!compiled.ok) {
       return;
     }
-    expect(compiled.value.publicLearningTask.taskType).toBe(
-      LearningTaskType.ACTIVE_RECALL_TYPING,
+    const target = plan.targets.find((item) => item.id === step.targetIds[0]);
+    const projection = findSemanticProjection({
+      semanticAction: step.semanticAction,
+      responseKind: step.expectedResponse.kind,
+      targetFocus: target?.focus ?? "CONTEXT_INTERPRETATION",
+      stepPurpose: step.purpose,
+    });
+    expect(target?.focus).toBe("MEANING_TO_FORM");
+    expect(step.purpose).toBe("RECALL");
+    expect(projection?.id).toBe(compiled.value.trace.semanticProjectionId);
+    expect(compiled.value.trace.semanticProjectionId).toBe(
+      "lexical-form-type-recall-to-active-recall",
     );
-    const { evaluation } = runEvidence(
-      compiled.value.publicLearningTask,
+
+    const task = compiled.value.publicLearningTask;
+    expectFrozenTask(task);
+    expect(task.taskType).toBe(LearningTaskType.ACTIVE_RECALL_TYPING);
+    expect(task.targetSkill).toBe(VocabularySkill.ACTIVE_RECALL);
+    expect(task.promptMode).toBe(PromptMode.MEANING_TO_WORD);
+    expect(task.answerMode).toBe(AnswerMode.TYPING);
+    expect(task.lexemeId).toBe("lex-spoon");
+    expect(compiled.value.answerKey.targetLexemeId).toBe("lex-spoon");
+
+    const { evaluation, evidence } = runEvidence(
+      task,
       compiled.value.answerKey,
       {
         kind: "TEXT_INPUT",
-        taskId: compiled.value.publicLearningTask.id,
+        taskId: task.id,
         value: "spoon",
         hintCount: 0,
         responseTimeMs: 700,
@@ -188,6 +190,9 @@ describe("Candidate V0 compilation contract", () => {
       },
     );
     expect(evaluation.outcome).toBe(EvidenceOutcome.INDEPENDENT_CORRECT);
+    expect(evaluation.skill).toBe(VocabularySkill.ACTIVE_RECALL);
+    expect(evidence.skill).toBe(VocabularySkill.ACTIVE_RECALL);
+    expect(evidence.taskType).toBe(LearningTaskType.ACTIVE_RECALL_TYPING);
   });
 
   it("returns a capability gap for ORDERED_ENTITY_REFS instead of faking a task", () => {

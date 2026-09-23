@@ -299,6 +299,7 @@ export interface ResolvedContextSnapshot {
   activeGoalId: string;
   allowedSemanticActions: SemanticAction[];
   sourceVersions: Record<string, number>;
+  perspectiveBindings?: PerspectiveBinding[];
 }
 
 export type SupportType =
@@ -365,15 +366,32 @@ export interface PromptIntent {
   mustNotRevealTargetForm?: boolean;
 }
 
+export interface SemanticChoiceCandidate<TValue> {
+  id: string;
+  value: TValue;
+  displayText: string;
+  lexemeRef?: LexemeSenseRef;
+}
+
+export interface ExplicitSemanticChoice<TValue> {
+  candidates: SemanticChoiceCandidate<TValue>[];
+  correctCandidateIds: string[];
+}
+
 export type ExpectedSemanticResponse =
-  | { kind: "ENTITY_REF"; allowedEntityIds: ContextEntityId[] }
-  | { kind: "RELATION_CHOICE"; allowedRelationIds: SemanticRelationId[] }
+  | ({ kind: "ENTITY_REF" } & ExplicitSemanticChoice<ContextEntityId>)
+  | ({ kind: "RELATION_CHOICE" } & ExplicitSemanticChoice<SemanticRelationId>)
   | { kind: "ORDERED_ENTITY_REFS"; allowedSequences: ContextEntityId[][] }
   | { kind: "LEXICAL_FORM"; sense: LexemeSenseRef }
-  | { kind: "SEMANTIC_CLASS"; allowedConceptIds: SemanticConceptId[] }
-  | { kind: "CLAIM_CHOICE"; allowedPredicates: SemanticPredicate[] };
+  | ({ kind: "SEMANTIC_CLASS" } & ExplicitSemanticChoice<SemanticConceptId>)
+  | ({ kind: "CLAIM_CHOICE" } & ExplicitSemanticChoice<SemanticPredicate>);
 
 export type ExpectedSemanticResponseKind = ExpectedSemanticResponse["kind"];
+
+export type ChoiceExpectedResponse = Exclude<
+  ExpectedSemanticResponse,
+  { kind: "ORDERED_ENTITY_REFS" } | { kind: "LEXICAL_FORM" }
+>;
 
 export type ExperienceStepPurpose =
   | "GROUND"
@@ -390,16 +408,82 @@ export interface StepTransitionPolicy {
   fallbackStepId?: ExperienceStepId;
 }
 
-export interface ExperienceStepSpec {
+export type GuidedActivityKind =
+  | "PRESENT_CONTEXT"
+  | "OBSERVE_RELATION"
+  | "CONNECT_ENTITY_AND_MEANING"
+  | "PRESENT_LEXICAL_FORM"
+  | "SHOW_CONTRAST"
+  | "RECONNECT_FORM"
+  | "FADE_FORM";
+
+export type AssessableExecutionIntent = {
+  kind: "ASSESSABLE";
+};
+
+export type GuidedExecutionIntent = {
+  kind: "GUIDED";
+  guidedActivityKind: GuidedActivityKind;
+  completionMode: "ACKNOWLEDGE_ONLY";
+  rationale: string;
+};
+
+export type StepExecutionIntent =
+  | AssessableExecutionIntent
+  | GuidedExecutionIntent;
+
+export type ContextualSupportExposureKind =
+  | "MEANING_GLOSS"
+  | "LEXICAL_FORM"
+  | "SPELLING_CUE";
+
+export interface ExperienceStepSupportExposure {
+  kinds: readonly ContextualSupportExposureKind[];
+  target: LexemeSenseRef;
+}
+
+export interface GuidedPresentation {
+  instruction: string;
+  presentedEntityIds?: ContextEntityId[];
+  presentedFactPredicates?: string[];
+}
+
+interface ExperienceStepBase {
   id: ExperienceStepId;
   purpose: ExperienceStepPurpose;
   targetIds: string[];
   semanticAction: SemanticAction;
+  transition: StepTransitionPolicy;
+}
+
+export interface AssessableExperienceStepSpec extends ExperienceStepBase {
+  executionIntent: AssessableExecutionIntent;
   promptIntent: PromptIntent;
   expectedResponse: ExpectedSemanticResponse;
   supportPolicy: StepSupportPolicy;
   requiredCapabilities: string[];
-  transition: StepTransitionPolicy;
+}
+
+export interface GuidedExperienceStepSpec extends ExperienceStepBase {
+  executionIntent: GuidedExecutionIntent;
+  presentation: GuidedPresentation;
+  supportExposure?: ExperienceStepSupportExposure;
+}
+
+export type ExperienceStepSpec =
+  | AssessableExperienceStepSpec
+  | GuidedExperienceStepSpec;
+
+export function isAssessableExperienceStep(
+  step: ExperienceStepSpec,
+): step is AssessableExperienceStepSpec {
+  return step.executionIntent.kind === "ASSESSABLE";
+}
+
+export function isGuidedExperienceStep(
+  step: ExperienceStepSpec,
+): step is GuidedExperienceStepSpec {
+  return step.executionIntent.kind === "GUIDED";
 }
 
 export interface ExperienceCompletionPolicy {
@@ -460,6 +544,11 @@ export interface CompilationTrace {
   capabilityId: string;
   compilerId: string;
   sourceContentIds: string[];
+  semanticProjectionId: string;
+  senseProjection?: {
+    candidateSense: LexemeSenseRef;
+    frozenLexemeId: string;
+  };
 }
 
 export const DIRECTIONAL_SENSE_MARKERS = ["borrow", "lend"] as const;

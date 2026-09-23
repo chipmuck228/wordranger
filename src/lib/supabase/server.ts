@@ -39,9 +39,11 @@ export function createSupabaseServerClient(): SupabaseClient | null {
  * Service-role client for internal/admin reference writes.
  * Never falls back to NEXT_PUBLIC_SUPABASE_ANON_KEY.
  */
-export function createSupabaseServiceRoleClient(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+export function createSupabaseServiceRoleClient(
+  env: Record<string, string | undefined> = process.env,
+): SupabaseClient | null {
+  const url = env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceRoleKey) {
     return null;
   }

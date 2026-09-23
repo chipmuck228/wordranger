@@ -1,0 +1,126 @@
+import { MealContextLabController } from "@/server/context-lab/meal-context-lab-controller";
+import { InMemoryContextLabRunRepository } from "@/server/context-lab/in-memory-context-lab-run-repository";
+import { InMemoryLearningTaskRepository } from "@/server/tasks/in-memory-learning-task-repository";
+import { InMemoryLearningRepository } from "@/server/learning/in-memory-learning-repository";
+import { V1_PLACEHOLDER_USER_ID } from "@/server/auth/v1-user";
+import type { ContextLabCurrentScreen } from "@/components/context-lab/types";
+import type { ContextLabClientOps } from "@/app/play/context-lab/context-lab-client";
+
+export const FORBIDDEN_CLIENT_FIELDS = [
+  "answerKey",
+  "correctOptionIds",
+  "optionLexemeIds",
+  "expectedAnswer",
+  "exactAcceptedTexts",
+  "semanticAcceptedTexts",
+  "isCorrect",
+  "LearningEvidence",
+  "StudentLexemeModel",
+] as const;
+
+export function collectKeys(value: unknown, keys = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectKeys(item, keys);
+    }
+    return keys;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, nested] of Object.entries(value)) {
+      keys.add(key);
+      collectKeys(nested, keys);
+    }
+  }
+  return keys;
+}
+
+export function serializedContains(value: unknown, needle: string): boolean {
+  return JSON.stringify(value).includes(needle);
+}
+
+export function createMealLabHarness(options: {
+  userId?: string;
+  enabled?: boolean;
+  createId?: () => string;
+  beginAt?: "PROBE" | "BUILD";
+  repository?: InMemoryContextLabRunRepository;
+  learningTasks?: InMemoryLearningTaskRepository;
+  learning?: InMemoryLearningRepository;
+} = {}) {
+  const repository = options.repository ?? new InMemoryContextLabRunRepository();
+  const learningTasks = options.learningTasks ?? new InMemoryLearningTaskRepository();
+  const learning = options.learning ?? new InMemoryLearningRepository();
+  let seq = 0;
+  const controller = new MealContextLabController({
+    repository,
+    learningTasks,
+    learning,
+    userId: options.userId ?? V1_PLACEHOLDER_USER_ID,
+    enabled: options.enabled ?? true,
+    now: () => "2026-09-20T00:00:00.000Z",
+    createId: options.createId ?? (() => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`),
+    beginAt: options.beginAt ?? "BUILD",
+  });
+  const ops: ContextLabClientOps = {
+    start: () => controller.start(),
+    acknowledge: (input) => controller.acknowledge(input),
+    restart: () => controller.restart(),
+    loadCurrent: (input) => controller.loadCurrent(input),
+    submitFrozenTask: (input) => controller.submitFrozenTask(input),
+    continueProbe: (input) => controller.continueProbe(input),
+  };
+  return { repository, learningTasks, learning, controller, ops };
+}
+
+export async function startFirstGuided() {
+  const harness = createMealLabHarness();
+  const screen = await harness.controller.start();
+  return { ...harness, screen };
+}
+
+export async function acknowledgeUntilFrozen(
+  controller: MealContextLabController,
+  startScreen?: ContextLabCurrentScreen,
+) {
+  let screen = startScreen ?? (await controller.start());
+  for (let index = 0; index < 5; index += 1) {
+    assertGuided(screen);
+    screen = await controller.acknowledge({
+      runId: screen.handle.runId,
+      revision: screen.handle.revision,
+      activityId: screen.activity.id,
+    });
+  }
+  assertFrozen(screen);
+  return screen;
+}
+
+export function assertGuided(
+  screen: ContextLabCurrentScreen,
+): asserts screen is Extract<ContextLabCurrentScreen, { kind: "GUIDED" }> {
+  if (screen.kind !== "GUIDED") {
+    throw new Error(`expected GUIDED, got ${screen.kind}`);
+  }
+}
+
+export function assertFrozen(
+  screen: ContextLabCurrentScreen,
+): asserts screen is Extract<
+  ContextLabCurrentScreen,
+  { kind: "FROZEN_TASK_PREVIEW" }
+> {
+  if (screen.kind !== "FROZEN_TASK_PREVIEW") {
+    throw new Error(`expected FROZEN_TASK_PREVIEW, got ${screen.kind}`);
+  }
+}
+
+export function assertRecorded(
+  screen: ContextLabCurrentScreen,
+): asserts screen is Extract<
+  ContextLabCurrentScreen,
+  { kind: "FROZEN_TASK_RECORDED" }
+> {
+  if (screen.kind !== "FROZEN_TASK_RECORDED") {
+    throw new Error(`expected FROZEN_TASK_RECORDED, got ${screen.kind}`);
+  }
+}

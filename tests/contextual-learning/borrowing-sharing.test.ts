@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { classroomRulerFrame } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/contexts";
 import { BORROW_SENSE } from "@/contextual-learning/candidate-v0/fixtures/borrowing-sharing/knowledge";
+import { sameLexemeSense } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
 import { serializeFact } from "@/contextual-learning/candidate-v0/domain/predicates";
 
 describe("Candidate V0 borrowing-sharing case", () => {
@@ -20,14 +21,18 @@ describe("Candidate V0 borrowing-sharing case", () => {
     );
     expect(requester?.eventId).toBe("TRANSFER_TEMPORARY_POSSESSION");
     expect(owner?.eventId).toBe("TRANSFER_TEMPORARY_POSSESSION");
-    expect(requester?.expressedSense.senseId).toBe(BORROW_SENSE.borrow.senseId);
-    expect(owner?.expressedSense.senseId).toBe(BORROW_SENSE.lend.senseId);
+    expect(sameLexemeSense(requester!.expressedSense, BORROW_SENSE.borrow)).toBe(
+      true,
+    );
+    expect(sameLexemeSense(owner!.expressedSense, BORROW_SENSE.lend)).toBe(true);
     expect(requester?.requiredDirection).toEqual({
       sourceRole: "OWNER",
       destinationRole: "REQUESTER",
     });
     expect(owner?.requiredDirection).toEqual(requester?.requiredDirection);
-    expect(requester?.expressedSense.senseId).not.toBe(owner?.expressedSense.senseId);
+    expect(
+      sameLexemeSense(requester!.expressedSense, owner!.expressedSense),
+    ).toBe(false);
   });
 
   it("keeps ownership fixed while temporary possession moves, then return restores it", () => {
@@ -62,7 +67,7 @@ describe("Candidate V0 borrowing-sharing case", () => {
     expect(
       transfer?.afterFacts.some((item) => item.predicate === "give_would_change_ownership"),
     ).toBe(false);
-    expect(BORROW_SENSE.share.senseId).not.toBe(BORROW_SENSE.give.senseId);
-    expect(BORROW_SENSE.borrow.senseId).not.toBe(BORROW_SENSE.give.senseId);
+    expect(sameLexemeSense(BORROW_SENSE.share, BORROW_SENSE.give)).toBe(false);
+    expect(sameLexemeSense(BORROW_SENSE.borrow, BORROW_SENSE.give)).toBe(false);
   });
 });

@@ -1,5 +1,7 @@
 import type { TaskCompilationRequest } from "@/contextual-learning/candidate-v0/compilation/types";
+import { findProfile } from "@/contextual-learning/candidate-v0/domain/lexeme-sense";
 import type {
+  AssessableExperienceStepSpec,
   ContextFrame,
   ExperienceStepSpec,
   LearningExperiencePlan,
@@ -14,30 +16,51 @@ export function sequentialIds(prefix: string): () => string {
   return () => `${prefix}-${index++}`;
 }
 
+export function resolvePlanTargets(
+  plan: LearningExperiencePlan,
+  profiles: ReadonlyMap<string, SenseSemanticProfile>,
+): ResolvedTargetSnapshot[] {
+  return plan.targets.map((target) => ({
+    targetId: target.id,
+    sense: target.sense,
+    displayForm: findProfile(profiles, target.sense)?.displayForm ?? "",
+    focus: target.focus,
+  }));
+}
+
 export function resolveTargets(
   plan: LearningExperiencePlan,
   step: ExperienceStepSpec,
   profiles: ReadonlyMap<string, SenseSemanticProfile>,
 ): ResolvedTargetSnapshot[] {
+  const byId = new Map(
+    resolvePlanTargets(plan, profiles).map((target) => [target.targetId, target]),
+  );
   return step.targetIds.flatMap((targetId) => {
-    const target = plan.targets.find((item) => item.id === targetId);
-    if (!target) {
-      return [];
-    }
-    return [
-      {
-        targetId: target.id,
-        sense: target.sense,
-        displayForm: profiles.get(target.sense.senseId)?.displayForm ?? "",
-        focus: target.focus,
-      },
-    ];
+    const target = byId.get(targetId);
+    return target ? [target] : [];
   });
+}
+
+export function resolvedSnapshotFor(
+  plan: LearningExperiencePlan,
+  frame: ContextFrame,
+  skeleton: SemanticSkeleton,
+  profiles: ReadonlyMap<string, SenseSemanticProfile>,
+) {
+  return {
+    resolvedContext: resolveContextSnapshot(
+      frame,
+      skeleton,
+      plan.activeGoalId,
+    ),
+    resolvedTargets: resolvePlanTargets(plan, profiles),
+  };
 }
 
 export function compilationRequest(input: {
   plan: LearningExperiencePlan;
-  step: ExperienceStepSpec;
+  step: AssessableExperienceStepSpec;
   frame: ContextFrame;
   skeleton: SemanticSkeleton;
   profiles: ReadonlyMap<string, SenseSemanticProfile>;

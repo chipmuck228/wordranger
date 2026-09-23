@@ -1,13 +1,22 @@
+import { validateExplicitAnswerSpec } from "../compilation/validate-answer-spec";
+import { findProfile, sameLexemeSense } from "../domain/lexeme-sense";
 import type {
+  AssessableExperienceStepSpec,
   ContextFrame,
   LearningExperiencePlan,
+  LexemeSenseRef,
   RuntimeCapability,
   SemanticSkeleton,
   SenseSemanticProfile,
   SupportBlock,
 } from "../domain/types";
+import {
+  isAssessableExperienceStep,
+  isGuidedExperienceStep,
+} from "../domain/types";
 import { DomainErrorCode, errorIssue, validationResult } from "../domain/errors";
 import type { DomainValidationResult } from "../domain/errors";
+import { findGuidedStepInvariantIssues } from "./guided-step-invariants";
 import { validateSupportPolicy } from "./validate-support-policy";
 
 const LEARNER_MUTATION_KEYS = [
@@ -58,25 +67,27 @@ export function validateExperiencePlan(
     );
   }
 
-  const reachableSenseIds = collectReachableSenseIds(frame);
+  const reachableSenses = collectReachableSenses(frame);
   const targetById = new Map(plan.targets.map((target) => [target.id, target]));
 
   for (const target of plan.targets) {
-    if (!target.sense.senseId.trim()) {
+    if (!target.sense.senseId.trim() || !target.sense.lexemeId.trim()) {
       issues.push(
         errorIssue(
           DomainErrorCode.CTX_MISSING_SENSE_ID,
           `targets.${target.id}`,
-          "Target is missing senseId",
+          "Target is missing lexemeId or senseId",
         ),
       );
     }
-    if (!reachableSenseIds.has(target.sense.senseId)) {
+    if (
+      !reachableSenses.some((sense) => sameLexemeSense(sense, target.sense))
+    ) {
       issues.push(
         errorIssue(
           DomainErrorCode.EXP_TARGET_NOT_REACHABLE,
           `targets.${target.id}`,
-          `Target sense ${target.sense.senseId} is not bound in frame ${frame.id}`,
+          `Target sense ${target.sense.lexemeId}::${target.sense.senseId} is not bound in frame ${frame.id}`,
         ),
       );
     }
@@ -105,60 +116,41 @@ export function validateExperiencePlan(
       );
     }
 
-    const matched = findCapability(capabilities, step.semanticAction, step.expectedResponse.kind);
-    if (step.requiredCapabilities.length > 0) {
-      const missing = step.requiredCapabilities.filter(
-        (id) => !capabilities.some((capability) => capability.id === id),
-      );
-      if (missing.length > 0 || !matched) {
+    if (isGuidedExperienceStep(step)) {
+      for (const issue of findGuidedStepInvariantIssues(step)) {
         issues.push(
           errorIssue(
-            DomainErrorCode.EXP_NO_RUNTIME_CAPABILITY,
-            `steps.${step.id}.requiredCapabilities`,
-            `No frozen runtime capability for ${step.semanticAction}/${step.expectedResponse.kind}`,
+            issue.kind === "DECLARES_ASSESSMENT"
+              ? DomainErrorCode.EXP_GUIDED_DECLARES_ASSESSMENT
+              : DomainErrorCode.EXP_INVALID_STEP_INTENT,
+            issue.path,
+            issue.message,
           ),
         );
       }
-    } else if (!matched) {
+      continue;
+    }
+
+    if (!isAssessableExperienceStep(step)) {
       issues.push(
         errorIssue(
-          DomainErrorCode.EXP_NO_RUNTIME_CAPABILITY,
-          `steps.${step.id}`,
-          `No frozen runtime capability for ${step.semanticAction}/${step.expectedResponse.kind}`,
+          DomainErrorCode.EXP_INVALID_STEP_INTENT,
+          "steps.executionIntent",
+          "Every step must declare ASSESSABLE or GUIDED executionIntent",
         ),
       );
+      continue;
     }
 
     issues.push(
-      ...validateSupportPolicy(
-        step.supportPolicy,
+      ...validateAssessableStep({
+        step,
+        capabilities,
         supportBlocks,
-        `steps.${step.id}.supportPolicy`,
-      ),
+        senseProfiles,
+        targetById,
+      }),
     );
-
-    const leaksAnswer =
-      step.purpose === "RECALL" ||
-      step.promptIntent.mustNotRevealTargetForm === true;
-    if (leaksAnswer) {
-      for (const targetId of step.targetIds) {
-        const target = targetById.get(targetId);
-        if (!target) {
-          continue;
-        }
-        const profile = senseProfiles.get(target.sense.senseId);
-        const form = profile?.displayForm ?? "";
-        if (form && promptRevealsForm(step.promptIntent, form)) {
-          issues.push(
-            errorIssue(
-              DomainErrorCode.EXP_RECALL_LEAKS_ANSWER,
-              `steps.${step.id}.promptIntent`,
-              `RECALL prompt reveals target form "${form}"`,
-            ),
-          );
-        }
-      }
-    }
   }
 
   const completionRecord = plan.completionPolicy as unknown as Record<
@@ -181,6 +173,89 @@ export function validateExperiencePlan(
   return validationResult(issues);
 }
 
+function validateAssessableStep(input: {
+  step: AssessableExperienceStepSpec;
+  capabilities: readonly RuntimeCapability[];
+  supportBlocks: ReadonlyMap<string, SupportBlock>;
+  senseProfiles: ReadonlyMap<string, SenseSemanticProfile>;
+  targetById: Map<string, LearningExperiencePlan["targets"][number]>;
+}) {
+  const { step, capabilities, supportBlocks, senseProfiles, targetById } = input;
+  const issues = [];
+  const matched = findCapability(
+    capabilities,
+    step.semanticAction,
+    step.expectedResponse.kind,
+  );
+  if (step.requiredCapabilities.length > 0) {
+    const missing = step.requiredCapabilities.filter(
+      (id) => !capabilities.some((capability) => capability.id === id),
+    );
+    if (missing.length > 0 || !matched) {
+      issues.push(
+        errorIssue(
+          DomainErrorCode.EXP_NO_RUNTIME_CAPABILITY,
+          `steps.${step.id}.requiredCapabilities`,
+          `No frozen runtime transport for ${step.semanticAction}/${step.expectedResponse.kind}`,
+        ),
+      );
+    }
+  } else if (!matched) {
+    issues.push(
+      errorIssue(
+        DomainErrorCode.EXP_NO_RUNTIME_CAPABILITY,
+        `steps.${step.id}`,
+        `No frozen runtime transport for ${step.semanticAction}/${step.expectedResponse.kind}`,
+      ),
+    );
+  }
+
+  if (step.expectedResponse.kind !== "ORDERED_ENTITY_REFS") {
+    const answerError = validateExplicitAnswerSpec(step.expectedResponse);
+    if (answerError && !answerError.ok) {
+      issues.push(
+        errorIssue(
+          answerError.error.code,
+          `steps.${step.id}.${answerError.error.path}`,
+          answerError.error.message,
+        ),
+      );
+    }
+  }
+
+  issues.push(
+    ...validateSupportPolicy(
+      step.supportPolicy,
+      supportBlocks,
+      `steps.${step.id}.supportPolicy`,
+    ),
+  );
+
+  const leaksAnswer =
+    step.purpose === "RECALL" ||
+    step.promptIntent.mustNotRevealTargetForm === true;
+  if (leaksAnswer) {
+    for (const targetId of step.targetIds) {
+      const target = targetById.get(targetId);
+      if (!target) {
+        continue;
+      }
+      const profile = findProfile(senseProfiles, target.sense);
+      const form = profile?.displayForm ?? "";
+      if (form && promptRevealsForm(step.promptIntent, form)) {
+        issues.push(
+          errorIssue(
+            DomainErrorCode.EXP_RECALL_LEAKS_ANSWER,
+            `steps.${step.id}.promptIntent`,
+            `RECALL prompt reveals target form "${form}"`,
+          ),
+        );
+      }
+    }
+  }
+  return issues;
+}
+
 export function findCapability(
   capabilities: readonly RuntimeCapability[],
   action: string,
@@ -195,24 +270,24 @@ export function findCapability(
   );
 }
 
-function collectReachableSenseIds(frame: ContextFrame): Set<string> {
-  const ids = new Set<string>();
+function collectReachableSenses(frame: ContextFrame): LexemeSenseRef[] {
+  const senses: LexemeSenseRef[] = [];
   for (const binding of frame.entityBindings) {
     for (const lexeme of binding.lexemeSenseBindings ?? []) {
-      ids.add(lexeme.sense.senseId);
+      senses.push(lexeme.sense);
     }
   }
   for (const perspective of frame.perspectiveBindings ?? []) {
-    ids.add(perspective.expressedSense.senseId);
+    senses.push(perspective.expressedSense);
   }
   for (const grounding of frame.claimGroundings ?? []) {
-    ids.add(grounding.sense.senseId);
+    senses.push(grounding.sense);
   }
-  return ids;
+  return senses;
 }
 
 function promptRevealsForm(
-  prompt: LearningExperiencePlan["steps"][number]["promptIntent"],
+  prompt: AssessableExperienceStepSpec["promptIntent"],
   form: string,
 ): boolean {
   const needle = form.toLowerCase();

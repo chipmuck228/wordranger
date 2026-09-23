@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { mealTestLexemeLoader } from "./content/helpers";
 import { MEAL_FRAMES, homeBreakfastFrame } from "@/contextual-learning/candidate-v0/fixtures/meal/contexts";
 import { mealSkeleton } from "@/contextual-learning/candidate-v0/fixtures/meal/skeleton";
+import { isAssessableExperienceStep } from "@/contextual-learning/candidate-v0/domain/types";
 import { createMealBuildPlan } from "@/contextual-learning/candidate-v0/fixtures/meal/plans";
 import { serializeFact } from "@/contextual-learning/candidate-v0/domain/predicates";
 
@@ -31,8 +33,12 @@ describe("Candidate V0 meal case", () => {
   });
 
   it("ends the BUILD plan with reduced-support RECALL", () => {
-    const plan = createMealBuildPlan(homeBreakfastFrame);
+    const plan = createMealBuildPlan(homeBreakfastFrame, { loadLexeme: mealTestLexemeLoader });
     const last = plan.steps[plan.steps.length - 1];
+    expect(isAssessableExperienceStep(last)).toBe(true);
+    if (!isAssessableExperienceStep(last)) {
+      return;
+    }
     expect(last.purpose).toBe("RECALL");
     expect(last.promptIntent.mustNotRevealTargetForm).toBe(true);
     expect(last.supportPolicy.ladder.every((level) => level.level === 0)).toBe(true);
