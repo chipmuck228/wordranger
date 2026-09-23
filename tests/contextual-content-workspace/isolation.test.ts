@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -17,12 +17,15 @@ import { isContextualContentReleaseWriteEnabled } from "@/server/contextual-cont
 import { isContextualContentReviewWriteEnabled } from "@/server/contextual-content-review/gates";
 import { isContextualContentPromotionWriteEnabled } from "@/server/contextual-content-promotion/gates";
 import {
+  HUMAN_WORKSPACE_PATHS,
   cleanupContextualContentTestWorkspace,
   createContextualContentTestWorkspace,
   humanWorkspaceRoots,
+  inventoryHumanArtifacts,
   seedOrdinaryE2EFixtures,
   seedSyntheticApprovedReviews,
   sha256File,
+  snapshotHumanArtifact,
   writeSyntheticStalePromotion,
   type ContextualContentTestWorkspace,
 } from "./index";
@@ -74,29 +77,52 @@ describe("contextual content test workspace isolation", () => {
     );
   });
 
-  it("keeps a real-workspace sentinel unchanged through temp writes and cleanup", () => {
-    const human = humanWorkspaceRoots();
-    mkdirSync(human.review, { recursive: true });
+  it("keeps a protected-workspace sentinel unchanged through temp writes and cleanup", () => {
+    const protectedWorkspace = createContextualContentTestWorkspace("isolation-protected");
+    const workspace = createContextualContentTestWorkspace("isolation-sentinel");
+    workspaces.push(protectedWorkspace, workspace);
     const sentinel = path.join(
-      human.review,
+      protectedWorkspace.reviewRoot,
       ".wordranger-synthetic-isolation-sentinel",
     );
     const payload = `SYNTHETIC_TEST_ONLY ${Date.now()}\n`;
     writeFileSync(sentinel, payload);
-    try {
-      const before = sha256File(sentinel);
-      const workspace = createContextualContentTestWorkspace("isolation-sentinel");
-      workspaces.push(workspace);
-      seedSyntheticApprovedReviews(workspace, ["knife", "bread", "water"]);
-      writeSyntheticStalePromotion(workspace);
-      cleanupContextualContentTestWorkspace(workspace);
-      expect(sha256File(sentinel)).toBe(before);
-      expect(readFileSync(sentinel, "utf8")).toBe(payload);
-    } finally {
-      if (existsSync(sentinel)) {
-        unlinkSync(sentinel);
-      }
-    }
+    const before = sha256File(sentinel);
+    seedSyntheticApprovedReviews(workspace, ["knife", "bread", "water"]);
+    writeSyntheticStalePromotion(workspace);
+    cleanupContextualContentTestWorkspace(workspace);
+    expect(sha256File(sentinel)).toBe(before);
+    expect(readFileSync(sentinel, "utf8")).toBe(payload);
+    expect(existsSync(protectedWorkspace.root)).toBe(true);
+    expect(
+      existsSync(path.join(humanWorkspaceRoots().review, ".wordranger-synthetic-isolation-sentinel")),
+    ).toBe(false);
+  });
+
+  it("does not change the real batch-03 promotion snapshot while writing temp fixtures", () => {
+    const before = snapshotHumanArtifact(HUMAN_WORKSPACE_PATHS.batch03Promotion);
+    const workspace = createContextualContentTestWorkspace("isolation-real-promotion");
+    workspaces.push(workspace);
+    seedOrdinaryE2EFixtures(workspace);
+    seedSyntheticApprovedReviews(workspace, ["knife", "bread", "water"]);
+    writeSyntheticStalePromotion(workspace);
+    expect(existsSync(path.join(workspace.promotionRoot, "meal-scene-v0__meal-scene-expansion-batch-03.json"))).toBe(
+      true,
+    );
+    cleanupContextualContentTestWorkspace(workspace);
+    expect(snapshotHumanArtifact(HUMAN_WORKSPACE_PATHS.batch03Promotion)).toEqual(before);
+  });
+
+  it("inventories the real human workspace without creating files", () => {
+    const before = inventoryHumanArtifacts();
+    const after = inventoryHumanArtifacts();
+    expect(after).toEqual(before);
+    expect(snapshotHumanArtifact(HUMAN_WORKSPACE_PATHS.batch03Promotion)).toEqual(
+      snapshotHumanArtifact(HUMAN_WORKSPACE_PATHS.batch03Promotion),
+    );
+    expect(
+      existsSync(path.join(humanWorkspaceRoots().review, ".wordranger-synthetic-isolation-sentinel")),
+    ).toBe(false);
   });
 
   it("refuses write-enabled repositories under real-release configuration", () => {

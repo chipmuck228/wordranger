@@ -57,6 +57,21 @@ export function sha256File(filePath: string): string {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
+export type HumanArtifactPresence =
+  | { status: "absent" }
+  | { status: "present"; sha256: string };
+
+export function snapshotHumanArtifact(
+  relPath: string,
+  cwd = process.cwd(),
+): HumanArtifactPresence {
+  const absolute = path.resolve(cwd, relPath);
+  if (!existsSync(absolute)) {
+    return { status: "absent" };
+  }
+  return { status: "present", sha256: sha256File(absolute) };
+}
+
 export function inventoryHumanArtifacts(cwd = process.cwd()): {
   present: Array<{ path: string; sha256: string }>;
   missing: string[];

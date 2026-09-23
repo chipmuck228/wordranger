@@ -7,6 +7,7 @@ import {
   SYNTHETIC_TEST_NOTE,
   seedOrdinaryE2EFixtures,
   seedSyntheticApprovedReviews,
+  snapshotHumanArtifact,
   workspacePromotionPath,
   workspaceReviewRecordPath,
 } from "../tests/contextual-content-workspace";
@@ -328,6 +329,7 @@ test.describe("writable review host", () => {
   test("promotes a fully approved batch once and keeps Context Lab on six words", async ({
     page,
   }) => {
+    const realPromotionBefore = snapshotHumanArtifact(HUMAN_WORKSPACE_PATHS.batch03Promotion);
     seedSyntheticApprovedReviews(workspace(), ["knife", "bread", "water"]);
     await page.goto("/debug/contextual-content-review");
     await expect(page.getByTestId("meal-expansion-batch-03-approved")).toHaveText("3");
@@ -348,7 +350,9 @@ test.describe("writable review host", () => {
     };
     expect(savedPromotion.packFingerprint).not.toBe("stale-pack");
     expect(savedPromotion.promotedBy).toBe("LOCAL_INTERNAL_PROMOTER");
-    expect(existsSync(HUMAN_WORKSPACE_PATHS.batch03Promotion)).toBe(false);
+    expect(snapshotHumanArtifact(HUMAN_WORKSPACE_PATHS.batch03Promotion)).toEqual(
+      realPromotionBefore,
+    );
 
     await page.goto("/debug/contextual-content-release");
     await expect(page.getByTestId("release-eligible-pack")).toHaveText("meal-scene-expansion-batch-03");

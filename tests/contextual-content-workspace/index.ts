@@ -10,6 +10,8 @@ export {
   humanWorkspaceRoots,
   inventoryHumanArtifacts,
   sha256File,
+  snapshotHumanArtifact,
+  type HumanArtifactPresence,
 } from "./human-workspace";
 export {
   assertSafeTestWorkspaceCleanup,
