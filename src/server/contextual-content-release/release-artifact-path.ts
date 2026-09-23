@@ -1,8 +1,16 @@
 import path from "node:path";
 import { RELEASE_ID_PATTERN } from "@/contextual-learning/candidate-v0/release";
 
-export function contextualReleaseRoot(): string {
-  return path.resolve(process.cwd(), "docs/contextual-content-releases");
+export function defaultContextualReleaseRoot(cwd = process.cwd()): string {
+  return path.resolve(cwd, "docs/contextual-content-releases");
+}
+
+export function contextualReleaseRoot(
+  env: Record<string, string | undefined> = process.env,
+  cwd = process.cwd(),
+): string {
+  const override = env.CONTEXTUAL_CONTENT_RELEASE_ROOT?.trim();
+  return override ? path.resolve(override) : defaultContextualReleaseRoot(cwd);
 }
 
 export function safeReleaseRecordPath(releaseId: string): string | null {

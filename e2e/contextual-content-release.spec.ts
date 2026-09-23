@@ -1,29 +1,38 @@
 import { expect, test, type Page } from "@playwright/test";
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  seedOrdinaryE2EFixtures,
+  seedSyntheticApprovedReviews,
+} from "../tests/contextual-content-workspace";
+import { ordinaryE2EWorkspace } from "./ordinary-contextual-workspace";
 
 const RELEASE_URL = "/debug/contextual-content-release";
 const LAB_URL = "/play/context-lab";
-const CUP_RECORD = "docs/contextual-content-reviews/meal-expansion-batch-01-cup/human-review.record.json";
-const PLATE_RECORD = "docs/contextual-content-reviews/meal-expansion-batch-02-plate/human-review.record.json";
-const BATCH_03_PROMOTION_PATH =
-  "docs/contextual-content-promotions/meal-scene-v0__meal-scene-expansion-batch-03.json";
-const cupBefore = readFileSync(CUP_RECORD, "utf8");
-const plateBefore = readFileSync(PLATE_RECORD, "utf8");
 
-function restorePromotionArtifacts() {
-  if (existsSync(BATCH_03_PROMOTION_PATH)) {
-    unlinkSync(BATCH_03_PROMOTION_PATH);
-  }
+test.afterEach(() => {
+  seedOrdinaryE2EFixtures(ordinaryE2EWorkspace());
+});
+
+async function isPresentAndEnabled(locator: { count(): Promise<number>; isEnabled(): Promise<boolean> }) {
+  return (await locator.count()) > 0 && (await locator.isEnabled());
 }
 
-function restoreReviewRecords() {
-  writeFileSync(CUP_RECORD, cupBefore);
-  writeFileSync(PLATE_RECORD, plateBefore);
+async function makeSyntheticBatch03ReleaseEligible(page: Page): Promise<void> {
+  seedSyntheticApprovedReviews(ordinaryE2EWorkspace(), ["knife", "bread", "water"]);
+  await page.goto("/debug/contextual-content-review");
+  await expect(page.getByTestId("meal-expansion-batch-03-approved")).toHaveText("3");
+  const promote = page.getByTestId("promote-reviewed-batch");
+  if (await isPresentAndEnabled(promote)) {
+    await promote.click();
+    await expect(page.getByTestId("promote-confirm")).toBeVisible();
+    await page.getByTestId("promote-confirm").click();
+    await expect(page.getByTestId("promote-save-message")).toContainText("Batch promotion 已保存");
+  }
+  await expect(page.getByText("Promotion: PROMOTED").first()).toBeVisible();
 }
 
 async function discardIfPresent(page: Page) {
   const discard = page.getByRole("button", { name: "放弃本地 Draft" });
-  if (await discard.isEnabled()) {
+  if (await isPresentAndEnabled(discard)) {
     await discard.click();
     await expect(page.getByTestId("release-no-draft").or(page.getByTestId("release-list"))).toBeVisible();
   }
@@ -56,7 +65,6 @@ test.describe("readonly release host", () => {
       "href",
       RELEASE_URL,
     );
-    restorePromotionArtifacts();
     await page.goto(RELEASE_URL);
     await expect(page.getByRole("heading", { name: "内容发布工具" })).toBeVisible();
     await expect(page.getByTestId("release-phase-notice")).toContainText("Experimental Context Lab");
@@ -77,13 +85,11 @@ test.describe("writable release host with active-release Context Lab", () => {
   test.afterEach(async ({ page }) => {
     await page.goto(RELEASE_URL);
     await discardIfPresent(page);
-    restorePromotionArtifacts();
-    expect(readFileSync(CUP_RECORD, "utf8")).toBe(cupBefore);
-    expect(readFileSync(PLATE_RECORD, "utf8")).toBe(plateBefore);
+    seedOrdinaryE2EFixtures(ordinaryE2EWorkspace());
   });
 
   test("preflight publish becomes active and Context Lab uses that release", async ({ page }) => {
-    restoreReviewRecords();
+    await makeSyntheticBatch03ReleaseEligible(page);
     await page.goto(RELEASE_URL);
     await discardIfPresent(page);
     await page.getByRole("button", { name: "创建迁移 Draft" }).click();
@@ -101,7 +107,7 @@ test.describe("writable release host with active-release Context Lab", () => {
   });
 
   test("an old run stays pinned after a newer publish", async ({ page, context }) => {
-    restoreReviewRecords();
+    await makeSyntheticBatch03ReleaseEligible(page);
     await page.goto(RELEASE_URL);
     await discardIfPresent(page);
     await page.getByRole("button", { name: "创建迁移 Draft" }).click();
@@ -127,7 +133,7 @@ test.describe("writable release host with active-release Context Lab", () => {
   });
 
   test("rollback and stale double-click stay fail-closed", async ({ page }) => {
-    restoreReviewRecords();
+    await makeSyntheticBatch03ReleaseEligible(page);
     await page.goto(RELEASE_URL);
     await discardIfPresent(page);
     await page.getByRole("button", { name: "创建迁移 Draft" }).click();
@@ -146,7 +152,7 @@ test.describe("writable release host with active-release Context Lab", () => {
   });
 
   test("stale revision does not publish twice", async ({ page, context }) => {
-    restoreReviewRecords();
+    await makeSyntheticBatch03ReleaseEligible(page);
     await page.goto(RELEASE_URL);
     await discardIfPresent(page);
     await page.getByRole("button", { name: "创建迁移 Draft" }).click();

@@ -1,76 +1,25 @@
 import { expect, test, type Page } from "@playwright/test";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { currentContentFingerprint } from "../src/server/contextual-content-review/project-review-packet";
 import { CONTENT_REVIEW_TARGETS } from "../src/server/contextual-content-review/review-target-registry";
+import {
+  HUMAN_WORKSPACE_PATHS,
+  SYNTHETIC_TEST_NOTE,
+  seedOrdinaryE2EFixtures,
+  seedSyntheticApprovedReviews,
+  workspacePromotionPath,
+  workspaceReviewRecordPath,
+} from "../tests/contextual-content-workspace";
+import { ordinaryE2EWorkspace } from "./ordinary-contextual-workspace";
 
 const REVIEW_URL = "/debug/contextual-content-review/meal-expansion-batch-01/cup";
-const RECORD_PATH = "docs/contextual-content-reviews/meal-expansion-batch-01-cup/human-review.record.json";
-const HUMAN_PATH = "docs/contextual-content-reviews/meal-expansion-batch-01-cup/HUMAN_REVIEW.md";
-const originalRecord = existsSync(RECORD_PATH) ? readFileSync(RECORD_PATH) : null;
-const originalHuman = existsSync(HUMAN_PATH) ? readFileSync(HUMAN_PATH) : null;
-const BATCH_03_RECORD_PATHS = [
-  "docs/contextual-content-reviews/meal-expansion-batch-03-knife/human-review.record.json",
-  "docs/contextual-content-reviews/meal-expansion-batch-03-bread/human-review.record.json",
-  "docs/contextual-content-reviews/meal-expansion-batch-03-water/human-review.record.json",
-] as const;
-const BATCH_03_HUMAN_PATHS = [
-  "docs/contextual-content-reviews/meal-expansion-batch-03-knife/HUMAN_REVIEW.md",
-  "docs/contextual-content-reviews/meal-expansion-batch-03-bread/HUMAN_REVIEW.md",
-  "docs/contextual-content-reviews/meal-expansion-batch-03-water/HUMAN_REVIEW.md",
-] as const;
-const BATCH_03_PROMOTION_PATH =
-  "docs/contextual-content-promotions/meal-scene-v0__meal-scene-expansion-batch-03.json";
 
-function seedApprovedBatch03Reviews() {
-  for (const slug of ["knife", "bread", "water"] as const) {
-    const spec = CONTENT_REVIEW_TARGETS.find((item) => item.targetSlug === slug)!;
-    const filePath = `docs/contextual-content-reviews/${spec.reviewKey}/human-review.record.json`;
-    mkdirSync(path.dirname(filePath), { recursive: true });
-    writeFileSync(
-      filePath,
-      `${JSON.stringify(
-        {
-          schemaVersion: "candidate-v0",
-          reviewKey: spec.reviewKey,
-          packId: spec.packId,
-          target: spec.target,
-          contentFingerprint: currentContentFingerprint(spec),
-          decision: "APPROVED",
-          notes: [],
-          reviewedAt: "2026-09-22T09:00:00.000Z",
-          revision: 1,
-          reviewer: "LOCAL_INTERNAL_REVIEWER",
-        },
-        null,
-        2,
-      )}\n`,
-    );
-  }
+function workspace() {
+  return ordinaryE2EWorkspace();
 }
 
 test.afterEach(() => {
-  if (originalRecord) {
-    writeFileSync(RECORD_PATH, originalRecord);
-  } else if (existsSync(RECORD_PATH)) {
-    unlinkSync(RECORD_PATH);
-  }
-  if (originalHuman) {
-    writeFileSync(HUMAN_PATH, originalHuman);
-  }
-  for (const filePath of BATCH_03_RECORD_PATHS) {
-    if (existsSync(filePath)) {
-      unlinkSync(filePath);
-    }
-  }
-  for (const filePath of BATCH_03_HUMAN_PATHS) {
-    if (existsSync(filePath)) {
-      unlinkSync(filePath);
-    }
-  }
-  if (existsSync(BATCH_03_PROMOTION_PATH)) {
-    unlinkSync(BATCH_03_PROMOTION_PATH);
-  }
+  seedOrdinaryE2EFixtures(workspace());
 });
 
 async function studentText(page: Page, stage: string, title?: string): Promise<string> {
@@ -276,7 +225,7 @@ test.describe("readonly review host", () => {
   test("hides promotion writes while review pages stay independently readable", async ({
     page,
   }) => {
-    seedApprovedBatch03Reviews();
+    seedSyntheticApprovedReviews(workspace(), ["knife", "bread", "water"]);
     await page.goto("/debug/contextual-content-review");
     await expect(page.getByTestId("review-batch-meal-expansion-batch-03")).toBeVisible();
     await expect(page.getByTestId("meal-expansion-batch-03-approved")).toHaveText("3");
@@ -285,7 +234,7 @@ test.describe("readonly review host", () => {
     await page.goto("/debug/contextual-content-review/meal-expansion-batch-03/knife");
     await expect(page.getByTestId("review-human-status")).toHaveText("APPROVED");
     await expect(page.getByRole("button", { name: "通过审核" })).toBeDisabled();
-    expect(existsSync(BATCH_03_PROMOTION_PATH)).toBe(false);
+    expect(existsSync(workspacePromotionPath(workspace()))).toBe(false);
   });
 });
 
@@ -312,20 +261,20 @@ test.describe("writable review host", () => {
     const pageRevision = Number((await page.getByTestId("review-revision").innerText()).trim());
     expect(Number.isInteger(pageRevision) && pageRevision >= 0).toBe(true);
     const fingerprint = (await page.getByTestId("review-fingerprint").innerText()).trim();
-    const manifest = JSON.parse(
-      readFileSync("docs/contextual-content-reviews/meal-expansion-batch-01-cup/REVIEW_MANIFEST.json", "utf8"),
-    ) as { target: { lexemeId: string; senseId: string } };
+    const cupSpec = CONTENT_REVIEW_TARGETS.find(
+      (item) => item.reviewKey === "meal-expansion-batch-01-cup",
+    )!;
     writeFileSync(
-      RECORD_PATH,
+      workspaceReviewRecordPath(workspace(), "meal-expansion-batch-01-cup"),
       `${JSON.stringify(
         {
           schemaVersion: "candidate-v0",
           reviewKey: "meal-expansion-batch-01-cup",
           packId: "meal-scene-expansion-batch-01",
-          target: manifest.target,
+          target: cupSpec.target,
           contentFingerprint: fingerprint,
           decision: "APPROVED",
-          notes: [],
+          notes: [SYNTHETIC_TEST_NOTE],
           reviewedAt: "2026-09-21T00:00:00.000Z",
           revision: pageRevision + 1,
           reviewer: "LOCAL_INTERNAL_REVIEWER",
@@ -379,29 +328,7 @@ test.describe("writable review host", () => {
   test("promotes a fully approved batch once and keeps Context Lab on six words", async ({
     page,
   }) => {
-    seedApprovedBatch03Reviews();
-    mkdirSync(path.dirname(BATCH_03_PROMOTION_PATH), { recursive: true });
-    writeFileSync(
-      BATCH_03_PROMOTION_PATH,
-      `${JSON.stringify(
-        {
-          schemaVersion: "candidate-v0",
-          kind: "CONTEXTUAL_CONTENT_BATCH_PROMOTION",
-          sceneId: "meal-scene-v0",
-          packId: "meal-scene-expansion-batch-03",
-          parentPackId: "meal-scene-expansion-batch-02",
-          packFingerprint: "stale-pack",
-          lineageFingerprint: "stale-lineage",
-          targetApprovalBindings: [],
-          decision: "PROMOTED",
-          revision: 1,
-          promotedAt: "2026-09-22T09:05:00.000Z",
-          promotedBy: "LOCAL_INTERNAL_PROMOTER",
-        },
-        null,
-        2,
-      )}\n`,
-    );
+    seedSyntheticApprovedReviews(workspace(), ["knife", "bread", "water"]);
     await page.goto("/debug/contextual-content-review");
     await expect(page.getByTestId("meal-expansion-batch-03-approved")).toHaveText("3");
     await expect(page.getByTestId("meal-expansion-batch-03-pending")).toHaveText("0");
@@ -415,10 +342,13 @@ test.describe("writable review host", () => {
     await expect(page.getByTestId("promote-save-message")).toContainText("Batch promotion 已保存");
     await expect(page.getByTestId("promote-confirm")).toHaveCount(0);
     await expect(page.getByText("Promotion: PROMOTED")).toBeVisible();
-    const leftover = JSON.parse(readFileSync(BATCH_03_PROMOTION_PATH, "utf8")) as {
+    const savedPromotion = JSON.parse(readFileSync(workspacePromotionPath(workspace()), "utf8")) as {
       packFingerprint: string;
+      promotedBy: string;
     };
-    expect(leftover.packFingerprint).toBe("stale-pack");
+    expect(savedPromotion.packFingerprint).not.toBe("stale-pack");
+    expect(savedPromotion.promotedBy).toBe("LOCAL_INTERNAL_PROMOTER");
+    expect(existsSync(HUMAN_WORKSPACE_PATHS.batch03Promotion)).toBe(false);
 
     await page.goto("/debug/contextual-content-release");
     await expect(page.getByTestId("release-eligible-pack")).toHaveText("meal-scene-expansion-batch-03");
@@ -435,7 +365,10 @@ test.describe("writable review host", () => {
   test("marks a stale batch-03 review after the stored fingerprint drifts", async ({ page }) => {
     await page.goto("/debug/contextual-content-review/meal-expansion-batch-03/water");
     const fingerprint = (await page.getByTestId("review-fingerprint").innerText()).trim();
-    const stalePath = "docs/contextual-content-reviews/meal-expansion-batch-03-water/human-review.record.json";
+    const stalePath = workspaceReviewRecordPath(
+      workspace(),
+      "meal-expansion-batch-03-water",
+    );
     mkdirSync(path.dirname(stalePath), { recursive: true });
     writeFileSync(
       stalePath,
@@ -447,7 +380,7 @@ test.describe("writable review host", () => {
           target: { lexemeId: "stale", senseId: "water#drinkable-liquid" },
           contentFingerprint: `stale-${fingerprint}`,
           decision: "APPROVED",
-          notes: [],
+          notes: [SYNTHETIC_TEST_NOTE],
           reviewedAt: "2026-09-22T00:00:00.000Z",
           revision: 1,
           reviewer: "LOCAL_INTERNAL_REVIEWER",

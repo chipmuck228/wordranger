@@ -1,6 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { expect, test, type Page, type Request } from "@playwright/test";
 import { chromium } from "playwright";
+import {
+  HISTORICALLY_MISSING_HUMAN_PATHS,
+  inventoryHumanArtifacts,
+} from "../tests/contextual-content-workspace";
+import { REAL_RELEASE_SERVER_ENV } from "./real-release-env";
 
 const REAL_RELEASE_GATE = process.env.CONTEXT_LAB_REAL_RELEASE_E2E === "1";
 const EXPECTED_RELEASE_ID = "meal-release-migration-v0";
@@ -51,8 +56,34 @@ const PROHIBITED_URL =
 
 type ProbeRoute = "READY" | "STRENGTHEN" | "BUILD";
 
+let humanInventoryBefore: ReturnType<typeof inventoryHumanArtifacts>;
+
 test.describe("nine-word human active-release Chromium acceptance", () => {
   test.describe.configure({ timeout: 180_000 });
+
+  test.beforeAll(() => {
+    if (!REAL_RELEASE_GATE) {
+      return;
+    }
+    assertWriteGatesClosed();
+    humanInventoryBefore = inventoryHumanArtifacts();
+    writeJson("human-artifact-inventory-before.json", humanInventoryBefore);
+  });
+
+  test.afterAll(() => {
+    if (!REAL_RELEASE_GATE || !humanInventoryBefore) {
+      return;
+    }
+    const after = inventoryHumanArtifacts();
+    writeJson("human-artifact-inventory-after.json", after);
+    expect(after.missing).toEqual(humanInventoryBefore.missing);
+    expect(after.present).toEqual(humanInventoryBefore.present);
+    for (const missing of HISTORICALLY_MISSING_HUMAN_PATHS) {
+      if (after.missing.includes(missing)) {
+        expect(existsSync(missing), `must not reconstruct ${missing}`).toBe(false);
+      }
+    }
+  });
 
   test.beforeEach(() => {
     if (!REAL_RELEASE_GATE) {
@@ -70,6 +101,7 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
       );
     }
     assertChromiumAvailable();
+    assertWriteGatesClosed();
     assertHumanArtifacts();
   });
 
@@ -423,6 +455,15 @@ test.describe("nine-word human active-release Chromium acceptance", () => {
     expect(releaseReads).toEqual([]);
   });
 });
+
+function assertWriteGatesClosed(): void {
+  expect(process.env.CONTEXTUAL_CONTENT_REVIEW_WRITE_ENABLED).not.toBe("1");
+  expect(process.env.CONTEXTUAL_CONTENT_PROMOTION_WRITE_ENABLED).not.toBe("1");
+  expect(process.env.CONTEXTUAL_CONTENT_RELEASE_WRITE_ENABLED).not.toBe("1");
+  expect(REAL_RELEASE_SERVER_ENV.CONTEXTUAL_CONTENT_REVIEW_WRITE_ENABLED).toBe("0");
+  expect(REAL_RELEASE_SERVER_ENV.CONTEXTUAL_CONTENT_PROMOTION_WRITE_ENABLED).toBe("0");
+  expect(REAL_RELEASE_SERVER_ENV.CONTEXTUAL_CONTENT_RELEASE_WRITE_ENABLED).toBe("0");
+}
 
 function assertChromiumAvailable(): void {
   const executable = chromium.executablePath();

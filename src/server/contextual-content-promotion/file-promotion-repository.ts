@@ -12,7 +12,9 @@ import type { PromotionSaveResult } from "./types";
 export class FileContextualContentBatchPromotionRepository
   implements ContextualContentBatchPromotionRepository
 {
-  readonly artifactRoot = contextualPromotionRoot();
+  get artifactRoot(): string {
+    return contextualPromotionRoot();
+  }
   private queue: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly filePathFor = safePromotionRecordPath) {}

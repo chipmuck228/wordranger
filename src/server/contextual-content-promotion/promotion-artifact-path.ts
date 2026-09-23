@@ -2,8 +2,16 @@ import path from "node:path";
 
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-export function contextualPromotionRoot(): string {
-  return path.resolve(process.cwd(), "docs/contextual-content-promotions");
+export function defaultContextualPromotionRoot(cwd = process.cwd()): string {
+  return path.resolve(cwd, "docs/contextual-content-promotions");
+}
+
+export function contextualPromotionRoot(
+  env: Record<string, string | undefined> = process.env,
+  cwd = process.cwd(),
+): string {
+  const override = env.CONTEXTUAL_CONTENT_PROMOTION_ROOT?.trim();
+  return override ? path.resolve(override) : defaultContextualPromotionRoot(cwd);
 }
 
 export function safePromotionRecordPath(input: { sceneId: string; packId: string }): string | null {

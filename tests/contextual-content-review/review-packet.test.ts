@@ -6,7 +6,6 @@ import { bundledSceneLexemeLoader } from "@/server/runtime/bundled-scene-lexeme-
 import { fingerprintContent } from "@/server/contextual-content-review/fingerprint";
 import { projectContentReviewPacket } from "@/server/contextual-content-review/project-review-packet";
 import { CONTENT_REVIEW_TARGETS } from "@/server/contextual-content-review/review-target-registry";
-import { generateMealBatch01CupReviewArtifacts } from "@/server/contextual-content-review/generate-review-artifacts";
 import { renderHumanReviewMarkdown } from "@/server/contextual-content-review/human-review-markdown";
 import { readFileSync } from "node:fs";
 
@@ -93,7 +92,6 @@ describe("Content review packet projection", () => {
       preview?.student.instruction,
     ).toBe("ACTIVE_RECALL_TYPING");
     expect(JSON.stringify(preview)).not.toMatch(/answerKey|correctCandidateIds|exactAcceptedTexts/i);
-    await generateMealBatch01CupReviewArtifacts();
     const manifest = readFileSync(
       "docs/contextual-content-reviews/meal-expansion-batch-01-cup/REVIEW_MANIFEST.json",
       "utf8",
