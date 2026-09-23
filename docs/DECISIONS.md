@@ -498,6 +498,12 @@ Free-practice `/play/ranger-trial` may have a distinct light, mobile-first shell
 
 Student-facing `/train` is 自由练习: a scheduled small set of direct questions. It is not free word selection and does not bypass Scheduler, TaskEvaluator, or Evidence. New Daily Training items use presentation identity `DIRECT_PRACTICE` and reuse Ranger Trial task contracts. `Evidence.gameId` stays `RANGER_TRIAL`. `DIRECT_PRACTICE` is not a fifth learning renderer. In-progress sessions that already stored Bubble / Matching / Snake keep that stored gameId for Evidence; student-facing `/train` presents the current item as direct practice. The next generated item uses direct presentation. Homepage does not link Context Lab. Free-play `/play/*` routes stay reachable by URL.
 
+## ADR-084 — Free Practice is a separate product surface (Candidate)
+
+**Status:** candidate — not a Standard
+
+Daily Training remains Scheduler-driven and may legally return fewer than `requestedNeedCount` needs. A user-initiated Free Practice path, if built, must use an application `FreePracticeRequest` / `FreePracticeItem` plan, not `planLearningSession()` impersonation, and must still submit through `submitTaskAction`. `RECENTLY_INCORRECT` is latest-terminal-Evidence per `lexemeId + skill` inside a bounded all-outcome window, not “last N INCORRECT rows”. Any TaskGenerator input is a local compatibility projection (archetype routing tokens only), not Scheduler provenance; `game_sessions.state` stores `FreePracticeItem`s only. If that isolation cannot be tested, record `CORE_INTEGRATION_BLOCKER` instead of changing `LearningNeedReason`, TaskGenerator, Evidence, or Scheduler. `Evidence.gameId` stays the renderer (`RANGER_TRIAL` for direct items). Orchestration identity, if added, belongs on `game_sessions.game_type` (proposed `FREE_PRACTICE`), not on frozen Evidence. Public Free Practice requires server-authoritative identity; `V1_PLACEHOLDER_USER_ID` is single-user internal only. This ADR does not implement the path. See `docs/FREE_PRACTICE_CONTRACT_CANDIDATE_V0.md`.
+
 ## Additional notes
 
 - The `LearningRepository` and `VocabularyRepository` *interfaces* live in domain so engines do not import Supabase. Server files implement the ports.

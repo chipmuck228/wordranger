@@ -236,3 +236,5 @@ There is no auth; student pages use `V1_PLACEHOLDER_USER_ID` (a UUID placeholder
 
 The home primary CTA is 开始自由练习 → `/train`. Scene learning stays 场景学习正在准备中. Free-play game routes remain reachable by URL but are not first-level home entries. See `docs/DAILY_TRAINING_EXPERIENCE.md`.
 
+A separate Free Practice product (user-initiated, non-Scheduler word pool) is a Candidate only and is not implemented. It is not this `/train` path and not Ranger Trial Free Play. See `docs/FREE_PRACTICE_CONTRACT_CANDIDATE_V0.md`.
+
