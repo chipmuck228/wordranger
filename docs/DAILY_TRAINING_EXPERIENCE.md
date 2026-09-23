@@ -79,3 +79,5 @@ Optional: 今天多留意：quiet、borrow、through
 The student does not pick a word list, skill, new/review count, or game.
 
 The student only starts, answers, and continues.
+
+A true user-initiated Free Practice path is a Candidate, not this `/train` flow. See `docs/FREE_PRACTICE_CONTRACT_CANDIDATE_V0.md`. Do not change Homepage from this note.

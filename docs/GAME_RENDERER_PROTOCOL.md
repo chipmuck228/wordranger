@@ -175,7 +175,7 @@ Snake `responseTimeMs` includes navigation overhead (movement time until option 
 
 ## UI Pilot (Ranger Trial free practice)
 
-`/play/ranger-trial` is the current UI pilot for Free Practice. Presentation only:
+`/play/ranger-trial` is the current UI pilot for Free Practice. Presentation only. That phrase here means Ranger Trial Free Play chrome, not the unimplemented Free Practice Candidate (`docs/FREE_PRACTICE_CONTRACT_CANDIDATE_V0.md`).
 
 - Choice + typing
 - Finite round (~8 tasks from `requestedNeedCount`)
