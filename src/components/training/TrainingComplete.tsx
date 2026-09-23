@@ -8,11 +8,11 @@ export function TrainingComplete(props: {
   onPlayAgain: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-8 text-center">
+    <div className="mx-auto flex w-full max-w-lg flex-col gap-8 text-center lg:max-w-2xl">
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">本组练习完成</h1>
+        <h1 className="text-3xl font-semibold tracking-tight lg:text-4xl">本组练习完成</h1>
       </div>
-      <div className="space-y-1 text-lg">
+      <div className="space-y-1 text-lg lg:text-xl">
         <p>完成 {props.stats.attempted} 个</p>
         <p>答对 {props.stats.correct} 个</p>
       </div>
@@ -22,10 +22,10 @@ export function TrainingComplete(props: {
           <p className="text-base font-medium">{props.recapWords.join("、")}</p>
         </div>
       ) : null}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
         <Button
           type="button"
-          className="h-12 w-full text-base"
+          className="h-12 w-full text-base sm:w-auto sm:min-w-40"
           onClick={props.onPlayAgain}
         >
           再练一组
@@ -33,7 +33,7 @@ export function TrainingComplete(props: {
         <Button
           nativeButton={false}
           variant="outline"
-          className="h-12 w-full text-base"
+          className="h-12 w-full text-base sm:w-auto sm:min-w-40"
           render={<Link href="/" />}
         >
           回首页

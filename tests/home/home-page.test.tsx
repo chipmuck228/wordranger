@@ -5,10 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomePage } from "@/components/home/home-page";
-import {
-  DAILY_TRAINING_LAST_COMPLETED_SESSION_KEY,
-  DAILY_TRAINING_SESSION_KEY,
-} from "@/components/training/training-session-storage";
+import { DAILY_TRAINING_COMPLETED_ROUNDS_KEY } from "@/components/training/training-session-storage";
 import { DAILY_TRAINING_HREF } from "@/server/home/resolve-home-learning-paths";
 
 afterEach(() => {
@@ -57,13 +54,20 @@ describe("Homepage learning-path presentation", () => {
     expect(screen.queryByRole("link", { name: "继续今天的学习" })).toBeNull();
   });
 
-  it("shows 继续自由练习 from the existing incomplete session key", () => {
-    sessionStorage.setItem(DAILY_TRAINING_SESSION_KEY, "sess-open");
-    sessionStorage.setItem(DAILY_TRAINING_LAST_COMPLETED_SESSION_KEY, "sess-old");
+  it("keeps 开始自由练习 until a group is completed", () => {
+    sessionStorage.setItem("wordranger.daily-training.sessionId", "sess-open");
+    renderHome();
+    expect(screen.getByRole("link", { name: "开始自由练习" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "继续自由练习" })).toBeNull();
+  });
+
+  it("shows 继续自由练习 after a completed group", () => {
+    sessionStorage.setItem(DAILY_TRAINING_COMPLETED_ROUNDS_KEY, "1");
     renderHome();
     expect(screen.getByRole("link", { name: "继续自由练习" }).getAttribute("href")).toBe(
       "/train",
     );
+    expect(screen.queryByRole("link", { name: "开始自由练习" })).toBeNull();
   });
 
   it("does not show old game menu items or Debug tools", () => {

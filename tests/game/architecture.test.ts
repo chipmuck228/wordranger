@@ -70,6 +70,7 @@ describe("G5 renderer architecture boundary", () => {
       join(process.cwd(), "src/components/training/DirectPracticeRenderer.tsx"),
       join(process.cwd(), "src/components/training/TrainingComplete.tsx"),
       join(process.cwd(), "src/components/training/home-daily-status.tsx"),
+      join(process.cwd(), "src/components/training/inline-training-feedback.tsx"),
       join(process.cwd(), "src/components/home/home-practice-entry.tsx"),
     ];
     const forbidden = [

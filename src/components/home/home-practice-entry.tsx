@@ -3,32 +3,26 @@
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { HomeDailyStatus } from "@/components/training/home-daily-status";
-import { hasIncompleteDailyTrainingSession } from "@/components/training/training-session-storage";
+import {
+  readCompletedDailyTrainingRounds,
+  subscribeDailyTrainingStatus,
+} from "@/components/training/training-session-storage";
 import type { HomeLearningPaths } from "@/server/home/resolve-home-learning-paths";
 
 const FOCUS =
   "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:border-ring";
 
-function subscribe(onChange: () => void): () => void {
-  window.addEventListener("storage", onChange);
-  return () => window.removeEventListener("storage", onChange);
-}
-
-function readIncomplete(): boolean {
-  return hasIncompleteDailyTrainingSession();
-}
-
-function serverSnapshot(): boolean {
-  return false;
+function serverSnapshot(): number {
+  return 0;
 }
 
 export function HomePracticeEntry({ href }: { href: HomeLearningPaths["primaryHref"] }) {
-  const continuing = useSyncExternalStore(
-    subscribe,
-    readIncomplete,
+  const rounds = useSyncExternalStore(
+    subscribeDailyTrainingStatus,
+    readCompletedDailyTrainingRounds,
     serverSnapshot,
   );
-  const label = continuing ? "继续自由练习" : "开始自由练习";
+  const label = rounds >= 1 ? "继续自由练习" : "开始自由练习";
   return (
     <div className="mt-8 flex max-w-md flex-col gap-3">
       <Link

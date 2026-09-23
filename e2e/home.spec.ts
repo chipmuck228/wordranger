@@ -40,6 +40,20 @@ async function assertHomeStructure(page: Page): Promise<void> {
   await expect(page.getByText(/fingerprint|AnswerKey|ExperienceRun/i)).toHaveCount(0);
 }
 
+test("Homepage switches to 继续自由练习 after a completed group", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "开始自由练习" })).toBeVisible();
+  await page.evaluate(() => {
+    sessionStorage.setItem("wordranger.daily-training.completedRounds", "1");
+  });
+  await page.reload();
+  await expect(page.getByRole("link", { name: "继续自由练习" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "开始自由练习" })).toHaveCount(0);
+});
+
 test("Homepage learning-path information architecture", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");

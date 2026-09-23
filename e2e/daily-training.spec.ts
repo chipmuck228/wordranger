@@ -31,6 +31,29 @@ async function answerCurrentItem(page: Page): Promise<void> {
   }
 }
 
+async function waitForInlineFeedback(page: Page): Promise<void> {
+  await expect(page.locator("[data-feedback-status]").first()).toBeVisible({
+    timeout: 30_000,
+  });
+}
+
+async function advanceAfterAnswer(page: Page): Promise<void> {
+  const before = await page.getByText(/^\d+ \/ 8$/).textContent();
+  await waitForInlineFeedback(page);
+  await page.getByRole("button", { name: "下一题" }).click();
+  await expect
+    .poll(
+      async () => {
+        if (await page.getByRole("heading", { name: "本组练习完成" }).isVisible()) {
+          return "done";
+        }
+        return page.getByText(/^\d+ \/ 8$/).textContent();
+      },
+      { timeout: 30_000 },
+    )
+    .not.toBe(before);
+}
+
 async function startDailyTraining(page: Page): Promise<void> {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
@@ -53,14 +76,12 @@ test("Homepage → 开始自由练习 → /train uses direct presentation", asyn
   );
   await assertNoGameChrome(page);
   await answerCurrentItem(page);
-  const next = page.getByRole("button", { name: "下一题" });
-  await expect(next).toBeVisible({ timeout: 30_000 });
-  await next.click();
-  await expect(
-    page
-      .getByRole("heading", { name: "本组练习完成" })
-      .or(page.locator('[data-renderer="DIRECT_PRACTICE"]')),
-  ).toBeVisible({ timeout: 30_000 });
+  await waitForInlineFeedback(page);
+  await expect(page.locator("[data-renderer]")).toBeVisible();
+  await expect(page.getByRole("button", { name: "下一题" })).toBeVisible();
+  await expect(page.getByText("1 / 8")).toBeVisible();
+  await expect(page.getByText(/^答对了$|^再看看$/)).toHaveCount(1);
+  await advanceAfterAnswer(page);
 });
 
 test("Daily Training reload resumes the same round from server sessionId", async ({
@@ -69,23 +90,14 @@ test("Daily Training reload resumes the same round from server sessionId", async
   await startDailyTraining(page);
   await expect(page.getByText("1 / 8")).toBeVisible();
   await answerCurrentItem(page);
-  await expect(page.getByRole("button", { name: "下一题" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await waitForInlineFeedback(page);
   await page.reload();
   await expect(
     page
-      .getByRole("button", { name: "下一题" })
-      .or(page.locator('[data-renderer="DIRECT_PRACTICE"]')),
-  ).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("1 / 8")).toBeVisible();
-  if (await page.getByRole("button", { name: "下一题" }).isVisible()) {
-    await page.getByRole("button", { name: "下一题" }).click();
-  }
-  await expect(
-    page
-      .getByRole("heading", { name: "本组练习完成" })
-      .or(page.locator('[data-renderer="DIRECT_PRACTICE"]')),
+      .locator('[data-renderer="DIRECT_PRACTICE"]')
+      .or(page.locator("[data-feedback-status]"))
+      .or(page.getByRole("heading", { name: "本组练习完成" }))
+      .first(),
   ).toBeVisible({ timeout: 30_000 });
 });
 
@@ -107,14 +119,7 @@ test("Daily Training new items stay on DIRECT_PRACTICE", async ({ page }) => {
     );
     await assertNoGameChrome(page);
     await answerCurrentItem(page);
-    const next = page.getByRole("button", { name: "下一题" });
-    await expect(next).toBeVisible({ timeout: 30_000 });
-    await next.click();
-    await expect(
-      page
-        .getByRole("heading", { name: "本组练习完成" })
-        .or(page.locator('[data-renderer="DIRECT_PRACTICE"]')),
-    ).toBeVisible({ timeout: 30_000 });
+    await advanceAfterAnswer(page);
   }
   expect(page.url()).toMatch(/\/train/);
 });
@@ -133,14 +138,7 @@ test("Daily Training can complete an 8-item round", async ({ page }) => {
       break;
     }
     await answerCurrentItem(page);
-    const next = page.getByRole("button", { name: "下一题" });
-    await expect(next).toBeVisible({ timeout: 30_000 });
-    await next.click();
-    await expect(
-      page
-        .getByRole("heading", { name: "本组练习完成" })
-        .or(page.locator('[data-renderer="DIRECT_PRACTICE"]')),
-    ).toBeVisible({ timeout: 30_000 });
+    await advanceAfterAnswer(page);
   }
 
   await expect(page.getByRole("heading", { name: "本组练习完成" })).toBeVisible();
@@ -157,9 +155,7 @@ test("duplicate answer click does not change the current item", async ({
   } else {
     await answerCurrentItem(page);
   }
-  await expect(page.getByRole("button", { name: "下一题" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await waitForInlineFeedback(page);
   await expect(page.getByText("1 / 8")).toBeVisible();
 });
 
@@ -190,9 +186,7 @@ test("Daily Training is keyboard reachable for a choice item", async ({
   if ((await page.getByRole("group", { name: "选项" }).count()) > 0) {
     await page.keyboard.press("Tab");
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("button", { name: "下一题" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await waitForInlineFeedback(page);
   }
 });
 

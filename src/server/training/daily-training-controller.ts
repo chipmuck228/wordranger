@@ -399,13 +399,7 @@ export class DailyTrainingController {
       };
     }
     if (record.phase === "awaiting_continue") {
-      return {
-        completed: false,
-        progress: publicProgress(record),
-        stats: { ...record.stats },
-        feedback: record.lastFeedback ?? undefined,
-        rendererGameType: publicProgress(record).rendererGameType ?? undefined,
-      };
+      return this.resumeAwaitingContinue(record);
     }
     if (record.currentTaskId) {
       return this.resumeCurrentTask(record);
@@ -586,6 +580,25 @@ export class DailyTrainingController {
     return this.recoverCompletedSubmit(latest, taskId);
   }
 
+  private async resumeAwaitingContinue(
+    record: DailyTrainingSessionRecord,
+  ): Promise<ResumeDailyTrainingResult> {
+    const current = record.currentTaskId
+      ? await this.resumeCurrentTask(record)
+      : null;
+    return {
+      completed: false,
+      progress: publicProgress(record),
+      stats: { ...record.stats },
+      feedback: record.lastFeedback ?? undefined,
+      task: current?.task,
+      rendererGameType:
+        current?.rendererGameType ??
+        publicProgress(record).rendererGameType ??
+        undefined,
+    };
+  }
+
   private async resumeCurrentTask(
     record: DailyTrainingSessionRecord,
   ): Promise<ResumeDailyTrainingResult> {
@@ -619,13 +632,7 @@ export class DailyTrainingController {
       };
     }
     if (latest.phase === "awaiting_continue") {
-      return {
-        completed: false,
-        progress: publicProgress(latest),
-        stats: { ...latest.stats },
-        feedback: latest.lastFeedback ?? undefined,
-        rendererGameType: publicProgress(latest).rendererGameType ?? undefined,
-      };
+      return this.resumeAwaitingContinue(latest);
     }
     if (latest.currentTaskId) {
       return this.resumeCurrentTask(latest);

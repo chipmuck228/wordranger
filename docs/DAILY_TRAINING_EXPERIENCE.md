@@ -16,7 +16,7 @@ Student-facing flow for 自由练习 (`/train`). Internal architecture lives in 
 
 [开始自由练习] → `/train`
 
-If an incomplete `/train` session id is already stored, the same link may read 继续自由练习. That uses the existing session keys, not a guessed plan.
+If the student has already completed at least one group today, the same link reads 继续自由练习. That uses the existing completed-round count, not a guessed plan.
 
 单词由系统根据当前学习情况安排。
 
@@ -52,13 +52,13 @@ Do not ask which game is next.
 
 ## Feedback
 
-Immediate result after the answer. Then [下一题].
+The current question stays on the page. A short inline result appears under it once (答对了 / 再看看). The student taps [下一题] to replace it with the next word.
 
 Wrong answers stay supportive and factual. No HP, penalty, or score deduction.
 
 ## Next item
 
-[下一题] → the next direct question.
+The next direct question replaces the current one on the same page.
 
 ## Complete
 
