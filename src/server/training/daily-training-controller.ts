@@ -49,7 +49,10 @@ import {
   rendererByGameType,
   type TrainingRendererDefinition,
 } from "./renderer-registry";
-import { selectDailyTrainingRenderer } from "./daily-training-renderer-policy";
+import {
+  dailyTrainingPresentationType,
+  selectDailyTrainingRenderer,
+} from "./daily-training-renderer-policy";
 import { selectRendererForTask } from "./renderer-selector";
 
 /**
@@ -92,7 +95,7 @@ function publicProgress(
     total: record.needs.length,
     completed: record.completed,
     currentTaskId: record.currentTaskId,
-    rendererGameType: item?.rendererGameType ?? null,
+    rendererGameType: dailyTrainingPresentationType(item?.rendererGameType),
   };
 }
 

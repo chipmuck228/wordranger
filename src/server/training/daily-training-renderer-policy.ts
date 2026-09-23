@@ -1,9 +1,20 @@
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
+import { DIRECT_PRACTICE_PRESENTATION_TYPE } from "@/server/auth/v1-user";
 import { GameSessionError } from "@/server/game-session/ranger-trial-errors";
 import {
   DAILY_TRAINING_DIRECT_RENDERER,
   type TrainingRendererDefinition,
 } from "./renderer-registry";
+
+/** Student-facing /train always shows direct practice. Stored game types stay on the item for Evidence. */
+export function dailyTrainingPresentationType(
+  stored: string | null | undefined,
+): string | null {
+  if (!stored) {
+    return null;
+  }
+  return DIRECT_PRACTICE_PRESENTATION_TYPE;
+}
 
 /**
  * Daily Training presentation policy. Always returns the direct
