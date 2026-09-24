@@ -202,6 +202,8 @@ the `user_id` filter or to read another user's rows.
 student_lexeme_models
   select lexeme_id, mastery_stage
   eq user_id
+  order lexeme_id ascending
+  paged with explicit inclusive ranges
 ```
 
 Skill-state and weakness rows are not loaded. Eligibility is “no

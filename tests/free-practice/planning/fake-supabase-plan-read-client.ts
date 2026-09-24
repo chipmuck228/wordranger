@@ -21,12 +21,16 @@ export interface RecordedQuery {
   filters: Array<{ column: string; value: unknown }>;
   orders: Array<{ column: string; ascending: boolean }>;
   limit: number | null;
+  range: { from: number; to: number } | null;
 }
+
+const POSTGREST_DEFAULT_MAX_ROWS = 1000;
 
 class QueryBuilder<T extends object> {
   constructor(
     private readonly rows: T[],
     readonly recorded: RecordedQuery,
+    private readonly failError: { message: string } | null,
   ) {}
 
   select(columns: string) {
@@ -47,14 +51,22 @@ class QueryBuilder<T extends object> {
     return this;
   }
 
+  range(from: number, to: number) {
+    this.recorded.range = { from, to };
+    return this;
+  }
+
   limit(count: number) {
     this.recorded.limit = count;
     return this;
   }
 
-  then<TResult1 = { data: T[]; error: null }, TResult2 = never>(
+  then<TResult1 = { data: T[] | null; error: { message: string } | null }, TResult2 = never>(
     onfulfilled?:
-      | ((value: { data: T[]; error: null }) => TResult1 | PromiseLike<TResult1>)
+      | ((value: {
+          data: T[] | null;
+          error: { message: string } | null;
+        }) => TResult1 | PromiseLike<TResult1>)
       | undefined
       | null,
     onrejected?:
@@ -62,6 +74,12 @@ class QueryBuilder<T extends object> {
       | undefined
       | null,
   ): Promise<TResult1 | TResult2> {
+    if (this.failError) {
+      return Promise.resolve({ data: null, error: this.failError }).then(
+        onfulfilled,
+        onrejected,
+      );
+    }
     return Promise.resolve({ data: this.execute(), error: null }).then(
       onfulfilled,
       onrejected,
@@ -85,8 +103,13 @@ class QueryBuilder<T extends object> {
         return order.ascending ? comparison : -comparison;
       });
     }
-    if (this.recorded.limit !== null) {
+    if (this.recorded.range) {
+      const { from, to } = this.recorded.range;
+      rows = rows.slice(from, to + 1);
+    } else if (this.recorded.limit !== null) {
       rows = rows.slice(0, this.recorded.limit);
+    } else {
+      rows = rows.slice(0, POSTGREST_DEFAULT_MAX_ROWS);
     }
     return rows;
   }
@@ -97,6 +120,8 @@ export class FakeFreePracticeSupabaseClient {
   readonly evidence: FakeEvidenceRow[] = [];
   readonly queries: RecordedQuery[] = [];
   readonly writes: string[] = [];
+  failSnapshotQueryIndex: number | null = null;
+  private snapshotQueryCount = 0;
 
   seedSnapshot(row: FakeSnapshotRow): void {
     this.snapshots.push(row);
@@ -116,12 +141,19 @@ export class FakeFreePracticeSupabaseClient {
       filters: [],
       orders: [],
       limit: null,
+      range: null,
     };
     this.queries.push(recorded);
     if (table === "student_lexeme_models") {
-      return new QueryBuilder(this.snapshots, recorded);
+      const index = this.snapshotQueryCount;
+      this.snapshotQueryCount += 1;
+      const fail =
+        this.failSnapshotQueryIndex === index
+          ? { message: "snapshot page failed" }
+          : null;
+      return new QueryBuilder(this.snapshots, recorded, fail);
     }
-    return new QueryBuilder(this.evidence, recorded);
+    return new QueryBuilder(this.evidence, recorded, null);
   };
 
   insert = () => {

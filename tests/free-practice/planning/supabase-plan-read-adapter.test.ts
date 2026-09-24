@@ -92,8 +92,10 @@ describe("SupabaseFreePracticePlanReadAdapter contract", () => {
     expect(query).toMatchObject({
       table: "student_lexeme_models",
       select: "lexeme_id, mastery_stage",
+      range: { from: 0, to: 999 },
     });
     expect(query?.filters).toEqual([{ column: "user_id", value: USER_A }]);
+    expect(query?.orders).toEqual([{ column: "lexeme_id", ascending: true }]);
     expect(rows).toEqual([
       { lexemeId: "apple", masteryStage: MasteryStage.EXPOSED },
     ]);

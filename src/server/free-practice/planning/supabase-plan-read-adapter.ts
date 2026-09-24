@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { EvidenceOutcome } from "@/domain/learning/evidence.types";
 import { MasteryStage } from "@/domain/learning/mastery-stage";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
+import { FREE_PRACTICE_SNAPSHOT_PAGE_SIZE } from "./constants";
 import type {
   FreePracticeLearnerSnapshot,
   FreePracticePlanReadPort,
@@ -69,14 +70,28 @@ export class SupabaseFreePracticePlanReadAdapter
     userId: string,
   ): Promise<FreePracticeLearnerSnapshot[]> {
     const trusted = requireUserId(userId);
-    const { data, error } = await this.client
-      .from("student_lexeme_models")
-      .select("lexeme_id, mastery_stage")
-      .eq("user_id", trusted);
-    if (error) {
-      throw error;
+    const pageSize = FREE_PRACTICE_SNAPSHOT_PAGE_SIZE;
+    const rows: SnapshotRow[] = [];
+    let from = 0;
+    for (;;) {
+      const to = from + pageSize - 1;
+      const { data, error } = await this.client
+        .from("student_lexeme_models")
+        .select("lexeme_id, mastery_stage")
+        .eq("user_id", trusted)
+        .order("lexeme_id", { ascending: true })
+        .range(from, to);
+      if (error) {
+        throw error;
+      }
+      const page = (data ?? []) as SnapshotRow[];
+      rows.push(...page);
+      if (page.length < pageSize) {
+        break;
+      }
+      from += pageSize;
     }
-    return ((data ?? []) as SnapshotRow[]).map((row) => ({
+    return rows.map((row) => ({
       lexemeId: row.lexeme_id,
       masteryStage: parseMasteryStage(row.mastery_stage),
     }));

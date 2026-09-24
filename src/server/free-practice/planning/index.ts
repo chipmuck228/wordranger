@@ -1,6 +1,9 @@
 import "server-only";
 
-export { FREE_PRACTICE_RECENT_TERMINAL_EVIDENCE_LIMIT } from "./constants";
+export {
+  FREE_PRACTICE_RECENT_TERMINAL_EVIDENCE_LIMIT,
+  FREE_PRACTICE_SNAPSHOT_PAGE_SIZE,
+} from "./constants";
 export { InMemoryFreePracticePlanReadAdapter } from "./in-memory-plan-read-adapter";
 export { planFreePractice } from "./plan-free-practice";
 export type { PlanFreePracticeInput } from "./plan-free-practice";
