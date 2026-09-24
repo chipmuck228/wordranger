@@ -6,6 +6,7 @@ import { InMemoryFreePracticePlanReadAdapter } from "@/server/free-practice/plan
 import { FreePracticeSessionController } from "@/server/free-practice/session/controller";
 import { InMemoryFreePracticeSessionStore } from "@/server/free-practice/session/in-memory-store";
 import { InMemoryLearningTaskRepository } from "@/server/tasks/in-memory-learning-task-repository";
+import type { TaskGenerator } from "@/domain/tasks/task-generator";
 import { InMemoryVocabularyRepository } from "@/server/vocabulary/in-memory-vocabulary-repository";
 import { tinyDataset } from "../../tasks/helpers";
 import {
@@ -41,6 +42,7 @@ export function createSessionHarness(input: {
   incorrectLexemeIds?: string[];
   tasks?: InMemoryLearningTaskRepository;
   sessions?: InMemoryFreePracticeSessionStore;
+  generator?: TaskGenerator;
 }) {
   const env = { ...TEST_IDENTITY_ENV };
   const userId = input.userId ?? USER_A;
@@ -79,6 +81,7 @@ export function createSessionHarness(input: {
     createSessionId: sequentialIds("session"),
     createId: sequentialIds("id"),
     now: () => "2026-09-24T02:00:00.000Z",
+    generator: input.generator,
   });
   return { controller, sessions, tasks, vocabulary, read, userId, env };
 }

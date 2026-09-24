@@ -38,6 +38,7 @@ describe("Free Practice session architecture boundary", () => {
         expect(text, `${file} ${token}`).not.toContain(token);
       }
       expect(text, file).not.toContain("@/server/context-lab");
+      expect(text, file).not.toContain("JSON.stringify(value).includes");
     }
   });
 
