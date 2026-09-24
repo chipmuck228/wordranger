@@ -4,6 +4,7 @@ import { createTestFreePracticeSessionReader } from "@/server/free-practice/iden
 import { FreePracticeSessionController } from "@/server/free-practice/session/controller";
 import { FreePracticeSessionError } from "@/server/free-practice/session/errors";
 import { InMemoryFreePracticeSessionStore } from "@/server/free-practice/session/in-memory-store";
+import { InMemoryLearningRepository } from "@/server/learning/in-memory-learning-repository";
 import { assertSafePublicPayload } from "@/server/free-practice/session/public-payload";
 import { parseFreePracticeRecord } from "@/server/free-practice/session/state";
 import { FREE_PRACTICE_ORCHESTRATION_TYPE } from "@/server/free-practice/session/constants";
@@ -751,5 +752,189 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
         }),
       }),
     ).toThrow(/COMPLETED/);
+  });
+
+  it("production defaults give two controllers distinct UUID Evidence and model IDs", async () => {
+    const learning = new InMemoryLearningRepository();
+    const first = createSessionHarness({
+      lexemes: unseenLexemes(20),
+      learning,
+      productionIds: true,
+    });
+    const second = createSessionHarness({
+      lexemes: unseenLexemes(20),
+      learning,
+      productionIds: true,
+    });
+    const startedA = await first.controller.start({
+      source: "UNSEEN",
+      requestedCount: 5,
+    });
+    const startedB = await second.controller.start({
+      source: "UNSEEN",
+      requestedCount: 5,
+    });
+    expect(startedA.status).toBe("STARTED");
+    expect(startedB.status).toBe("STARTED");
+    if (startedA.status !== "STARTED" || startedB.status !== "STARTED") {
+      return;
+    }
+    expect(startedA.session.sessionId).not.toBe(startedB.session.sessionId);
+    const submittedA = expectFeedback(
+      await submitCurrent(
+        first.controller,
+        startedA.session,
+        first.tasks,
+        true,
+      ),
+      true,
+    );
+    expectFeedback(
+      await submitCurrent(
+        second.controller,
+        startedB.session,
+        second.tasks,
+        false,
+      ),
+      false,
+    );
+    const uuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const evidence = learning.listEvidenceForUser(USER_A);
+    expect(evidence).toHaveLength(2);
+    expect(evidence[0]?.id).toMatch(uuid);
+    expect(evidence[1]?.id).toMatch(uuid);
+    expect(evidence[0]?.id).not.toBe(evidence[1]?.id);
+    expect(evidence[0]?.id).not.toMatch(/^fp-ev-/);
+    const models = learning.listStudentLexemeModels(USER_A);
+    expect(models.length).toBeGreaterThan(0);
+    const identityIds = [
+      ...evidence.map((item) => item.id),
+      ...models.map((model) => model.id),
+      ...models.flatMap((model) => model.weaknesses.map((item) => item.id)),
+    ];
+    expect(new Set(identityIds).size).toBe(identityIds.length);
+    for (const id of identityIds) {
+      expect(id).toMatch(uuid);
+    }
+    const duplicate = await first.controller.submit({
+      sessionId: submittedA.session.sessionId,
+      revision: submittedA.session.revision,
+      taskId: startedA.task.id,
+      intent: await choiceIntentForTask(first.tasks, startedA.task.id, true),
+    });
+    expectFeedback(duplicate, true);
+    expect(learning.listEvidenceForUser(USER_A)).toHaveLength(2);
+  });
+
+  it("delayed duplicate submit after continue stays on task B", async () => {
+    const { harness, started } = await startUnseen();
+    const submittedA = expectFeedback(
+      await submitCurrent(
+        harness.controller,
+        started.session,
+        harness.tasks,
+        true,
+      ),
+      true,
+    );
+    const next = await harness.controller.continue({
+      sessionId: submittedA.session.sessionId,
+      revision: submittedA.session.revision,
+      taskId: submittedA.task.id,
+    });
+    expect(next.status).toBe("RESUMED");
+    if (next.status !== "RESUMED") {
+      return;
+    }
+    expect(next.task.id).not.toBe(started.task.id);
+    const before = await harness.sessions.get(started.session.sessionId, USER_A);
+    expect(before?.state.phase).toBe("AWAITING_ACTION");
+    const delayed = await harness.controller.submit({
+      sessionId: started.session.sessionId,
+      revision: submittedA.session.revision,
+      taskId: started.task.id,
+      intent: await choiceIntentForTask(harness.tasks, started.task.id, true),
+    });
+    expect(["RESUMED", "CONFLICT"]).toContain(delayed.status);
+    if (delayed.status === "RESUMED") {
+      expect(delayed.task.id).toBe(next.task.id);
+      expect(delayed.session.currentTaskId).toBe(next.task.id);
+      expect(delayed.session.phase).toBe("AWAITING_ACTION");
+      expect(delayed.session.current).toBe(2);
+    }
+    const after = await harness.sessions.get(started.session.sessionId, USER_A);
+    expect(after?.revision).toBe(before?.revision);
+    expect(after?.state.phase).toBe("AWAITING_ACTION");
+    expect(after?.state.currentIndex).toBe(1);
+    expect(after?.state.currentTaskId).toBe(next.task.id);
+    expect(after?.state.attempted).toBe(1);
+    expect(after?.state.correct).toBe(1);
+    expect(after?.state.feedback).toBeNull();
+    expect(after?.state.lastCompletedTaskId).toBe(started.task.id);
+    const evidence = harness.learning.listEvidenceForUser(USER_A);
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0]?.taskId).toBe(started.task.id);
+  });
+
+  it("duplicate final submit returns COMPLETED without new Evidence or stats", async () => {
+    const { harness, started } = await startUnseen();
+    let current = started;
+    let lastTaskId = started.task.id;
+    for (let index = 0; index < 5; index += 1) {
+      const submitted = expectFeedback(
+        await submitCurrent(
+          harness.controller,
+          current.session,
+          harness.tasks,
+          true,
+        ),
+        true,
+      );
+      lastTaskId = submitted.task.id;
+      const next = await harness.controller.continue({
+        sessionId: submitted.session.sessionId,
+        revision: submitted.session.revision,
+        taskId: submitted.task.id,
+      });
+      if (index < 4) {
+        expect(next.status).toBe("RESUMED");
+        if (next.status !== "RESUMED") {
+          return;
+        }
+        current = next;
+      } else {
+        expect(next.status).toBe("COMPLETED");
+        if (next.status !== "COMPLETED") {
+          return;
+        }
+        const before = await harness.sessions.get(
+          started.session.sessionId,
+          USER_A,
+        );
+        const delayed = await harness.controller.submit({
+          sessionId: started.session.sessionId,
+          revision: submitted.session.revision,
+          taskId: lastTaskId,
+          intent: await choiceIntentForTask(harness.tasks, lastTaskId, true),
+        });
+        expect(delayed.status).toBe("COMPLETED");
+        if (delayed.status === "COMPLETED" && next.status === "COMPLETED") {
+          expect(delayed.completedAt).toBe(next.completedAt);
+          expect(delayed.session.attempted).toBe(5);
+          expect(delayed.session.correct).toBe(5);
+        }
+        const after = await harness.sessions.get(
+          started.session.sessionId,
+          USER_A,
+        );
+        expect(after?.revision).toBe(before?.revision);
+        expect(after?.state.phase).toBe("COMPLETED");
+        expect(after?.state.attempted).toBe(5);
+        expect(after?.state.correct).toBe(5);
+        expect(after?.state.completedAt).toBe(before?.state.completedAt);
+        expect(harness.learning.listEvidenceForUser(USER_A)).toHaveLength(5);
+      }
+    }
   });
 });

@@ -56,16 +56,27 @@ mastery language.
 ## Evidence / session CAS recovery
 
 Evidence write and session CAS are not one transaction. Recovery
-follows Daily Training:
+follows Daily Training, then re-reads the latest session:
 
-1. Winner saves feedback → loser reloads that feedback.
-2. `TASK_ALREADY_COMPLETED` → `getEvidenceForLexeme` (existing
-   `LearningRepository` method) → apply stats once → persist
-   `AWAITING_CONTINUE`.
-3. Evidence exists but session CAS lost → same recovery. Retry
-   must not write a second Evidence or increment stats twice.
+- `AWAITING_CONTINUE` for the same task → return that feedback.
+- `AWAITING_ACTION` after continue (`lastCompletedTaskId` is the old
+  task, `currentTaskId` is the next) → return the current task
+  (`RESUMED`) or `CONFLICT`. Do not rebuild old feedback or change
+  stats / index / task / revision.
+- `COMPLETED` for the final task → return `COMPLETED`.
+- Unrelated `taskId` → `INVALID` or `CONFLICT`. Do not scan
+  historical Evidence.
+- Evidence may be applied into `AWAITING_CONTINUE` only while the
+  latest phase is still `AWAITING_ACTION`, `currentTaskId` is that
+  exact task, assignment checks pass, and the session has not
+  advanced.
 
 The client cannot supply an evaluation as a recovery source.
+
+Production defaults for `createId` and `createEvidenceId` are
+`crypto.randomUUID()`. Tests may inject sequences. Deterministic
+task/option IDs still come from
+`createFreePracticeGenerationIds(sessionId, itemId)` only.
 
 ## Continue and completion
 

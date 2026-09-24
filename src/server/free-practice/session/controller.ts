@@ -166,6 +166,9 @@ function applySubmitOnce(
   taskId: string,
   feedback: FreePracticePublicFeedback,
 ): boolean {
+  if (record.state.currentTaskId !== taskId) {
+    return false;
+  }
   if (record.state.lastCompletedTaskId === taskId) {
     record.state.phase = "AWAITING_CONTINUE";
     if (!record.state.feedback) {
@@ -193,8 +196,6 @@ export class FreePracticeSessionController {
   private readonly createSessionId: () => string;
   private readonly createId: () => string;
   private readonly createEvidenceId: () => string;
-  private idSeq = 0;
-  private evidenceSeq = 0;
 
   constructor(private readonly deps: FreePracticeSessionControllerDeps) {
     this.generator =
@@ -202,18 +203,9 @@ export class FreePracticeSessionController {
     this.now = deps.now ?? (() => new Date().toISOString());
     this.createSessionId =
       deps.createSessionId ?? (() => crypto.randomUUID());
-    this.createId =
-      deps.createId ??
-      (() => {
-        this.idSeq += 1;
-        return `fp-id-${this.idSeq}`;
-      });
+    this.createId = deps.createId ?? (() => crypto.randomUUID());
     this.createEvidenceId =
-      deps.createEvidenceId ??
-      (() => {
-        this.evidenceSeq += 1;
-        return `fp-ev-${this.evidenceSeq}`;
-      });
+      deps.createEvidenceId ?? (() => crypto.randomUUID());
   }
 
   async start(
@@ -343,20 +335,18 @@ export class FreePracticeSessionController {
     if (!record) {
       return { status: "NOT_FOUND" };
     }
-    if (record.state.phase === "COMPLETED") {
-      return { status: "INVALID", reason: "INVALID_REQUEST" };
-    }
-    if (record.state.lastCompletedTaskId === taskId && record.state.feedback) {
-      return this.presentFeedback(record);
+    const settled = await this.resolveSettledSubmit(record, taskId);
+    if (settled) {
+      return settled;
     }
     if (record.state.phase !== "AWAITING_ACTION") {
       return { status: "INVALID", reason: "INVALID_REQUEST" };
     }
-    if (record.revision !== revision) {
-      return this.recoverStaleSubmit(record, taskId);
-    }
     if (record.state.currentTaskId !== taskId) {
       return { status: "INVALID", reason: "INVALID_REQUEST" };
+    }
+    if (record.revision !== revision) {
+      return this.recoverStaleSubmit(record, taskId);
     }
     let task: PublicLearningTask;
     try {
@@ -401,10 +391,7 @@ export class FreePracticeSessionController {
         throw error;
       }
     } catch (error) {
-      if (this.isAlreadyCompleted(error)) {
-        return this.recoverCompletedSubmit(record, taskId);
-      }
-      if (this.isConflict(error)) {
+      if (this.isAlreadyCompleted(error) || this.isConflict(error)) {
         return this.recoverSubmitAfterConflict(sessionId, identity.userId, taskId);
       }
       if (error instanceof TaskProtocolError) {
@@ -541,14 +528,50 @@ export class FreePracticeSessionController {
     return null;
   }
 
+  /**
+   * Authoritative result for a submit that is no longer the open
+   * current task. Does not rebuild old feedback onto a newer item
+   * and does not mutate stats/index/task/revision.
+   */
+  private async resolveSettledSubmit(
+    latest: FreePracticeSessionRecord,
+    taskId: string,
+  ): Promise<FreePracticeSessionPublicResult | null> {
+    const { phase, currentTaskId, lastCompletedTaskId, feedback } =
+      latest.state;
+    if (
+      phase === "AWAITING_CONTINUE" &&
+      currentTaskId === taskId &&
+      lastCompletedTaskId === taskId &&
+      feedback
+    ) {
+      return this.presentFeedback(latest);
+    }
+    if (
+      phase === "COMPLETED" &&
+      (lastCompletedTaskId === taskId || currentTaskId === taskId)
+    ) {
+      return toCompleted(latest);
+    }
+    if (
+      phase === "AWAITING_ACTION" &&
+      lastCompletedTaskId === taskId &&
+      currentTaskId !== taskId
+    ) {
+      if (!currentTaskId) {
+        return { status: "CONFLICT" };
+      }
+      return this.presentRecord(latest, "RESUMED");
+    }
+    return null;
+  }
+
   private async recoverStaleSubmit(
     record: FreePracticeSessionRecord,
     taskId: string,
   ): Promise<FreePracticeSessionPublicResult> {
-    if (record.state.lastCompletedTaskId === taskId && record.state.feedback) {
-      return this.presentFeedback(record);
-    }
-    return { status: "CONFLICT" };
+    const settled = await this.resolveSettledSubmit(record, taskId);
+    return settled ?? { status: "CONFLICT" };
   }
 
   private async recoverSubmitAfterConflict(
@@ -560,63 +583,64 @@ export class FreePracticeSessionController {
     if (!latest) {
       return { status: "CONFLICT" };
     }
-    if (latest.state.lastCompletedTaskId === taskId && latest.state.feedback) {
-      return this.presentFeedback(latest);
+    const settled = await this.resolveSettledSubmit(latest, taskId);
+    if (settled) {
+      return settled;
     }
-    return this.recoverCompletedSubmit(latest, taskId);
+    return this.recoverEvidenceIfCurrent(latest, taskId);
   }
 
-  private async recoverCompletedSubmit(
-    record: FreePracticeSessionRecord,
+  /**
+   * Case E: Evidence exists, session CAS has not advanced, and the
+   * assigned current task still matches. Never applied after continue.
+   */
+  private async recoverEvidenceIfCurrent(
+    latest: FreePracticeSessionRecord,
     taskId: string,
   ): Promise<FreePracticeSessionPublicResult> {
-    if (record.state.lastCompletedTaskId === taskId && record.state.feedback) {
-      if (record.state.phase !== "AWAITING_CONTINUE") {
-        record.state.phase = "AWAITING_CONTINUE";
-        try {
-          const saved = await this.deps.sessions.save(record);
-          return this.presentFeedback(saved);
-        } catch (error) {
-          if (!this.isConflict(error)) {
-            throw error;
-          }
-        }
-      }
-      return this.presentFeedback(record);
+    if (
+      latest.state.phase !== "AWAITING_ACTION" ||
+      latest.state.currentTaskId !== taskId
+    ) {
+      return { status: "CONFLICT" };
     }
-    const assigned = await this.deps.tasks.getTaskForEvaluation(taskId);
+    const assigned = await this.matchAssignedTask(taskId, latest);
     if (!assigned) {
       return { status: "NOT_FOUND" };
     }
     const evidence = (
       await this.deps.learning.getEvidenceForLexeme(
-        record.userId,
+        latest.userId,
         assigned.task.publicTask.lexemeId,
       )
     ).find((item) => item.taskId === taskId);
-    if (!evidence) {
+    if (!evidence || latest.state.currentTaskId !== taskId) {
       return { status: "CONFLICT" };
     }
     const feedback = toFreePracticePublicFeedbackFromOutcome(
       taskId,
       evidence.outcome,
     );
-    applySubmitOnce(record, taskId, feedback);
+    if (!applySubmitOnce(latest, taskId, feedback)) {
+      const settled = await this.resolveSettledSubmit(latest, taskId);
+      return settled ?? { status: "CONFLICT" };
+    }
     try {
-      const saved = await this.deps.sessions.save(record);
+      const saved = await this.deps.sessions.save(latest);
       return this.presentFeedback(saved, assigned.task.publicTask);
     } catch (error) {
       if (!this.isConflict(error)) {
         throw error;
       }
-      const latest = await this.deps.sessions.get(
-        record.sessionId,
-        record.userId,
+      const newest = await this.deps.sessions.get(
+        latest.sessionId,
+        latest.userId,
       );
-      if (latest?.state.lastCompletedTaskId === taskId && latest.state.feedback) {
-        return this.presentFeedback(latest);
+      if (!newest) {
+        return { status: "CONFLICT" };
       }
-      return { status: "CONFLICT" };
+      const settled = await this.resolveSettledSubmit(newest, taskId);
+      return settled ?? { status: "CONFLICT" };
     }
   }
 
@@ -742,10 +766,10 @@ export class FreePracticeSessionController {
     }
   }
 
-  private async loadPublicTask(
+  private async matchAssignedTask(
     taskId: string,
     record: FreePracticeSessionRecord,
-  ): Promise<PublicLearningTask> {
+  ) {
     const assigned = await this.deps.tasks.getTaskForEvaluation(taskId);
     const current = record.state.items[record.state.currentIndex];
     if (
@@ -757,6 +781,17 @@ export class FreePracticeSessionController {
       assigned.task.publicTask.lexemeId !== current.lexemeId ||
       assigned.task.publicTask.targetSkill !== current.targetSkill
     ) {
+      return null;
+    }
+    return assigned;
+  }
+
+  private async loadPublicTask(
+    taskId: string,
+    record: FreePracticeSessionRecord,
+  ): Promise<PublicLearningTask> {
+    const assigned = await this.matchAssignedTask(taskId, record);
+    if (!assigned) {
       throw new FreePracticeSessionError(
         "SESSION_NOT_FOUND",
         "Assigned task is not available",

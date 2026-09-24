@@ -152,6 +152,7 @@ export function createSessionHarness(input: {
   learning?: InMemoryLearningRepository;
   generator?: TaskGenerator;
   livePlanRead?: boolean;
+  productionIds?: boolean;
 }) {
   const env = { ...TEST_IDENTITY_ENV };
   const userId = input.userId ?? USER_A;
@@ -193,9 +194,13 @@ export function createSessionHarness(input: {
       isAnonymous: true,
     }),
     env,
-    createSessionId: sequentialIds("session"),
-    createId: sequentialIds("id"),
-    createEvidenceId: sequentialIds("evidence"),
+    createSessionId: input.productionIds
+      ? undefined
+      : sequentialIds("session"),
+    createId: input.productionIds ? undefined : sequentialIds("id"),
+    createEvidenceId: input.productionIds
+      ? undefined
+      : sequentialIds("evidence"),
     now: () => "2026-09-24T02:00:00.000Z",
     generator: input.generator,
   });
