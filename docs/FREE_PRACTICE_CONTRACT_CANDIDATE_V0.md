@@ -449,11 +449,17 @@ FREE_PRACTICE_RECENT_TERMINAL_EVIDENCE_LIMIT = 40
 
 5. **Generatable skill.** V0 can generate
    `MEANING_RECOGNITION`, `ACTIVE_RECALL`, `SPELLING_RECALL`, and
-   `SEMANTIC_CONNECTION` when required content exists. Drop a key
-   whose skill is not generatable (`LISTENING_RECOGNITION`,
-   `CONTEXT_USE`, or missing content). **Do not** rewrite that key
-   into another skill. Silent fallback to `MEANING_RECOGNITION`
-   would practice a different skill and then clear the wrong key.
+   `SEMANTIC_CONNECTION` when required content exists. Content
+   checks follow frozen `DefaultTaskGenerator`: usable meaning is
+   non-blank `meaningsZh[0]` only; `ACTIVE_RECALL` /
+   `SPELLING_RECALL` require a non-blank `lemma` (`display` is not
+   a fallback); `SEMANTIC_CONNECTION` requires a
+   production-approved relation whose counterpart lexeme exists and
+   has a non-blank lemma. Drop a key whose skill is not generatable
+   (`LISTENING_RECOGNITION`, `CONTEXT_USE`, or missing content).
+   **Do not** rewrite that key into another skill. Silent fallback
+   to `MEANING_RECOGNITION` would practice a different skill and
+   then clear the wrong key.
 
 6. **Dedup by `lexemeId`.** If one lexeme still has several unresolved
    generatable skills, keep **one** item: the key whose latest
@@ -938,12 +944,27 @@ official Supabase Auth cookies.
 
 ### Slice 2 — Free Practice plan / read model
 
+**Implementation note (still Candidate / not a Standard):** a
+server-only planner exists under `src/server/free-practice/planning/`.
+It does not persist, does not create `game_sessions`, and does not
+wire `/practice`, Homepage, or `/train`.
+
 - **Does:** `FreePracticeRequest` → eligible pool →
   `FreePracticePlanResult`. UNSEEN first; `RECENTLY_INCORRECT` uses
   the latest-terminal-per-skill algorithm in §5.4.
-- **Files expected:** `src/server/free-practice/plan-free-practice.ts`,
-  types, query port that returns a bounded terminal Evidence window
-  (all outcomes), not Core.
+- **Files:** `src/server/free-practice/planning/**`; tests under
+  `tests/free-practice/planning/`.
+- **Read port:** `FreePracticePlanReadPort` is independent of the
+  frozen `LearningRepository`. In-memory test adapter plus a dedicated
+  Supabase read adapter: `user_id` filter, `occurred_at` desc, `id`
+  desc, limit 40, all outcomes. No migration.
+- **Identity:** `userId` is a server-internal planner argument. Future
+  public callers must pass `requireFreePracticeIdentity`. This slice
+  has no browser/server action.
+- **Generator-content compatibility (still Candidate):** eligibility
+  uses `meaningsZh[0]`, `lemma` (not `display`), and a present
+  counterpart lemma for `SEMANTIC_CONNECTION`. The planner does not
+  copy TaskGenerator or generate distractors.
 - **Frozen forbidden:** Scheduler policy, Need Generator, Evidence
   schema, `LearningNeedReason`.
 - **Tests:** 100 unseen → 10 `READY`; Case 2 A–F; 0 eligible →
