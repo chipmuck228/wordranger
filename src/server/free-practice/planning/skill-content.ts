@@ -10,12 +10,52 @@ function usableText(value: string | null | undefined): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+/**
+ * Frozen generator contract: only meaningsZh[0] is the required
+ * Chinese gloss. A later non-blank gloss does not count.
+ */
 export function hasUsableMeaning(lexeme: Lexeme): boolean {
-  return lexeme.meaningsZh.some((meaning) => usableText(meaning));
+  return usableText(lexeme.meaningsZh[0]);
 }
 
+/**
+ * Frozen generator contract: accepted text is lemma.
+ * display is presentation only and is not a fallback.
+ */
 export function hasUsableLemma(lexeme: Lexeme): boolean {
-  return usableText(lexeme.lemma) || usableText(lexeme.display);
+  return usableText(lexeme.lemma);
+}
+
+export interface FreePracticeSkillContentContext {
+  vocabulary: ReadonlyMap<string, Lexeme>;
+  relationsByLexeme: ReadonlyMap<string, LexemeRelation[]>;
+}
+
+function otherLexemeId(relation: LexemeRelation, lexemeId: string): string {
+  return relation.fromLexemeId === lexemeId
+    ? relation.toLexemeId
+    : relation.fromLexemeId;
+}
+
+/**
+ * SEMANTIC_CONNECTION is generatable only when a production-approved
+ * relation has a present counterpart whose lemma is non-blank.
+ * Does not generate distractors or copy TaskGenerator.
+ */
+export function hasGeneratableSemanticConnection(
+  lexemeId: string,
+  context: FreePracticeSkillContentContext,
+): boolean {
+  const relations = context.relationsByLexeme.get(lexemeId) ?? [];
+  for (const relation of relations) {
+    const counterpart = context.vocabulary.get(
+      otherLexemeId(relation, lexemeId),
+    );
+    if (counterpart && hasUsableLemma(counterpart)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export const FREE_PRACTICE_GENERATABLE_SKILLS = [
@@ -28,7 +68,7 @@ export const FREE_PRACTICE_GENERATABLE_SKILLS = [
 export function canGenerateFreePracticeSkill(
   lexeme: Lexeme,
   skill: VocabularySkill,
-  hasApprovedRelation: boolean,
+  context: FreePracticeSkillContentContext,
 ): boolean {
   switch (skill) {
     case VocabularySkill.MEANING_RECOGNITION:
@@ -37,7 +77,7 @@ export function canGenerateFreePracticeSkill(
     case VocabularySkill.SPELLING_RECALL:
       return hasUsableMeaning(lexeme) && hasUsableLemma(lexeme);
     case VocabularySkill.SEMANTIC_CONNECTION:
-      return hasApprovedRelation;
+      return hasGeneratableSemanticConnection(lexeme.id, context);
     case VocabularySkill.LISTENING_RECOGNITION:
     case VocabularySkill.CONTEXT_USE:
       return false;

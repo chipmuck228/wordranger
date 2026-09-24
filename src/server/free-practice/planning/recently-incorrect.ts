@@ -70,9 +70,12 @@ export function selectRecentlyIncorrectEligible(
     if (!lexeme) {
       continue;
     }
-    const hasApprovedRelation =
-      (relationsByLexeme.get(row.lexemeId) ?? []).length > 0;
-    if (!canGenerateFreePracticeSkill(lexeme, row.skill, hasApprovedRelation)) {
+    if (
+      !canGenerateFreePracticeSkill(lexeme, row.skill, {
+        vocabulary,
+        relationsByLexeme,
+      })
+    ) {
       continue;
     }
     unresolved.push({
