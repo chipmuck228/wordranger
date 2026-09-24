@@ -6,6 +6,8 @@ import "server-only";
  */
 export const FREE_PRACTICE_ORCHESTRATION_TYPE = "FREE_PRACTICE";
 
-export const FREE_PRACTICE_SESSION_SCHEMA_VERSION = "fp-session-v1";
+export const FREE_PRACTICE_SESSION_SCHEMA_VERSION = "fp-session-v2";
+
+export const FREE_PRACTICE_LEGACY_SESSION_SCHEMA_VERSION = "fp-session-v1";
 
 export const FREE_PRACTICE_PRESENTATION_GAME_TYPE = "RANGER_TRIAL";

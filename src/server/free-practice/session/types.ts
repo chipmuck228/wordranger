@@ -7,10 +7,19 @@ import type {
   FreePracticeSource,
 } from "@/server/free-practice/planning/types";
 
-export type FreePracticeSessionStatus = "active";
+export type FreePracticeSessionPhase =
+  | "AWAITING_ACTION"
+  | "AWAITING_CONTINUE"
+  | "COMPLETED";
+
+export interface FreePracticePublicFeedback {
+  taskId: string;
+  correct: boolean;
+  message: string;
+}
 
 export interface FreePracticeSessionState {
-  schemaVersion: "fp-session-v1";
+  schemaVersion: "fp-session-v2";
   source: FreePracticeSource;
   requestedCount: FreePracticeRequestedCount;
   plannedCount: number;
@@ -18,8 +27,13 @@ export interface FreePracticeSessionState {
   currentIndex: number;
   assignedItemId: string | null;
   currentTaskId: string | null;
-  status: FreePracticeSessionStatus;
+  phase: FreePracticeSessionPhase;
+  attempted: number;
+  correct: number;
+  lastCompletedTaskId: string | null;
+  feedback: FreePracticePublicFeedback | null;
   createdAt: string;
+  completedAt: string | null;
 }
 
 export interface FreePracticeSessionRecord {
@@ -47,6 +61,9 @@ export interface FreePracticePublicSession {
   plannedCount: number;
   current: number;
   currentTaskId: string | null;
+  phase: FreePracticeSessionPhase;
+  attempted: number;
+  correct: number;
   presentationGameType: "RANGER_TRIAL";
 }
 
@@ -61,6 +78,18 @@ export type FreePracticeSessionPublicResult =
       status: "STARTED" | "RESUMED";
       session: FreePracticePublicSession;
       task: PublicLearningTask;
+    }
+  | {
+      status: "AWAITING_CONTINUE";
+      session: FreePracticePublicSession;
+      task: PublicLearningTask;
+      feedback: FreePracticePublicFeedback;
+    }
+  | {
+      status: "COMPLETED";
+      session: FreePracticePublicSession;
+      completedAt: string;
+      message: string;
     }
   | {
       status: "UNAVAILABLE";

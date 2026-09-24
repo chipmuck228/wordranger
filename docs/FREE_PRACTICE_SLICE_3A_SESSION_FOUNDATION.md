@@ -35,5 +35,7 @@ It does **not**:
 `game_type = FREE_PRACTICE` is an application-layer orchestration
 value. No database migration was required or applied.
 
-Multi-item advancement, answer submit, and Evidence belong to Slice 5.
-Do not treat this note as “Slice 3 complete”.
+Multi-item advancement, answer submit, and Evidence landed in
+Slice 3B / 5A. See
+`docs/FREE_PRACTICE_SLICE_3B_5A_EVIDENCE_ORCHESTRATION.md`.
+Do not treat Slice 3A as “Slice 3 complete”.

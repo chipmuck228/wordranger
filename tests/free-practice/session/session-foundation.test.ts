@@ -199,6 +199,7 @@ describe("Free Practice Slice 3A session foundation", () => {
       read: a.read,
       tasks: a.tasks,
       sessions: a.sessions,
+      learning: a.learning,
       readSession: createTestFreePracticeSessionReader({
         env: TEST_IDENTITY_ENV,
         userId: USER_B,
@@ -258,7 +259,7 @@ describe("Free Practice Slice 3A session foundation", () => {
       planId: "fp-plan:session-race",
       revision: 0,
       state: {
-        schemaVersion: "fp-session-v1",
+        schemaVersion: "fp-session-v2",
         source: "UNSEEN",
         requestedCount: 5,
         plannedCount: 2,
@@ -279,8 +280,13 @@ describe("Free Practice Slice 3A session foundation", () => {
         currentIndex: 0,
         assignedItemId: null,
         currentTaskId: null,
-        status: "active",
+        phase: "AWAITING_ACTION",
+        attempted: 0,
+        correct: 0,
+        lastCompletedTaskId: null,
+        feedback: null,
         createdAt: "2026-09-24T02:00:00.000Z",
+        completedAt: null,
       },
     });
     const other = new FreePracticeSessionController({
@@ -288,6 +294,7 @@ describe("Free Practice Slice 3A session foundation", () => {
       read: fresh.read,
       tasks: fresh.tasks,
       sessions: fresh.sessions,
+      learning: fresh.learning,
       readSession: createTestFreePracticeSessionReader({
         env: TEST_IDENTITY_ENV,
         userId: USER_A,
@@ -342,7 +349,7 @@ describe("Free Practice Slice 3A session foundation", () => {
           schemaVersion: "fp-session-v1",
           source: "UNSEEN",
           requestedCount: 5,
-          plannedCount: 2,
+          plannedCount: 1,
           items: [
             {
               id: "a",
@@ -358,12 +365,41 @@ describe("Free Practice Slice 3A session foundation", () => {
           createdAt: "now",
         },
       }),
+    ).toThrow(/Legacy fp-session-v1 is not accepted/);
+    expect(() =>
+      parseFreePracticeRecord({
+        ...base,
+        state: {
+          schemaVersion: "fp-session-v2",
+          source: "UNSEEN",
+          requestedCount: 5,
+          plannedCount: 2,
+          items: [
+            {
+              id: "a",
+              lexemeId: "lex-1",
+              targetSkill: "MEANING_RECOGNITION",
+              source: "UNSEEN",
+            },
+          ],
+          currentIndex: 0,
+          assignedItemId: null,
+          currentTaskId: null,
+          phase: "AWAITING_ACTION",
+          attempted: 0,
+          correct: 0,
+          lastCompletedTaskId: null,
+          feedback: null,
+          createdAt: "now",
+          completedAt: null,
+        },
+      }),
     ).toThrow(/plannedCount/);
     expect(() =>
       parseFreePracticeRecord({
         ...base,
         state: {
-          schemaVersion: "fp-session-v1",
+          schemaVersion: "fp-session-v2",
           source: "UNSEEN",
           requestedCount: 5,
           plannedCount: 1,
@@ -379,8 +415,13 @@ describe("Free Practice Slice 3A session foundation", () => {
           currentIndex: 0,
           assignedItemId: null,
           currentTaskId: null,
-          status: "active",
+          phase: "AWAITING_ACTION",
+          attempted: 0,
+          correct: 0,
+          lastCompletedTaskId: null,
+          feedback: null,
           createdAt: "now",
+          completedAt: null,
         },
       }),
     ).toThrow(/must not persist reason/);
@@ -388,7 +429,7 @@ describe("Free Practice Slice 3A session foundation", () => {
       parseFreePracticeRecord({
         ...base,
         state: {
-          schemaVersion: "fp-session-v1",
+          schemaVersion: "fp-session-v2",
           source: "UNSEEN",
           requestedCount: 5,
           plannedCount: 2,
@@ -409,8 +450,13 @@ describe("Free Practice Slice 3A session foundation", () => {
           currentIndex: 0,
           assignedItemId: null,
           currentTaskId: null,
-          status: "active",
+          phase: "AWAITING_ACTION",
+          attempted: 0,
+          correct: 0,
+          lastCompletedTaskId: null,
+          feedback: null,
           createdAt: "now",
+          completedAt: null,
         },
       }),
     ).toThrow(/Duplicate Free Practice item id/);
@@ -418,7 +464,7 @@ describe("Free Practice Slice 3A session foundation", () => {
       parseFreePracticeRecord({
         ...base,
         state: {
-          schemaVersion: "fp-session-v1",
+          schemaVersion: "fp-session-v2",
           source: "UNSEEN",
           requestedCount: 5,
           plannedCount: 2,
@@ -439,8 +485,13 @@ describe("Free Practice Slice 3A session foundation", () => {
           currentIndex: 0,
           assignedItemId: null,
           currentTaskId: null,
-          status: "active",
+          phase: "AWAITING_ACTION",
+          attempted: 0,
+          correct: 0,
+          lastCompletedTaskId: null,
+          feedback: null,
           createdAt: "now",
+          completedAt: null,
         },
       }),
     ).toThrow(/Duplicate Free Practice lexeme id/);
@@ -448,7 +499,7 @@ describe("Free Practice Slice 3A session foundation", () => {
       parseFreePracticeRecord({
         ...base,
         state: {
-          schemaVersion: "fp-session-v1",
+          schemaVersion: "fp-session-v2",
           source: "UNSEEN",
           requestedCount: 5,
           plannedCount: 1,
@@ -463,8 +514,13 @@ describe("Free Practice Slice 3A session foundation", () => {
           currentIndex: 1,
           assignedItemId: null,
           currentTaskId: null,
-          status: "active",
+          phase: "AWAITING_ACTION",
+          attempted: 0,
+          correct: 0,
+          lastCompletedTaskId: null,
+          feedback: null,
           createdAt: "now",
+          completedAt: null,
         },
       }),
     ).toThrow(/currentIndex is out of range/);
@@ -472,7 +528,7 @@ describe("Free Practice Slice 3A session foundation", () => {
       parseFreePracticeRecord({
         ...base,
         state: {
-          schemaVersion: "fp-session-v1",
+          schemaVersion: "fp-session-v2",
           source: "UNSEEN",
           requestedCount: 5,
           plannedCount: 1,
@@ -487,8 +543,13 @@ describe("Free Practice Slice 3A session foundation", () => {
           currentIndex: 0,
           assignedItemId: null,
           currentTaskId: null,
-          status: "active",
+          phase: "AWAITING_ACTION",
+          attempted: 0,
+          correct: 0,
+          lastCompletedTaskId: null,
+          feedback: null,
           createdAt: "now",
+          completedAt: null,
           answerKey: { taskId: "t1", correctOptionIds: ["opt-1"] },
         },
       }),
