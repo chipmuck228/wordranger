@@ -226,15 +226,14 @@ keeps the latest terminal row per `lexeme_id + skill`. The planner is
 read-only: it does not insert Evidence, snapshots, tasks, or
 `game_sessions`.
 
-## Free Practice session foundation (Candidate Slice 3A)
+## Free Practice session foundation (Candidate Slice 3A / 3B / 5A)
 
-This is Candidate / Not a Standard. Slice 3A persists orchestration
-only. It does not add `/practice`, answer submit, Evidence, or
-Homepage / `/train` wiring.
+This is Candidate / Not a Standard. Server-only. Not
+production-ready. No `/practice`, Homepage, or `/train` wiring.
 
 `game_type` is unconstrained `text`. Adding `FREE_PRACTICE` is an
 application-layer value. **No migration.** Existing rows are
-unchanged.
+unchanged. Slice 3B / 5A upgrades JSON `state` only.
 
 Ownership and CAS match the existing `game_sessions` contract:
 
@@ -242,29 +241,61 @@ Ownership and CAS match the existing `game_sessions` contract:
 - get is `id + user_id + game_type = FREE_PRACTICE`
 - save is `WHERE id + user_id + game_type + revision = N` then `N+1`
 - missing and foreign sessions both look absent
+- `game_sessions.status` is `active` until JSON phase is
+  `COMPLETED`, then `completed`
 
-Persisted `state` schema version `fp-session-v1`:
+Persisted `state` schema version `fp-session-v2`:
 
-- source, requestedCount, plannedCount, `FreePracticeItem[]`
-- currentIndex, assignedItemId, currentTaskId, status, createdAt
+- source, requestedCount (5|10), plannedCount, `FreePracticeItem[]`
+- currentIndex, assignedItemId, currentTaskId
+- phase: `AWAITING_ACTION` | `AWAITING_CONTINUE` | `COMPLETED`
+- attempted, correct
+- lastCompletedTaskId
+- safe public feedback `{ taskId, correct, message }` or null
+- createdAt, completedAt (completed only)
 - `assignedItemId` is null iff `currentTaskId` is null
 - when set, `assignedItemId` equals `items[currentIndex].id`
 - every item source equals session source
+- `0 <= correct <= attempted <= plannedCount`
+
+Phase combinations:
+
+- `AWAITING_ACTION`: feedback null; attempted === currentIndex;
+  lastCompletedTaskId must not equal the unfinished currentTaskId.
+  A transient unassigned pair (both null) is legal after continue,
+  before the next lazy bind.
+- `AWAITING_CONTINUE`: assigned pair set;
+  lastCompletedTaskId === currentTaskId; feedback present;
+  attempted === currentIndex + 1.
+- `COMPLETED`: attempted === plannedCount; currentIndex is the last
+  item; last task/feedback retained; completedAt set; no further
+  generation.
 
 Write and read share one state validator. A mismatched assigned
 `PublicLearningTask` (user, session, item id, lexeme, or skill) is
 fail-closed and does not rewrite the row.
 
+**Legacy `fp-session-v1` is rejected fail-closed.** Candidate has no
+public route, so old rows are not migrated and missing
+feedback/stats are never invented.
+
 Forbidden in `state`: LearningSessionPlan, Scheduler trace / reason,
-compatibility projection, AnswerKey, Evidence, learner snapshots,
-outcomes, scores, Context Lab state, client-supplied userId.
+compatibility projection, AnswerKey, expected answers, correction
+text, complete Evidence, learner snapshots, outcomes, scores,
+Context Lab state, client-supplied userId. Persist-key inspection is
+structural (property names), not substring scan.
 
 `plan_id` is an orchestration token (`fp-plan:<sessionId>`), not a
 Scheduler plan. AnswerKeys stay in `learning_tasks`. Public DTO
-exposes `PublicLearningTask` only.
+exposes `PublicLearningTask` plus safe feedback/completion only.
 
-Slice 3A does **not** accept student answers or write Evidence.
-Multi-item advancement waits for Slice 5.
+Evidence write and session CAS are not one transaction. Recovery
+uses existing `LearningRepository.getEvidenceForLexeme` the same
+way Daily Training does. Retry must not write a second Evidence or
+double-count attempted/correct.
+
+The next Free Practice start re-calls the Slice 2 planner. It does
+not reuse a completed session’s pinned items.
 
 ## RLS TODO
 

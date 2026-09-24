@@ -116,7 +116,7 @@ function sampleRecord(
     planId: `fp-plan:${sessionId}`,
     revision: 0,
     state: {
-      schemaVersion: "fp-session-v1",
+      schemaVersion: "fp-session-v2",
       source: "UNSEEN",
       requestedCount: 5,
       plannedCount: 1,
@@ -131,8 +131,13 @@ function sampleRecord(
       currentIndex: 0,
       assignedItemId: null,
       currentTaskId: null,
-      status: "active",
+      phase: "AWAITING_ACTION",
+      attempted: 0,
+      correct: 0,
+      lastCompletedTaskId: null,
+      feedback: null,
       createdAt: "2026-09-24T02:00:00.000Z",
+      completedAt: null,
     },
   };
 }

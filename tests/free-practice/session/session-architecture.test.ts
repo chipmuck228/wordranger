@@ -20,13 +20,11 @@ const FORBIDDEN = [
   "planLearningSession",
   "DeterministicScheduler",
   "DefaultLearningNeedGenerator",
-  "submitTaskAction",
   "processEvidence",
   "DefaultTaskEvaluator",
   "createLearningEvidenceFromTaskEvaluation",
   "EvidenceFactory",
   "commitEvidenceAndSnapshot",
-  "LearningRepository",
 ];
 
 describe("Free Practice session architecture boundary", () => {
@@ -39,6 +37,23 @@ describe("Free Practice session architecture boundary", () => {
       }
       expect(text, file).not.toContain("@/server/context-lab");
       expect(text, file).not.toContain("JSON.stringify(value).includes");
+    }
+  });
+
+  it("enters the learning pipeline only through submitTaskAction", () => {
+    const controller = readFileSync(join(SESSION_DIR, "controller.ts"), "utf8");
+    expect(controller).toContain("submitTaskAction");
+    expect(controller).toContain("LearningRepository");
+    expect(controller).toContain('gameId: FREE_PRACTICE_PRESENTATION_GAME_TYPE');
+    expect(controller).toContain("hintCount: 0");
+    for (const file of walk(SESSION_DIR)) {
+      const text = readFileSync(file, "utf8");
+      const base = file.split("/").pop();
+      if (base === "controller.ts") {
+        continue;
+      }
+      expect(text, file).not.toContain("submitTaskAction");
+      expect(text, file).not.toContain("LearningRepository");
     }
   });
 

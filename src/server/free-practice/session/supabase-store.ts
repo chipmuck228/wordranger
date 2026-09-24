@@ -20,6 +20,10 @@ interface GameSessionRow {
   revision: number;
 }
 
+function rowStatus(phase: FreePracticeSessionRecord["state"]["phase"]): string {
+  return phase === "COMPLETED" ? "completed" : "active";
+}
+
 function persistError(): never {
   throw new FreePracticeSessionError(
     "NETWORK_ERROR",
@@ -59,7 +63,7 @@ export class SupabaseFreePracticeSessionStore
       user_id: record.userId,
       game_type: FREE_PRACTICE_ORCHESTRATION_TYPE,
       plan_id: record.planId,
-      status: "active",
+      status: rowStatus(record.state.phase),
       state,
       created_at: record.state.createdAt,
       updated_at: record.state.createdAt,
@@ -117,7 +121,7 @@ export class SupabaseFreePracticeSessionStore
       .from("game_sessions")
       .update({
         plan_id: record.planId,
-        status: "active",
+        status: rowStatus(record.state.phase),
         state,
         updated_at: now,
         revision: next,

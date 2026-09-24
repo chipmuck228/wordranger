@@ -60,7 +60,7 @@ class UniqueRaceLearningTaskRepository implements LearningTaskRepository {
 
 function validState(overrides: Record<string, unknown> = {}) {
   return {
-    schemaVersion: "fp-session-v1",
+    schemaVersion: "fp-session-v2",
     source: "UNSEEN",
     requestedCount: 5,
     plannedCount: 2,
@@ -81,8 +81,13 @@ function validState(overrides: Record<string, unknown> = {}) {
     currentIndex: 0,
     assignedItemId: null,
     currentTaskId: null,
-    status: "active",
+    phase: "AWAITING_ACTION",
+    attempted: 0,
+    correct: 0,
+    lastCompletedTaskId: null,
+    feedback: null,
     createdAt: "2026-09-24T02:00:00.000Z",
+    completedAt: null,
     ...overrides,
   };
 }
@@ -385,6 +390,7 @@ describe("Free Practice session association and write-time integrity", () => {
       read: harness.read,
       tasks,
       sessions,
+      learning: harness.learning,
       readSession: createTestFreePracticeSessionReader({
         env: TEST_IDENTITY_ENV,
         userId: USER_A,

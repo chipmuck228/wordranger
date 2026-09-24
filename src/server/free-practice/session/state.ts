@@ -3,14 +3,18 @@ import "server-only";
 import { z } from "zod";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
 import { assertNoAnswerKeyFields } from "@/server/game-session/ranger-trial-session-state";
-import { FREE_PRACTICE_SESSION_SCHEMA_VERSION } from "./constants";
+import {
+  FREE_PRACTICE_LEGACY_SESSION_SCHEMA_VERSION,
+  FREE_PRACTICE_SESSION_SCHEMA_VERSION,
+} from "./constants";
 import { FreePracticeSessionError } from "./errors";
+import { forEachObjectKey } from "./inspect-object-keys";
 import type {
   FreePracticeSessionRecord,
   FreePracticeSessionState,
 } from "./types";
 
-const FORBIDDEN_STATE_KEYS = [
+const FORBIDDEN_STATE_KEYS = new Set([
   "reason",
   "priority",
   "weaknessFocus",
@@ -31,7 +35,13 @@ const FORBIDDEN_STATE_KEYS = [
   "weaknesses",
   "outcome",
   "evidence",
-];
+  "expectedAnswer",
+  "correction",
+  "userId",
+  "learner",
+  "snapshot",
+  "compatibility",
+]);
 
 const itemSchema = z
   .object({
@@ -39,6 +49,14 @@ const itemSchema = z
     lexemeId: z.string().min(1),
     targetSkill: z.enum(VocabularySkill),
     source: z.enum(["UNSEEN", "RECENTLY_INCORRECT"]),
+  })
+  .strict();
+
+const feedbackSchema = z
+  .object({
+    taskId: z.string().min(1),
+    correct: z.boolean(),
+    message: z.string().min(1),
   })
   .strict();
 
@@ -52,21 +70,25 @@ const stateSchema = z
     currentIndex: z.number().int().nonnegative(),
     assignedItemId: z.string().min(1).nullable(),
     currentTaskId: z.string().min(1).nullable(),
-    status: z.literal("active"),
+    phase: z.enum(["AWAITING_ACTION", "AWAITING_CONTINUE", "COMPLETED"]),
+    attempted: z.number().int().nonnegative(),
+    correct: z.number().int().nonnegative(),
+    lastCompletedTaskId: z.string().min(1).nullable(),
+    feedback: feedbackSchema.nullable(),
     createdAt: z.string().min(1),
+    completedAt: z.string().min(1).nullable(),
   })
   .strict();
 
 function rejectForbiddenFields(value: unknown): void {
-  const json = JSON.stringify(value);
-  for (const key of FORBIDDEN_STATE_KEYS) {
-    if (json.includes(`"${key}"`)) {
+  forEachObjectKey(value, (key) => {
+    if (FORBIDDEN_STATE_KEYS.has(key)) {
       throw new FreePracticeSessionError(
         "INVALID_STATE",
         `Free Practice session state must not persist ${key}`,
       );
     }
-  }
+  });
   assertNoAnswerKeyFields(value);
 }
 
@@ -123,12 +145,129 @@ function assertItemSources(state: FreePracticeSessionState): void {
   }
 }
 
+function assertFeedbackSafe(state: FreePracticeSessionState): void {
+  if (!state.feedback) {
+    return;
+  }
+  if (state.feedback.message.includes("正确答案")) {
+    throw new FreePracticeSessionError(
+      "INVALID_STATE",
+      "Free Practice feedback must not reveal the expected answer",
+    );
+  }
+}
+
+function assertPhaseInvariants(state: FreePracticeSessionState): void {
+  if (
+    state.correct < 0 ||
+    state.attempted < 0 ||
+    state.correct > state.attempted ||
+    state.attempted > state.plannedCount
+  ) {
+    throw new FreePracticeSessionError(
+      "INVALID_STATE",
+      "correct/attempted/plannedCount invariant failed",
+    );
+  }
+
+  if (state.phase === "AWAITING_ACTION") {
+    if (state.feedback !== null || state.completedAt !== null) {
+      throw new FreePracticeSessionError(
+        "INVALID_STATE",
+        "AWAITING_ACTION cannot carry feedback or completedAt",
+      );
+    }
+    if (
+      state.currentTaskId !== null &&
+      state.lastCompletedTaskId === state.currentTaskId
+    ) {
+      throw new FreePracticeSessionError(
+        "INVALID_STATE",
+        "lastCompletedTaskId must not impersonate an unfinished task",
+      );
+    }
+    if (state.attempted !== state.currentIndex) {
+      throw new FreePracticeSessionError(
+        "INVALID_STATE",
+        "AWAITING_ACTION attempted must equal currentIndex",
+      );
+    }
+    return;
+  }
+
+  if (state.phase === "AWAITING_CONTINUE") {
+    if (
+      state.assignedItemId === null ||
+      state.currentTaskId === null ||
+      state.lastCompletedTaskId !== state.currentTaskId ||
+      state.feedback === null ||
+      state.completedAt !== null
+    ) {
+      throw new FreePracticeSessionError(
+        "INVALID_STATE",
+        "AWAITING_CONTINUE requires the current task, matching lastCompletedTaskId, and safe feedback",
+      );
+    }
+    if (state.feedback.taskId !== state.currentTaskId) {
+      throw new FreePracticeSessionError(
+        "INVALID_STATE",
+        "feedback.taskId must match currentTaskId",
+      );
+    }
+    if (state.attempted !== state.currentIndex + 1) {
+      throw new FreePracticeSessionError(
+        "INVALID_STATE",
+        "AWAITING_CONTINUE attempted must include the current item",
+      );
+    }
+    return;
+  }
+
+  if (
+    state.attempted !== state.plannedCount ||
+    state.currentIndex !== state.plannedCount - 1 ||
+    state.assignedItemId === null ||
+    state.currentTaskId === null ||
+    state.lastCompletedTaskId !== state.currentTaskId ||
+    state.feedback === null ||
+    !state.completedAt
+  ) {
+    throw new FreePracticeSessionError(
+      "INVALID_STATE",
+      "COMPLETED requires full stats, last item, feedback, and completedAt",
+    );
+  }
+  if (state.feedback.taskId !== state.currentTaskId) {
+    throw new FreePracticeSessionError(
+      "INVALID_STATE",
+      "feedback.taskId must match currentTaskId",
+    );
+  }
+}
+
+function rejectLegacySchema(state: unknown): void {
+  if (
+    state &&
+    typeof state === "object" &&
+    "schemaVersion" in state &&
+    (state as { schemaVersion?: unknown }).schemaVersion ===
+      FREE_PRACTICE_LEGACY_SESSION_SCHEMA_VERSION
+  ) {
+    throw new FreePracticeSessionError(
+      "INVALID_STATE",
+      "Legacy fp-session-v1 is not accepted",
+    );
+  }
+}
+
 /**
  * Single state validator used by both write (serialize) and read (parse).
+ * fp-session-v1 is rejected fail-closed. No invented feedback or stats.
  */
 export function parseFreePracticeState(
   state: unknown,
 ): FreePracticeSessionState {
+  rejectLegacySchema(state);
   rejectForbiddenFields(state);
   const parsed = stateSchema.safeParse(state);
   if (!parsed.success) {
@@ -153,6 +292,8 @@ export function parseFreePracticeState(
   assertItemUniqueness(next.items);
   assertItemSources(next);
   assertAssignmentPair(next);
+  assertFeedbackSafe(next);
+  assertPhaseInvariants(next);
   return next;
 }
 

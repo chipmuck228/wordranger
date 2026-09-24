@@ -978,10 +978,12 @@ wire `/practice`, Homepage, or `/train`.
 
 **Implementation note (still Candidate / not a Standard):** Slice 3A
 lands a server-only session foundation under
-`src/server/free-practice/session/`. It creates/pins/resumes a
-`FREE_PRACTICE` `game_sessions` row and lazily assigns the current
-task. It does **not** accept answers, write Evidence, add `/practice`,
-or change Homepage / `/train`. Multi-item advancement is Slice 5.
+`src/server/free-practice/session/`. Slice 3B / 5A adds
+server-authoritative submit, frozen `submitTaskAction` Evidence,
+persisted safe feedback, continue, lazy next-item assignment, and
+completion. It does **not** add `/practice`, change Homepage /
+`/train`, or make this document a Standard. See
+`docs/FREE_PRACTICE_SLICE_3B_5A_EVIDENCE_ORCHESTRATION.md`.
 
 - **Does:** `FreePracticeController` on `game_sessions.game_type =
   FREE_PRACTICE`; CAS; lazy task generation; resume.
@@ -1010,6 +1012,10 @@ or change Homepage / `/train`. Multi-item advancement is Slice 5.
 - **Done:** no Bubble / Matching / Snake / 单词闯关 chrome.
 
 ### Slice 5 — Evidence integration
+
+**Implementation note (still Candidate / not a Standard):** Slice 5A
+lands the server-only Evidence path described above. UI remains
+Slice 4. Not production-ready. Not learning completion.
 
 - **Does:** `submitTaskAction` with `gameId = RANGER_TRIAL`;
   `hintCount: 0`; existing idempotency.
