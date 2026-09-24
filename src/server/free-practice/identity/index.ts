@@ -16,4 +16,5 @@ export {
   isDeployedIdentityRuntime,
   isFreePracticeAuthConfigured,
   isFreePracticeTestIdentityAllowed,
+  isPublicDeployedHost,
 } from "./runtime";

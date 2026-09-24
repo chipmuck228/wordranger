@@ -1000,6 +1000,12 @@ completion. It does **not** add `/practice`, change Homepage /
 
 ### Slice 4 — Direct renderer
 
+**Implementation note (still Candidate / not a Standard):** Slice 4
+adds a gated `/practice` Direct Renderer surface on the Slice 3B
+session controller. It is not production-ready, is off by default,
+is not linked from Homepage, and does not replace `/train`. See
+`docs/FREE_PRACTICE_SLICE_4_DIRECT_UI.md`.
+
 - **Does:** `/practice` (or approved name) reusing
   `DirectPracticeRenderer` and inline feedback.
 - **Files expected:** `src/app/practice/**`, thin client, reuse

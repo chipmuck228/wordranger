@@ -209,6 +209,42 @@ describe("createTestFreePracticeSessionReader", () => {
     ).toThrow(/disabled/);
   });
 
+  it("allows local next start only with the explicit E2E gate", () => {
+    const reader = createTestFreePracticeSessionReader({
+      env: {
+        NODE_ENV: "production",
+        WORD_RANGER_FREE_PRACTICE_TEST_IDENTITY: "1",
+        WORD_RANGER_FREE_PRACTICE_E2E: "1",
+      },
+      userId: USER_A,
+      isAnonymous: true,
+    });
+    expect(reader).toEqual(expect.any(Function));
+    expect(() =>
+      createTestFreePracticeSessionReader({
+        env: {
+          NODE_ENV: "production",
+          WORD_RANGER_FREE_PRACTICE_TEST_IDENTITY: "1",
+        },
+        userId: USER_A,
+        isAnonymous: true,
+      }),
+    ).toThrow(/disabled/);
+    expect(() =>
+      createTestFreePracticeSessionReader({
+        env: {
+          NODE_ENV: "production",
+          VERCEL: "1",
+          VERCEL_ENV: "preview",
+          WORD_RANGER_FREE_PRACTICE_TEST_IDENTITY: "1",
+          WORD_RANGER_FREE_PRACTICE_E2E: "1",
+        },
+        userId: USER_A,
+        isAnonymous: true,
+      }),
+    ).toThrow(/disabled/);
+  });
+
   it("refuses to run without the test gate", () => {
     expect(() =>
       createTestFreePracticeSessionReader({
