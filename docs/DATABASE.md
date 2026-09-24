@@ -247,6 +247,13 @@ Persisted `state` schema version `fp-session-v1`:
 
 - source, requestedCount, plannedCount, `FreePracticeItem[]`
 - currentIndex, assignedItemId, currentTaskId, status, createdAt
+- `assignedItemId` is null iff `currentTaskId` is null
+- when set, `assignedItemId` equals `items[currentIndex].id`
+- every item source equals session source
+
+Write and read share one state validator. A mismatched assigned
+`PublicLearningTask` (user, session, item id, lexeme, or skill) is
+fail-closed and does not rewrite the row.
 
 Forbidden in `state`: LearningSessionPlan, Scheduler trace / reason,
 compatibility projection, AnswerKey, Evidence, learner snapshots,

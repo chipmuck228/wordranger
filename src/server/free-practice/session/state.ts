@@ -91,11 +91,75 @@ function assertItemUniqueness(items: FreePracticeSessionState["items"]): void {
   }
 }
 
+function assertAssignmentPair(state: FreePracticeSessionState): void {
+  const assigned = state.assignedItemId;
+  const taskId = state.currentTaskId;
+  if ((assigned === null) !== (taskId === null)) {
+    throw new FreePracticeSessionError(
+      "INVALID_STATE",
+      "assignedItemId and currentTaskId must be both null or both set",
+    );
+  }
+  if (assigned === null) {
+    return;
+  }
+  const current = state.items[state.currentIndex];
+  if (!current || current.id !== assigned) {
+    throw new FreePracticeSessionError(
+      "INVALID_STATE",
+      "assignedItemId must equal items[currentIndex].id",
+    );
+  }
+}
+
+function assertItemSources(state: FreePracticeSessionState): void {
+  for (const item of state.items) {
+    if (item.source !== state.source) {
+      throw new FreePracticeSessionError(
+        "INVALID_STATE",
+        "Free Practice item source must match session source",
+      );
+    }
+  }
+}
+
+/**
+ * Single state validator used by both write (serialize) and read (parse).
+ */
+export function parseFreePracticeState(
+  state: unknown,
+): FreePracticeSessionState {
+  rejectForbiddenFields(state);
+  const parsed = stateSchema.safeParse(state);
+  if (!parsed.success) {
+    throw new FreePracticeSessionError(
+      "INVALID_STATE",
+      "Session state is not a valid Free Practice record",
+    );
+  }
+  const next = parsed.data;
+  if (next.plannedCount !== next.items.length) {
+    throw new FreePracticeSessionError(
+      "INVALID_STATE",
+      "plannedCount must equal items.length",
+    );
+  }
+  if (next.currentIndex >= next.items.length) {
+    throw new FreePracticeSessionError(
+      "INVALID_STATE",
+      "currentIndex is out of range",
+    );
+  }
+  assertItemUniqueness(next.items);
+  assertItemSources(next);
+  assertAssignmentPair(next);
+  return next;
+}
+
 export function serializeFreePracticeState(
   record: FreePracticeSessionRecord,
 ): FreePracticeSessionState {
-  rejectForbiddenFields(record.state);
-  return structuredClone(record.state);
+  return structuredClone(parseFreePracticeState(record.state));
 }
 
 export function parseFreePracticeRecord(input: {
@@ -126,42 +190,11 @@ export function parseFreePracticeRecord(input: {
       "Session revision is not a valid concurrency token",
     );
   }
-  rejectForbiddenFields(input.state);
-  const parsed = stateSchema.safeParse(input.state);
-  if (!parsed.success) {
-    throw new FreePracticeSessionError(
-      "INVALID_STATE",
-      "Session state is not a valid Free Practice record",
-    );
-  }
-  const state = parsed.data;
-  if (state.plannedCount !== state.items.length) {
-    throw new FreePracticeSessionError(
-      "INVALID_STATE",
-      "plannedCount must equal items.length",
-    );
-  }
-  if (state.currentIndex >= state.items.length) {
-    throw new FreePracticeSessionError(
-      "INVALID_STATE",
-      "currentIndex is out of range",
-    );
-  }
-  assertItemUniqueness(state.items);
-  if (
-    state.assignedItemId &&
-    !state.items.some((item) => item.id === state.assignedItemId)
-  ) {
-    throw new FreePracticeSessionError(
-      "INVALID_STATE",
-      "assignedItemId is not in the pinned plan",
-    );
-  }
   return {
     sessionId: input.sessionId,
     userId: input.userId,
     planId: input.planId,
     revision: input.revision,
-    state,
+    state: parseFreePracticeState(input.state),
   };
 }

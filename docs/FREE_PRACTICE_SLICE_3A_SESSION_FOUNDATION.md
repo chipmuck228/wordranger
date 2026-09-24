@@ -16,6 +16,10 @@ It does:
 - pin `FreePracticeItem[]` and lazily issue the current task
 - resume the same owned session / revision / task
 - reuse existing `game_sessions` revision CAS
+- issue the current task with deterministic ids for
+  `sessionId + FreePracticeItem.id`, then idempotent
+  `ensureAssignedGeneratedTask` (shared server-only helper, not a
+  Context Lab product dependency)
 
 It does **not**:
 

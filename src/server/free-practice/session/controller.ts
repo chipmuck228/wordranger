@@ -13,10 +13,12 @@ import type {
   FreePracticeRequest,
 } from "@/server/free-practice/planning/types";
 import { createTaskRandom } from "@/server/game-session/ranger-trial-seeds";
+import { ensureAssignedGeneratedTask } from "@/server/tasks/ensure-assigned-generated-task";
 import {
   FREE_PRACTICE_ORCHESTRATION_TYPE,
   FREE_PRACTICE_SESSION_SCHEMA_VERSION,
 } from "./constants";
+import { createFreePracticeGenerationIds } from "./deterministic-ids";
 import { FreePracticeSessionError } from "./errors";
 import { toStartedOrResumed } from "./public-payload";
 import { toTaskGenerationProjection } from "./to-task-generation-projection";
@@ -221,7 +223,7 @@ export class FreePracticeSessionController {
       desiredDifficulty: 0.45,
       recentTasks: [],
       now: this.now(),
-      createId: () => this.createId(),
+      createId: createFreePracticeGenerationIds(record.sessionId, item.id),
       random: createTaskRandom(
         FREE_PRACTICE_ORCHESTRATION_TYPE,
         record.sessionId,
@@ -234,18 +236,32 @@ export class FreePracticeSessionController {
         generation.reason,
       );
     }
-    const publicTask = generation.value.publicTask;
-    await this.deps.tasks.saveGeneratedTask({
+    const assignment = {
+      userId: record.userId,
+      sessionId: record.sessionId,
+    };
+    const ensured = await ensureAssignedGeneratedTask({
+      tasks: this.deps.tasks,
       task: generation.value,
-      assignment: {
-        userId: record.userId,
-        sessionId: record.sessionId,
-      },
+      assignment,
     });
-    record.state.currentTaskId = publicTask.id;
-    record.state.assignedItemId = item.id;
+    if (!ensured.ok) {
+      throw new FreePracticeSessionError(
+        "SESSION_CONFLICT",
+        "Task assignment conflict",
+      );
+    }
+    const publicTask = generation.value.publicTask;
+    const next: FreePracticeSessionRecord = {
+      ...record,
+      state: {
+        ...record.state,
+        currentTaskId: publicTask.id,
+        assignedItemId: item.id,
+      },
+    };
     try {
-      const saved = await this.deps.sessions.save(record);
+      const saved = await this.deps.sessions.save(next);
       return { record: saved, task: publicTask };
     } catch (error) {
       if (
@@ -273,10 +289,15 @@ export class FreePracticeSessionController {
     record: FreePracticeSessionRecord,
   ): Promise<PublicLearningTask> {
     const assigned = await this.deps.tasks.getTaskForEvaluation(taskId);
+    const current = record.state.items[record.state.currentIndex];
     if (
       !assigned ||
+      !current ||
       assigned.assignment.userId !== record.userId ||
-      assigned.assignment.sessionId !== record.sessionId
+      assigned.assignment.sessionId !== record.sessionId ||
+      assigned.task.publicTask.learningNeedId !== record.state.assignedItemId ||
+      assigned.task.publicTask.lexemeId !== current.lexemeId ||
+      assigned.task.publicTask.targetSkill !== current.targetSkill
     ) {
       throw new FreePracticeSessionError(
         "SESSION_NOT_FOUND",

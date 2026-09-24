@@ -39,6 +39,8 @@ export function createSessionHarness(input: {
   userId?: string;
   lexemes?: Array<Partial<Lexeme> & Pick<Lexeme, "id" | "lemma" | "meaningsZh">>;
   incorrectLexemeIds?: string[];
+  tasks?: InMemoryLearningTaskRepository;
+  sessions?: InMemoryFreePracticeSessionStore;
 }) {
   const env = { ...TEST_IDENTITY_ENV };
   const userId = input.userId ?? USER_A;
@@ -60,8 +62,8 @@ export function createSessionHarness(input: {
       ),
     );
   }
-  const sessions = new InMemoryFreePracticeSessionStore();
-  const tasks = new InMemoryLearningTaskRepository();
+  const sessions = input.sessions ?? new InMemoryFreePracticeSessionStore();
+  const tasks = input.tasks ?? new InMemoryLearningTaskRepository();
   const vocabulary = new InMemoryVocabularyRepository(tinyDataset({ lexemes }));
   const controller = new FreePracticeSessionController({
     vocabulary,

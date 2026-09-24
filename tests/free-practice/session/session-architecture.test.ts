@@ -37,6 +37,7 @@ describe("Free Practice session architecture boundary", () => {
       for (const token of FORBIDDEN) {
         expect(text, `${file} ${token}`).not.toContain(token);
       }
+      expect(text, file).not.toContain("@/server/context-lab");
     }
   });
 

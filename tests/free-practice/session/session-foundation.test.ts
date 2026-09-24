@@ -283,20 +283,33 @@ describe("Free Practice Slice 3A session foundation", () => {
         createdAt: "2026-09-24T02:00:00.000Z",
       },
     });
+    const other = new FreePracticeSessionController({
+      vocabulary: fresh.vocabulary,
+      read: fresh.read,
+      tasks: fresh.tasks,
+      sessions: fresh.sessions,
+      readSession: createTestFreePracticeSessionReader({
+        env: TEST_IDENTITY_ENV,
+        userId: USER_A,
+        isAnonymous: true,
+      }),
+      env: TEST_IDENTITY_ENV,
+      now: () => "2026-09-24T02:00:00.000Z",
+    });
     const [first, second] = await Promise.all([
       fresh.controller.load(created.sessionId),
-      fresh.controller.load(created.sessionId),
+      other.load(created.sessionId),
     ]);
-    const assigned = [first, second].filter(
-      (result) => result.status === "RESUMED",
-    );
-    expect(assigned.length).toBeGreaterThanOrEqual(1);
-    if (assigned[0]?.status === "RESUMED" && assigned[1]?.status === "RESUMED") {
-      expect(assigned[0].task.id).toBe(assigned[1].task.id);
+    expect(first.status).toBe("RESUMED");
+    expect(second.status).toBe("RESUMED");
+    if (first.status !== "RESUMED" || second.status !== "RESUMED") {
+      return;
     }
+    expect(first.task.id).toBe(second.task.id);
     const latest = await fresh.sessions.get(created.sessionId, USER_A);
-    expect(latest?.state.currentTaskId).toBeTruthy();
-    expect(fresh.tasks.listTaskIds().length).toBeGreaterThanOrEqual(1);
+    expect(latest?.state.currentTaskId).toBe(first.task.id);
+    expect(latest?.state.assignedItemId).toBe("item-a");
+    expect(fresh.tasks.listTaskIds()).toEqual([first.task.id]);
   });
 
   it("H. parser rejects unknown schema, bad counts, and forbidden persisted fields", () => {

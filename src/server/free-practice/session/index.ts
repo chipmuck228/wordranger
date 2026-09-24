@@ -13,6 +13,7 @@ export { InMemoryFreePracticeSessionStore } from "./in-memory-store";
 export { assertSafePublicPayload, toPublicSession } from "./public-payload";
 export {
   parseFreePracticeRecord,
+  parseFreePracticeState,
   serializeFreePracticeState,
 } from "./state";
 export { SupabaseFreePracticeSessionStore } from "./supabase-store";
