@@ -976,6 +976,13 @@ wire `/practice`, Homepage, or `/train`.
 
 ### Slice 3 — Server-authoritative session
 
+**Implementation note (still Candidate / not a Standard):** Slice 3A
+lands a server-only session foundation under
+`src/server/free-practice/session/`. It creates/pins/resumes a
+`FREE_PRACTICE` `game_sessions` row and lazily assigns the current
+task. It does **not** accept answers, write Evidence, add `/practice`,
+or change Homepage / `/train`. Multi-item advancement is Slice 5.
+
 - **Does:** `FreePracticeController` on `game_sessions.game_type =
   FREE_PRACTICE`; CAS; lazy task generation; resume.
 - **Files expected:** `src/server/free-practice/*`, session state

@@ -113,7 +113,7 @@ Honest limitation: V1 does **not** fake atomicity. A later `process_evidence` Po
 | --- | --- |
 | `id` | Session id (uuid) |
 | `user_id` | Owner (uuid). V1 is the placeholder user, not real auth. |
-| `game_type` | Free play: `RANGER_TRIAL`, `WORD_BUBBLE`, `MATCHING`, or `SNAKE`. Daily Training: `DAILY_TRAINING` as orchestration identity only (not `Evidence.gameId`). A store must not resume another type's session |
+| `game_type` | Free play: `RANGER_TRIAL`, `WORD_BUBBLE`, `MATCHING`, or `SNAKE`. Daily Training: `DAILY_TRAINING` as orchestration identity only (not `Evidence.gameId`). Candidate Free Practice Slice 3A: `FREE_PRACTICE` as orchestration identity only (not `Evidence.gameId`). A store must not resume another type's session |
 | `plan_id` | Scheduler plan id |
 | `status` | `active` / `completed` / `failed` |
 | `state` | JSON orchestration (`stateVersion: "v1"`, planned needs, `currentNeedIndex`, `currentTaskId`, phase, presentation stats, last safe feedback, `lastCompletedTaskId`) |
@@ -225,6 +225,46 @@ All outcomes. This is not “last 40 `INCORRECT` rows”. The planner then
 keeps the latest terminal row per `lexeme_id + skill`. The planner is
 read-only: it does not insert Evidence, snapshots, tasks, or
 `game_sessions`.
+
+## Free Practice session foundation (Candidate Slice 3A)
+
+This is Candidate / Not a Standard. Slice 3A persists orchestration
+only. It does not add `/practice`, answer submit, Evidence, or
+Homepage / `/train` wiring.
+
+`game_type` is unconstrained `text`. Adding `FREE_PRACTICE` is an
+application-layer value. **No migration.** Existing rows are
+unchanged.
+
+Ownership and CAS match the existing `game_sessions` contract:
+
+- create at `revision = 0`
+- get is `id + user_id + game_type = FREE_PRACTICE`
+- save is `WHERE id + user_id + game_type + revision = N` then `N+1`
+- missing and foreign sessions both look absent
+
+Persisted `state` schema version `fp-session-v1`:
+
+- source, requestedCount, plannedCount, `FreePracticeItem[]`
+- currentIndex, assignedItemId, currentTaskId, status, createdAt
+- `assignedItemId` is null iff `currentTaskId` is null
+- when set, `assignedItemId` equals `items[currentIndex].id`
+- every item source equals session source
+
+Write and read share one state validator. A mismatched assigned
+`PublicLearningTask` (user, session, item id, lexeme, or skill) is
+fail-closed and does not rewrite the row.
+
+Forbidden in `state`: LearningSessionPlan, Scheduler trace / reason,
+compatibility projection, AnswerKey, Evidence, learner snapshots,
+outcomes, scores, Context Lab state, client-supplied userId.
+
+`plan_id` is an orchestration token (`fp-plan:<sessionId>`), not a
+Scheduler plan. AnswerKeys stay in `learning_tasks`. Public DTO
+exposes `PublicLearningTask` only.
+
+Slice 3A does **not** accept student answers or write Evidence.
+Multi-item advancement waits for Slice 5.
 
 ## RLS TODO
 
