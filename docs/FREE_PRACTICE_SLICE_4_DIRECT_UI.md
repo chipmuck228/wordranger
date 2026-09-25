@@ -51,11 +51,24 @@ revision, current task/input, and UI state.
 `sessionStorage` key `wordranger.free-practice.session-id` stores
 the handle only. Refresh calls `load`.
 
-`开始练习` / `再练一组` share the existing `inFlight` lock. A second
-click while start is in flight does not call `startFreePractice`.
-The start button is disabled once the request is issued. Failure
-clears the lock so Retry can start once. The client never generates
-or chooses a `sessionId`.
+The first client render is `hydrating`. The start button is not shown
+until `sessionStorage` has been read. No stored handle enters
+`select`. A stored handle must finish `load` before the restored
+phase is shown (`AWAITING_ACTION`, `AWAITING_CONTINUE`, `COMPLETED`,
+`NOT_FOUND` → `select`, or unavailable). Mount resume and start
+cannot overlap.
+
+`start` / `submit` / `continue` / mount `load` share one operation
+lock. An operation releases only the token it acquired. A stale
+`requestId` response cannot clear a newer operation's lock. Timeout,
+error, conflict, and stale-return paths all go through that owned
+release. `requestId` still only ignores stale responses. It is not
+used for scoring, Evidence, or server identity.
+
+A second click while start is in flight does not call
+`startFreePractice`. The start button is not shown during hydration
+or start. Failure releases the owned lock so Retry can start once.
+The client never generates or chooses a `sessionId`.
 
 ## Isolation
 

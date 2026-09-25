@@ -19,6 +19,7 @@ const PRACTICE_DIR = join(process.cwd(), "src/app/practice");
 const CLIENT_FILES = [
   join(PRACTICE_DIR, "free-practice-client.tsx"),
   join(process.cwd(), "src/components/free-practice/free-practice-session-storage.ts"),
+  join(process.cwd(), "src/components/free-practice/free-practice-operation-lock.ts"),
 ];
 const ACTION_FILE = join(PRACTICE_DIR, "actions.ts");
 
@@ -58,12 +59,20 @@ describe("Free Practice Direct UI architecture", () => {
     expect(client).toContain("hideCorrection");
     const startFn = client.slice(
       client.indexOf("async function start("),
-      client.indexOf("async function submit("),
+      client.indexOf("useEffect("),
     );
-    expect(startFn).toContain("if (inFlight.current)");
-    expect(startFn.indexOf("inFlight.current = true")).toBeLessThan(
+    expect(client).toContain('"hydrating"');
+    expect(client).toContain("createFreePracticeOperationLock");
+    expect(startFn).toContain("if (!hydrated.current)");
+    expect(startFn).toContain("acquireLock");
+    expect(startFn).toContain("releaseLock");
+    expect(startFn.indexOf("acquireLock")).toBeLessThan(
       startFn.indexOf("startFreePractice"),
     );
+    expect(startFn.indexOf("releaseLock")).toBeGreaterThan(
+      startFn.indexOf("startFreePractice"),
+    );
+    expect(client).not.toContain("inFlight");
     expect(client).toContain("disabled={busy}");
   });
 

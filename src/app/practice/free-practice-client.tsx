@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DirectPracticeRenderer } from "@/components/training/DirectPracticeRenderer";
 import { InlineTrainingFeedback } from "@/components/training/inline-training-feedback";
+import { createFreePracticeOperationLock } from "@/components/free-practice/free-practice-operation-lock";
 import {
   clearFreePracticeSessionId,
   readFreePracticeSessionId,
@@ -32,6 +33,7 @@ import {
 } from "./actions";
 
 type Screen =
+  | "hydrating"
   | "select"
   | "empty"
   | "unavailable"
@@ -60,6 +62,7 @@ const SOURCE_COPY: Record<
 };
 
 const LOADING_COPY: Partial<Record<Screen, string>> = {
+  hydrating: "正在准备",
   preparing: "正在准备",
   submitting: "提交中",
   continuing: "正在进入下一题",
@@ -86,7 +89,7 @@ function toInlineFeedback(
 }
 
 export function FreePracticeClient() {
-  const [screen, setScreen] = useState<Screen>("select");
+  const [screen, setScreen] = useState<Screen>("hydrating");
   const [source, setSource] = useState<FreePracticeSource>("UNSEEN");
   const [requestedCount, setRequestedCount] =
     useState<FreePracticeRequestedCount>(10);
@@ -105,7 +108,16 @@ export function FreePracticeClient() {
   const retryKind = useRef<"start" | "load" | "submit" | "continue" | null>(
     null,
   );
-  const inFlight = useRef(false);
+  const lock = useRef(createFreePracticeOperationLock()).current;
+  const hydrated = useRef(false);
+
+  function acquireLock(): number | null {
+    return lock.acquire();
+  }
+
+  function releaseLock(token: number): void {
+    lock.release(token);
+  }
 
   function applyResult(
     result: FreePracticeSessionPublicResult,
@@ -165,46 +177,60 @@ export function FreePracticeClient() {
     }
     setFeedback(null);
     // Telemetry only; not used for scoring.
-    // eslint-disable-next-line react-hooks/purity -- event-handler helper, not render
     startedAt.current = performance.now();
     setScreen("playing");
     return true;
   }
 
   async function resume(sessionId: string): Promise<void> {
+    const token = acquireLock();
+    if (token === null) {
+      hydrated.current = true;
+      return;
+    }
     const id = ++requestId.current;
     retryKind.current = "load";
     setScreen("preparing");
-    const bounded = await boundedAction(loadFreePracticeSession({ sessionId }));
-    if (id !== requestId.current) {
-      return;
-    }
-    if (bounded.timedOut) {
-      setError("暂时无法加载");
-      setScreen("error");
-      return;
-    }
-    if (bounded.value.status === "CONFLICT") {
-      const retry = await boundedAction(loadFreePracticeSession({ sessionId }));
+    try {
+      const bounded = await boundedAction(loadFreePracticeSession({ sessionId }));
       if (id !== requestId.current) {
         return;
       }
-      if (retry.timedOut || retry.value.status === "CONFLICT") {
+      if (bounded.timedOut) {
         setError("暂时无法加载");
         setScreen("error");
         return;
       }
-      applyResult(retry.value);
-      return;
+      if (bounded.value.status === "CONFLICT") {
+        const retryLoad = await boundedAction(
+          loadFreePracticeSession({ sessionId }),
+        );
+        if (id !== requestId.current) {
+          return;
+        }
+        if (retryLoad.timedOut || retryLoad.value.status === "CONFLICT") {
+          setError("暂时无法加载");
+          setScreen("error");
+          return;
+        }
+        applyResult(retryLoad.value);
+        return;
+      }
+      applyResult(bounded.value);
+    } finally {
+      hydrated.current = true;
+      releaseLock(token);
     }
-    applyResult(bounded.value);
   }
 
   async function start(nextSource = source, nextCount = requestedCount): Promise<void> {
-    if (inFlight.current) {
+    if (!hydrated.current) {
       return;
     }
-    inFlight.current = true;
+    const token = acquireLock();
+    if (token === null) {
+      return;
+    }
     const id = ++requestId.current;
     retryKind.current = "start";
     sourceRef.current = nextSource;
@@ -213,132 +239,138 @@ export function FreePracticeClient() {
     setRequestedCount(nextCount);
     setScreen("preparing");
     setError(null);
-    const bounded = await boundedAction(
-      startFreePractice({ source: nextSource, requestedCount: nextCount }),
-    );
-    if (id !== requestId.current) {
-      return;
+    try {
+      const bounded = await boundedAction(
+        startFreePractice({ source: nextSource, requestedCount: nextCount }),
+      );
+      if (id !== requestId.current) {
+        return;
+      }
+      if (bounded.timedOut) {
+        setError("暂时无法加载");
+        setScreen("error");
+        return;
+      }
+      applyResult(bounded.value, { fromStart: true });
+    } finally {
+      releaseLock(token);
     }
-    if (bounded.timedOut) {
-      inFlight.current = false;
-      setError("暂时无法加载");
-      setScreen("error");
-      return;
-    }
-    inFlight.current = false;
-    applyResult(bounded.value, { fromStart: true });
   }
 
   useEffect(() => {
     const stored = readFreePracticeSessionId();
     if (!stored) {
+      hydrated.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount hydrate: no stored handle
+      setScreen("select");
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount hydrate via server load
     void resume(stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only hydrate
   }, []);
 
   async function submit(intent: StudentActionIntent): Promise<void> {
-    if (!session || !task || screen === "submitting" || inFlight.current) {
+    if (!hydrated.current || !session || !task || screen === "submitting") {
       return;
     }
-    inFlight.current = true;
+    const token = acquireLock();
+    if (token === null) {
+      return;
+    }
     const id = ++requestId.current;
     retryKind.current = "submit";
     lastIntent.current = intent;
     setScreen("submitting");
     setError(null);
-    const bounded = await boundedAction(
-      submitFreePracticeIntent({
-        sessionId: session.sessionId,
-        revision: session.revision,
-        taskId: task.id,
-        intent,
-        responseTimeMs: Math.round(
-          // eslint-disable-next-line react-hooks/purity -- event-handler helper, not render
-          performance.now() - startedAt.current,
-        ),
-      }),
-    );
-    if (id !== requestId.current) {
-      return;
-    }
-    if (bounded.timedOut) {
-      inFlight.current = false;
-      setError("暂时无法加载");
-      setScreen("error");
-      return;
-    }
-    if (bounded.value.status === "CONFLICT") {
-      const recovered = await boundedAction(
-        loadFreePracticeSession({ sessionId: session.sessionId }),
+    try {
+      const bounded = await boundedAction(
+        submitFreePracticeIntent({
+          sessionId: session.sessionId,
+          revision: session.revision,
+          taskId: task.id,
+          intent,
+          responseTimeMs: Math.round(performance.now() - startedAt.current),
+        }),
       );
       if (id !== requestId.current) {
         return;
       }
-      if (recovered.timedOut || recovered.value.status === "CONFLICT") {
-        inFlight.current = false;
+      if (bounded.timedOut) {
         setError("暂时无法加载");
         setScreen("error");
         return;
       }
-      inFlight.current = false;
-      applyResult(recovered.value);
-      return;
+      if (bounded.value.status === "CONFLICT") {
+        const recovered = await boundedAction(
+          loadFreePracticeSession({ sessionId: session.sessionId }),
+        );
+        if (id !== requestId.current) {
+          return;
+        }
+        if (recovered.timedOut || recovered.value.status === "CONFLICT") {
+          setError("暂时无法加载");
+          setScreen("error");
+          return;
+        }
+        applyResult(recovered.value);
+        return;
+      }
+      applyResult(bounded.value);
+    } finally {
+      releaseLock(token);
     }
-    inFlight.current = false;
-    applyResult(bounded.value);
   }
 
   async function continueSession(): Promise<void> {
-    if (!session || !task || screen === "continuing" || inFlight.current) {
+    if (!hydrated.current || !session || !task || screen === "continuing") {
       return;
     }
-    inFlight.current = true;
+    const token = acquireLock();
+    if (token === null) {
+      return;
+    }
     const id = ++requestId.current;
     retryKind.current = "continue";
     setScreen("continuing");
     setError(null);
-    const bounded = await boundedAction(
-      continueFreePractice({
-        sessionId: session.sessionId,
-        revision: session.revision,
-        taskId: task.id,
-      }),
-    );
-    if (id !== requestId.current) {
-      return;
-    }
-    if (bounded.timedOut) {
-      inFlight.current = false;
-      setError("暂时无法加载");
-      setScreen("error");
-      return;
-    }
-    if (bounded.value.status === "CONFLICT") {
-      const recovered = await boundedAction(
-        loadFreePracticeSession({ sessionId: session.sessionId }),
+    try {
+      const bounded = await boundedAction(
+        continueFreePractice({
+          sessionId: session.sessionId,
+          revision: session.revision,
+          taskId: task.id,
+        }),
       );
       if (id !== requestId.current) {
         return;
       }
-      if (recovered.timedOut || recovered.value.status === "CONFLICT") {
-        inFlight.current = false;
+      if (bounded.timedOut) {
         setError("暂时无法加载");
         setScreen("error");
         return;
       }
-      inFlight.current = false;
-      applyResult(recovered.value);
-      return;
+      if (bounded.value.status === "CONFLICT") {
+        const recovered = await boundedAction(
+          loadFreePracticeSession({ sessionId: session.sessionId }),
+        );
+        if (id !== requestId.current) {
+          return;
+        }
+        if (recovered.timedOut || recovered.value.status === "CONFLICT") {
+          setError("暂时无法加载");
+          setScreen("error");
+          return;
+        }
+        applyResult(recovered.value);
+        return;
+      }
+      applyResult(bounded.value);
+    } finally {
+      releaseLock(token);
     }
-    inFlight.current = false;
-    applyResult(bounded.value);
   }
 
   function retry(): void {
-    inFlight.current = false;
     if (retryKind.current === "start") {
       void start();
       return;
@@ -376,6 +408,7 @@ export function FreePracticeClient() {
   }
 
   const busy =
+    screen === "hydrating" ||
     screen === "preparing" ||
     screen === "submitting" ||
     screen === "continuing";

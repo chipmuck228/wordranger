@@ -87,6 +87,7 @@ async function openSelector(page: Page): Promise<void> {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(`${PRACTICE}/practice`);
   await expect(page.getByRole("heading", { name: "自由练习" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "开始练习" })).toBeVisible();
 }
 
 async function startSource(
