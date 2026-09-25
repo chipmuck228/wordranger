@@ -15,12 +15,12 @@ This inventory does not approve preview or production enablement. It records wha
 
 The workspace does not have a linked Supabase project or a linked Vercel project. No remote catalog, migration history, RLS, grant, or Vercel env metadata was read.
 
-The maintainer-identified main host is
-`https://wordranger-git-main-zhen-lius-projects.vercel.app`.
-GitHub repository `homepage` (`https://wordranger.vercel.app`) is **not**
-that host and must not be used as production evidence. Unauthenticated
-GETs to the identified host hit Vercel Deployment Protection (login /
-403), not the Next.js app. That is not a `/practice` 404.
+The public production origin used for HTTP checks is
+`https://engsme.cn` → `https://www.engsme.cn`.
+GitHub repository `homepage` (`https://wordranger.vercel.app`) and the
+Vercel git-main alias are **not** treated as that public origin.
+The git-main alias is behind Vercel Deployment Protection (login / 403)
+and is not application status.
 
 ## 2. Authorization availability
 
@@ -135,25 +135,24 @@ Process env in this audit shell: all of the above names **absent**.
 
 ## 9. HTTP route findings
 
-Identified main host (maintainer-provided, this pass):
-`https://wordranger-git-main-zhen-lius-projects.vercel.app`
+Public production origin (this pass): `https://engsme.cn`
+canonical: `https://www.engsme.cn` (`308` from apex).
 
-GitHub `homepage` `https://wordranger.vercel.app` was used in the first
-pass and is **withdrawn** as production evidence.
-
-Local `curl` / `fetch` from this workspace **timed out** on both hosts.
-Unauthenticated WebFetch of the identified host:
+Unauthenticated GET via proxy `127.0.0.1:7897`, no login, no POST:
 
 | Route | Result | Notes |
 | --- | --- | --- |
-| `GET /practice` | **Vercel login page** | Not WordRanger `/practice`. Not a Next.js 404. App closed/open is **NOT VERIFIED**. |
-| `GET /practice/e2e-probe` | **403** | Deployment Protection. Probe closed/open is **NOT VERIFIED**. |
-| `GET /` | **403** | Same wall. Homepage `/practice` href is **NOT VERIFIED**. |
-| `GET /train` | **403** | Same wall. `/train` behavior is **NOT VERIFIED**. |
-| `GET /play/context-lab` | **403** | Same wall. Context Lab is **NOT VERIFIED**. |
+| `GET https://engsme.cn/practice` | **308** → `https://www.engsme.cn/practice` | |
+| `GET https://www.engsme.cn/practice` | **404** | Candidate route closed on this host. |
+| `GET /practice/e2e-probe` | **404** | Probe closed. |
+| `GET /` | **200** | Homepage. `href="/train"` present. No `href` containing `practice`. |
+| `GET /train` | **200** | Daily Training (product label still 自由练习). |
+| `GET /play/context-lab` | **404** | Observed closed/gated. Not treated as an FP change. |
 
-No Vercel login, no POST, no server action, no session/task/Evidence
-create. Preview hostnames were not guessed. Preview HTTP: **NOT VERIFIED**.
+`wordranger.vercel.app` first-pass 404s remain **withdrawn**.
+`wordranger-git-main-zhen-lius-projects.vercel.app` remains
+Deployment Protection (login/403), not app status.
+Preview HTTP: **NOT VERIFIED**.
 
 ## 10. Confirmed drift / blockers
 
@@ -163,9 +162,10 @@ Confirmed **authorization blockers** for this inventory:
 
 1. Supabase CLI missing and project not linked.
 2. Vercel project not linked; env metadata unread.
-3. This host cannot complete direct TCP GET (timeout).
-4. The identified main alias is behind Vercel Deployment Protection.
-   Unauthenticated responses are login/403, not application status.
+3. Direct GET without proxy often times out from this workspace.
+4. The Vercel git-main alias is behind Deployment Protection.
+5. Public `www.engsme.cn/practice` is **404**. That is consistent with
+   flags remaining off, but Vercel env names are still unread.
 
 Prior production-readiness audit blockers (identity mint, repo RLS absence, service-role data client, unscoped task get) remain **design findings**, not newly verified remote facts.
 
@@ -178,9 +178,8 @@ Prior production-readiness audit blockers (identity mint, repo RLS absence, serv
 - Remote RPC security attributes
 - All Vercel env names in development / preview / production
 - Whether preview accidentally enables Free Practice
-- Whether production/main flags keep `/practice` closed (Protection hides the app)
+- Whether Vercel production/preview env names are unset (HTTP 404 ≠ env ls)
 - Preview `/practice` HTTP
-- Homepage `href="/practice"` absence on the real host
 - Live A/B isolation
 - Any finding previously taken from `wordranger.vercel.app`
 
