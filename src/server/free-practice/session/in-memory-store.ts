@@ -80,6 +80,10 @@ export class InMemoryFreePracticeSessionStore
     return this.sessions.size;
   }
 
+  ids(): string[] {
+    return [...this.sessions.keys()];
+  }
+
   reset(): void {
     this.sessions.clear();
   }

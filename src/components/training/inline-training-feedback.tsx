@@ -22,14 +22,25 @@ export function InlineTrainingFeedback({
   feedback,
   onContinue,
   disabled,
+  continueLabel = "下一题",
+  hideCorrection = false,
+  title,
 }: {
   feedback: GameSubmissionFeedback;
   onContinue: () => void;
   disabled?: boolean;
+  continueLabel?: string;
+  hideCorrection?: boolean;
+  title?: string;
 }) {
   const correct =
     feedback.status === "CORRECT" || feedback.status === "ASSISTED";
-  const detail = detailText(feedback, correct);
+  const detail = title ? null : detailText(feedback, correct);
+  const showCorrection =
+    !hideCorrection &&
+    Boolean(feedback.correction?.text) &&
+    !feedback.message.includes(feedback.correction?.text ?? "") &&
+    detail !== `正确答案：${feedback.correction?.text}`;
   return (
     <div
       className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
@@ -44,14 +55,12 @@ export function InlineTrainingFeedback({
             : "bg-rose-50 text-rose-950 ring-rose-200/80"
         }`}
       >
-        <p className="font-medium">{correct ? "答对了" : "再看看"}</p>
+        <p className="font-medium">{title ?? (correct ? "答对了" : "再看看")}</p>
         {detail ? (
           <p className="mt-1 text-base font-semibold tracking-tight">{detail}</p>
         ) : null}
-        {feedback.correction?.text &&
-        !feedback.message.includes(feedback.correction.text) &&
-        detail !== `正确答案：${feedback.correction.text}` ? (
-          <p className="mt-1 text-sm">正确答案：{feedback.correction.text}</p>
+        {showCorrection ? (
+          <p className="mt-1 text-sm">正确答案：{feedback.correction?.text}</p>
         ) : null}
       </div>
       <Button
@@ -60,7 +69,7 @@ export function InlineTrainingFeedback({
         onClick={onContinue}
         disabled={disabled || !feedback.continueAvailable}
       >
-        下一题
+        {continueLabel}
       </Button>
     </div>
   );

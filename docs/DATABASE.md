@@ -178,8 +178,8 @@ Public Free Practice must not use `V1_PLACEHOLDER_USER_ID`. A server-only port (
 - The shared placeholder id is rejected (`PLACEHOLDER_FORBIDDEN`).
 - Daily Training (`/train`) and Context Lab still use the placeholder. This section does not migrate them and does not change RLS yet.
 - Anonymous Auth is single-browser: clearing cookies loses continuity. Cross-device recovery is not supported. Email/magic-link is a later identity option.
-- `WORD_RANGER_FREE_PRACTICE_TEST_IDENTITY=1` enables a test-only reader factory. It is ignored on Vercel / `NODE_ENV=production`.
-- This is not a Standard and does not authorize a `/practice` route.
+- `WORD_RANGER_FREE_PRACTICE_TEST_IDENTITY=1` enables a test-only reader factory. Vercel production/preview ignore it. Local `next start` also needs `WORD_RANGER_FREE_PRACTICE_E2E=1`.
+- Slice 4 adds a gated `/practice` Candidate surface. It is not a Standard and is off by default.
 - Cookie refresh middleware is **not** added in Slice 1, so `/train` is
   unchanged. A later public `/practice` slice must add `@supabase/ssr`
   middleware before relying on long-lived anonymous sessions. Expired
@@ -228,8 +228,9 @@ read-only: it does not insert Evidence, snapshots, tasks, or
 
 ## Free Practice session foundation (Candidate Slice 3A / 3B / 5A)
 
-This is Candidate / Not a Standard. Server-only. Not
-production-ready. No `/practice`, Homepage, or `/train` wiring.
+This is Candidate / Not a Standard. Not production-ready. Slice 4
+adds gated `/practice` UI on this same `game_sessions` JSON. Homepage
+and `/train` stay unwired. **No migration.**
 
 `game_type` is unconstrained `text`. Adding `FREE_PRACTICE` is an
 application-layer value. **No migration.** Existing rows are
@@ -296,6 +297,16 @@ double-count attempted/correct.
 
 The next Free Practice start re-calls the Slice 2 planner. It does
 not reuse a completed session’s pinned items.
+
+## Free Practice `/practice` wiring (Candidate Slice 4)
+
+Application-layer only. **No migration.** `FREE_PRACTICE_ENABLED` and
+`FREE_PRACTICE_RUNTIME` are independent of `GAME_RUNTIME`. Memory is
+forbidden on Vercel production/preview. Public identity still requires
+a Supabase Auth cookie; local/E2E may use the explicit test identity
+gate. The browser never receives `userId`, AnswerKey, Evidence, or
+the full session state. See
+`docs/FREE_PRACTICE_SLICE_4_DIRECT_UI.md`.
 
 ## RLS TODO
 

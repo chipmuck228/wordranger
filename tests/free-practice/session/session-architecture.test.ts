@@ -94,14 +94,17 @@ describe("Free Practice session architecture boundary", () => {
     }
   });
 
-  it("does not add a /practice route or Homepage wiring", () => {
+  it("keeps Homepage unwired while /practice exists as a gated Candidate surface", () => {
     const appFiles = walk(join(process.cwd(), "src/app"));
-    expect(appFiles.some((file) => file.includes("/practice"))).toBe(false);
+    expect(appFiles.some((file) => file.includes("/practice/page.tsx"))).toBe(
+      true,
+    );
     const home = readFileSync(
       join(process.cwd(), "src/components/home/home-page.tsx"),
       "utf8",
     );
     expect(home).not.toContain("FreePracticeSessionController");
     expect(home).not.toContain("FREE_PRACTICE");
+    expect(home).not.toContain("/practice");
   });
 });
