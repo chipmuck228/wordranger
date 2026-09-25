@@ -130,9 +130,11 @@ describe.skipIf(!requireLive || !allowWrites)(
       const missLexemeId = firstLexemes[2];
       let current = started;
       for (let index = 0; index < 3; index += 1) {
-        const assigned = await firstRuntime.tasks.getTaskForEvaluation(
-          current.task.id,
-        );
+        const assigned = await firstRuntime.tasks.getTaskForEvaluation({
+          taskId: current.task.id,
+          userId,
+          sessionId: current.session.sessionId,
+        });
         expect(assigned?.assignment.userId).toBe(userId);
         const key = assigned!.task.answerKey;
         const correct = current.task.lexemeId !== missLexemeId;

@@ -554,7 +554,11 @@ export class DailyTrainingController {
       throw new GameSessionError("TASK_NOT_FOUND", "Current task missing");
     }
     const assigned = await this.bounded(
-      this.deps.tasks.getTaskForEvaluation(record.currentTaskId),
+      this.deps.tasks.getTaskForEvaluation({
+        taskId: record.currentTaskId,
+        userId: record.userId,
+        sessionId: record.sessionId,
+      }),
     );
     if (!assigned) {
       throw new GameSessionError("TASK_NOT_FOUND", "Current task missing");
@@ -609,7 +613,11 @@ export class DailyTrainingController {
       throw new GameSessionError("TASK_NOT_FOUND", "Active task was not found");
     }
     const assigned = await this.bounded(
-      this.deps.tasks.getTaskForEvaluation(record.currentTaskId),
+      this.deps.tasks.getTaskForEvaluation({
+        taskId: record.currentTaskId,
+        userId: record.userId,
+        sessionId: record.sessionId,
+      }),
     );
     if (!assigned) {
       throw new GameSessionError("TASK_NOT_FOUND", "Active task was not found");
@@ -675,7 +683,11 @@ export class DailyTrainingController {
       );
     }
     const assigned = await this.bounded(
-      this.deps.tasks.getTaskForEvaluation(taskId),
+      this.deps.tasks.getTaskForEvaluation({
+        taskId,
+        userId: record.userId,
+        sessionId: record.sessionId,
+      }),
     );
     if (!assigned) {
       throw new GameSessionError("TASK_NOT_FOUND", "Completed task was not found");

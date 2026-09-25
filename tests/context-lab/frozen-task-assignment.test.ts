@@ -3,6 +3,7 @@ import { V1_PLACEHOLDER_USER_ID } from "@/server/auth/v1-user";
 import { contextLabBoundLexemeId } from "@/server/context-lab/bind-generated-task-to-vocabulary";
 import { contextLabFrozenTaskId } from "@/server/context-lab/context-lab-frozen-task-id";
 import { toGeneratedLearningTask } from "@/server/context-lab/to-generated-learning-task";
+import { ensureAssignedGeneratedTask } from "@/server/tasks/ensure-assigned-generated-task";
 import { LearningTaskType } from "@/domain/tasks/task-type";
 import {
   acknowledgeUntilFrozen,
@@ -17,7 +18,11 @@ describe("Context Lab frozen task assignment", () => {
   it("persists a generated frozen task on the final Guided acknowledgement", async () => {
     const harness = createMealLabHarness();
     const screen = await acknowledgeUntilFrozen(harness.controller);
-    const assigned = await harness.learningTasks.getTaskForEvaluation(screen.task.id);
+    const assigned = await harness.learningTasks.getTaskForEvaluation({
+      taskId: screen.task.id,
+      userId: V1_PLACEHOLDER_USER_ID,
+      sessionId: screen.handle.runId,
+    });
     expect(assigned).not.toBeNull();
     expect(assigned?.task.publicTask.taskType).toBe(
       LearningTaskType.ACTIVE_RECALL_TYPING,
@@ -53,7 +58,11 @@ describe("Context Lab frozen task assignment", () => {
       expect(keys.has(field), field).toBe(false);
     }
     expect(JSON.stringify(screen)).not.toContain("exactAcceptedTexts");
-    const assigned = await harness.learningTasks.getTaskForEvaluation(screen.task.id);
+    const assigned = await harness.learningTasks.getTaskForEvaluation({
+      taskId: screen.task.id,
+      userId: V1_PLACEHOLDER_USER_ID,
+      sessionId: screen.handle.runId,
+    });
     expect(assigned?.task.answerKey.exactAcceptedTexts).toEqual(["soup"]);
     const stored = await harness.repository.get({
       runId: screen.handle.runId,
@@ -66,12 +75,18 @@ describe("Context Lab frozen task assignment", () => {
   it("reuses an identical existing assignment", async () => {
     const harness = createMealLabHarness();
     const first = await acknowledgeUntilFrozen(harness.controller);
-    const assigned = await harness.learningTasks.getTaskForEvaluation(first.task.id);
+    const assigned = await harness.learningTasks.getTaskForEvaluation({
+      taskId: first.task.id,
+      userId: V1_PLACEHOLDER_USER_ID,
+      sessionId: first.handle.runId,
+    });
     expect(assigned).not.toBeNull();
-    await harness.learningTasks.saveGeneratedTask({
+    const reused = await ensureAssignedGeneratedTask({
+      tasks: harness.learningTasks,
       task: assigned!.task,
       assignment: assigned!.assignment,
     });
+    expect(reused).toEqual({ ok: true, reused: true });
     const loaded = await harness.controller.loadCurrent({ runId: first.handle.runId });
     assertFrozen(loaded);
     expect(loaded.task.id).toBe(first.task.id);
@@ -97,9 +112,11 @@ describe("Context Lab frozen task assignment", () => {
     const taskId = contextLabFrozenTaskId(screen.handle.runId, step.id);
     const donor = createMealLabHarness();
     const donorScreen = await acknowledgeUntilFrozen(donor.controller);
-    const donorAssigned = await donor.learningTasks.getTaskForEvaluation(
-      donorScreen.task.id,
-    );
+    const donorAssigned = await donor.learningTasks.getTaskForEvaluation({
+      taskId: donorScreen.task.id,
+      userId: V1_PLACEHOLDER_USER_ID,
+      sessionId: donorScreen.handle.runId,
+    });
     const conflicting = toGeneratedLearningTask({
       publicTask: { ...donorAssigned!.task.publicTask, id: taskId },
       answerKey: {

@@ -69,8 +69,13 @@ async function submitTyping(
 async function choiceIds(
   learningTasks: InMemoryLearningTaskRepository,
   taskId: string,
+  sessionId: string,
 ) {
-  const assigned = await learningTasks.getTaskForEvaluation(taskId);
+  const assigned = await learningTasks.getTaskForEvaluation({
+    taskId,
+    userId: V1_PLACEHOLDER_USER_ID,
+    sessionId,
+  });
   if (!assigned || assigned.task.publicTask.responseContract.kind !== "CHOICE") {
     throw new Error("choice task");
   }
@@ -93,7 +98,7 @@ async function submitChoice(
   correct: boolean,
 ) {
   assertKind(screen, "FROZEN_TASK_PREVIEW");
-  const ids = await choiceIds(learningTasks, screen.task.id);
+  const ids = await choiceIds(learningTasks, screen.task.id, screen.handle.runId);
   return controller.submitFrozenTask({
     runId: screen.handle.runId,
     revision: screen.handle.revision,
@@ -176,7 +181,7 @@ describe("Meal Context Lab nine-word active-release routing", () => {
     screen = await submitTyping(controller, screen, "nope");
     screen = await continueFrom(controller, screen);
     assertKind(screen, "FROZEN_TASK_PREVIEW");
-    const recognition = await choiceIds(learningTasks, screen.task.id);
+    const recognition = await choiceIds(learningTasks, screen.task.id, screen.handle.runId);
     expect(recognition.texts).toContain("小刀");
     expect(recognition.texts).not.toContain("勺子");
     screen = await submitChoice(controller, learningTasks, screen, false);
@@ -278,7 +283,7 @@ describe("Meal Context Lab nine-word active-release routing", () => {
     screen = await submitTyping(controller, screen, "nope");
     screen = await continueFrom(controller, screen);
     assertKind(screen, "FROZEN_TASK_PREVIEW");
-    const recognition = await choiceIds(learningTasks, screen.task.id);
+    const recognition = await choiceIds(learningTasks, screen.task.id, screen.handle.runId);
     expect(recognition.texts).toContain("面包");
     screen = await submitChoice(controller, learningTasks, screen, true);
     screen = await continueFrom(controller, screen);

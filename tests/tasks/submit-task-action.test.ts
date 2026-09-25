@@ -96,7 +96,7 @@ describe("submitTaskAction", () => {
         learningRepository: learning,
         now: NOW,
       }),
-    ).rejects.toMatchObject({ code: "TASK_USER_MISMATCH" });
+    ).rejects.toMatchObject({ code: "TASK_NOT_FOUND" });
     expect(
       await learning.getEvidenceForLexeme("user-b", generated.publicTask.lexemeId),
     ).toEqual([]);
@@ -128,7 +128,7 @@ describe("submitTaskAction", () => {
         learningRepository: learning,
         now: NOW,
       }),
-    ).rejects.toMatchObject({ code: "TASK_SESSION_MISMATCH" });
+    ).rejects.toMatchObject({ code: "TASK_NOT_FOUND" });
     expect(
       await learning.getEvidenceForLexeme(USER_A, generated.publicTask.lexemeId),
     ).toEqual([]);

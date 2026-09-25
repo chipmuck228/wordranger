@@ -1,4 +1,8 @@
-import type { LearningTaskRepository } from "@/domain/tasks/learning-task-repository";
+import type {
+  LearningTaskRepository,
+  TaskEvaluationLookup,
+} from "@/domain/tasks/learning-task-repository";
+import { isCompleteTaskEvaluationLookup } from "@/domain/tasks/learning-task-repository";
 import type {
   AssignedLearningTask,
   SaveGeneratedTaskInput,
@@ -10,6 +14,9 @@ export class InMemoryLearningTaskRepository implements LearningTaskRepository {
 
   async saveGeneratedTask(input: SaveGeneratedTaskInput): Promise<void> {
     assertTaskAssignment(input.assignment);
+    if (this.tasks.has(input.task.publicTask.id)) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
     this.tasks.set(input.task.publicTask.id, {
       task: structuredClone(input.task),
       assignment: { ...input.assignment },
@@ -17,10 +24,20 @@ export class InMemoryLearningTaskRepository implements LearningTaskRepository {
   }
 
   async getTaskForEvaluation(
-    taskId: string,
+    lookup: TaskEvaluationLookup,
   ): Promise<AssignedLearningTask | null> {
-    const assigned = this.tasks.get(taskId);
-    return assigned ? structuredClone(assigned) : null;
+    if (!isCompleteTaskEvaluationLookup(lookup)) {
+      return null;
+    }
+    const assigned = this.tasks.get(lookup.taskId);
+    if (
+      !assigned ||
+      assigned.assignment.userId !== lookup.userId ||
+      assigned.assignment.sessionId !== lookup.sessionId
+    ) {
+      return null;
+    }
+    return structuredClone(assigned);
   }
 
   reset(): void {

@@ -174,7 +174,11 @@ describe("Context Lab Supabase repository", () => {
       if (screen.kind !== "FROZEN_TASK_PREVIEW") {
         throw new Error(screen.kind);
       }
-      const assigned = await learningTasks.getTaskForEvaluation(screen.task.id);
+      const assigned = await learningTasks.getTaskForEvaluation({
+        taskId: screen.task.id,
+        userId: V1_PLACEHOLDER_USER_ID,
+        sessionId: screen.handle.runId,
+      });
       const optionId = recognitionCorrect[index]
         ? assigned?.task.answerKey.correctOptionIds[0]
         : assigned?.task.publicTask.responseContract.kind === "CHOICE"
