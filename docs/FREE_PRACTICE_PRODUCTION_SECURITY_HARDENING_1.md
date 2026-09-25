@@ -1,11 +1,16 @@
 # Free Practice Production Security Hardening Slice 1
 
-Candidate / not a Standard. This slice is **validated in repo, not deployed**.
+Candidate / not a Standard. This slice is repo-validated. The learner-table
+server-only migration is **applied** on linked Blaze production through
+the authorized Dashboard SQL Editor. `/practice` remains disabled.
 
 - Branch: `security/free-practice-production-hardening-1`
 - Base: `origin/main` @ `36d1fa97cfc7ccd0a797bdf46c411d93b59ed121`
 - Remote identity: Vercel production Supabase hostname **MATCH** to linked `blaze` (inventory §14)
-- Migration file is **committed, not remotely applied**. Not `db push`.
+- Pre-apply snapshot: file was committed and not yet remotely applied.
+- Current apply: Dashboard SQL Editor; catalog and runtime verified in
+  `docs/FREE_PRACTICE_SECURITY_MIGRATION_APPLY_EVIDENCE.md`. `db push`
+  and history repair remain forbidden. Migration history remains absent.
 - SQL targets `public.<table>` so a shared `blaze` `search_path` cannot
   resolve a different schema. Deployment status is Markdown-only; it is
   not written into database object comments.
@@ -57,7 +62,7 @@ Not used. Reasons:
 
 From repo migrations + remote inventory. No name patterns.
 
-| Table | Repo RLS before | Remote (`blaze`) | This migration |
+| Table | Repo RLS before | Remote (`blaze`) pre-apply | This migration |
 | --- | --- | --- | --- |
 | `public.learning_tasks` | off | off, client ALL | ENABLE RLS; revoke client; grant service_role |
 | `public.game_sessions` | off | on, 0 policies, client ALL | same revoke/grant |
@@ -103,7 +108,7 @@ forward migration designed under a later contract.
 
 ## Out of scope
 
-- Applying the migration
-- Vercel env / `/practice` / Homepage
+- Re-running the migration, `db push`, or history repair
+- Vercel env / enabling `/practice` / Homepage activation
 - Frozen Scheduler, LearningNeed, Evaluator, Evidence, `processEvidence`
 - Shared blaze non-WordRanger objects

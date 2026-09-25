@@ -27,10 +27,12 @@ describe("security migration deployment preflight", () => {
     for (const table of TABLES) {
       expect(doc).toContain(table);
     }
+    expect(doc).toContain("Pre-apply snapshot");
     expect(doc).toContain("NOT APPLIED");
     expect(doc).toContain("Dashboard SQL editor");
     expect(doc).toContain("begin;");
     expect(doc).toContain("FORCE RLS off");
+    expect(doc).toMatch(/Current remote apply status: \*\*APPLIED\*\*/);
   });
 
   it("does not embed secrets or a second copy of the migration", () => {
