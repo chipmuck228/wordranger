@@ -272,3 +272,43 @@ Not implemented:
 `.env.local` exists locally and was not opened.
 `supabase/.temp` exists locally and was not opened in the inventory
 text or committed.
+
+## 14. Production project identity
+
+Later confirmation on the same branch, after `9795122`. Existing
+sections above are left as written.
+
+**Result: `MATCH`**
+
+Vercel production `NEXT_PUBLIC_SUPABASE_URL` hostname equals the linked
+`blaze` project API URL hostname.
+
+Method (authorized, read-only):
+
+1. `vercel env run -e production` was attempted first. It also loaded
+   workspace `.env.local`, so that run is **not** the identity evidence.
+2. `vercel env pull --environment production` wrote
+   `/tmp/wr-fp-prod.env` only. Hostname of
+   `NEXT_PUBLIC_SUPABASE_URL` was compared in memory to the linked
+   project API hostname. The temp file was deleted immediately.
+3. `.env.local` was not opened by this pass. No URL, project ref, or
+   key was printed or committed.
+
+This confirms identity only. It does not approve `/practice`, Homepage
+integration, or a security migration. Learner-table RLS / grant findings
+in §5–§6 remain catalog facts, not a fix license.
+
+This-pass confirmation:
+
+- No migration applied
+- No DDL / DML
+- No learner rows read
+- No remote data written
+- No Vercel env add / rm
+- Production env was **read** via pull to `/tmp` and deleted; not
+  written into the repository
+- No redeploy
+- No production activation
+- No Homepage integration
+- No frozen learning-semantics change
+- No secret printed or committed
