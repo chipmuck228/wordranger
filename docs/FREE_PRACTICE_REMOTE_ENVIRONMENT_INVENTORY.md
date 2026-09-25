@@ -11,9 +11,19 @@
 
 This inventory does not approve preview or production enablement. It records what this workspace could and could not verify.
 
-**Conclusion: `BLOCKED_NOT_VERIFIED`**
+**Conclusion: `PARTIALLY_VERIFIED`**
 
-The workspace does not have a linked Supabase project or a linked Vercel project. No remote catalog, migration history, RLS, grant, or Vercel env metadata was read.
+Public HTTP on `www.engsme.cn` is verified: `/practice` and the E2E
+probe are **404**; Homepage links `/train` only; `/train` is up.
+
+Vercel env metadata is now verified for the linked `wordranger` project:
+Free Practice flags are **absent** in development, preview, and
+production. Production has Supabase URL / anon / service-role names
+present (values encrypted, unread). Preview and development have
+**no** listed env names.
+
+Supabase catalog, migration history, RLS, and grants remain
+**NOT VERIFIED**. The workspace still has no Supabase CLI link.
 
 The public production origin used for HTTP checks is
 `https://engsme.cn` → `https://www.engsme.cn`.
@@ -29,22 +39,21 @@ and is not application status.
 | Supabase CLI | **not installed** | **not linked** |
 | `supabase/config.toml` | **absent** | n/a |
 | `supabase/.temp` | **absent** | n/a |
-| Vercel CLI | installed (`54.14.0`) | **not linked** |
-| `.vercel/project.json` | **absent** | n/a |
-| `vercel env ls` | refused: codebase is not linked | n/a |
+| Vercel CLI | installed (`54.14.0`) | **linked** to existing `wordranger` project |
+| `.vercel/` | **present** (`repo.json`; no `project.json`) | matches CLI project name `wordranger` |
+| `vercel env ls` | **ran** (names + target only) | see §8 |
 | Process env Free Practice / Supabase keys | **absent** in the audit shell | n/a |
-| Local `.env.local` file | **present** on disk | **not read** (would expose secrets) |
+| Local `.env.local` file | **present** on disk | **not read** |
 | `vercel env pull` | **not run** | would write secrets into the workspace |
-| `vercel link` / `supabase link` | **not run** | not authorized by this task |
+| `supabase link` | **not run** | still blocked |
 
 No project ref, token, connection string, or key is recorded here.
 
 Non-secret recovery steps for a later authorized pass:
 
-1. On a machine that already owns this project, install Supabase CLI and link the existing WordRanger project. Do not paste keys into chat.
-2. Run `vercel link` against the Vercel project already used by this repo’s GitHub deployment checks. Do not create a new project.
-3. Re-run this inventory. Use `vercel env ls` (names only). Do not `vercel env pull`, `env add`, or redeploy.
-4. Query `information_schema` / `pg_catalog` only. Do not `db push`, migrate, or read learner rows.
+1. Vercel link is done. Do not `vercel env pull`, `env add`, or redeploy.
+2. Install Supabase CLI and link the existing WordRanger project. Do not paste keys into chat.
+3. Query `information_schema` / `pg_catalog` only. Do not `db push`, migrate, or read learner rows.
 
 ## 3. Migration comparison
 
@@ -116,22 +125,31 @@ No remote function catalog was read. Search path and SECURITY DEFINER/INVOKER on
 
 ## 8. Vercel environment matrix
 
-`vercel env ls` was not available (project not linked). Values were not printed. `vercel env pull` was not run.
+Source: `vercel env ls`, `vercel env ls development|preview|production`.
+Values were not printed (`Encrypted` only). `vercel env pull` / add / rm
+and redeploy were not run.
 
 | Variable | development | preview | production |
 | --- | --- | --- | --- |
-| `FREE_PRACTICE_ENABLED` | **NOT VERIFIED** | **NOT VERIFIED** | **NOT VERIFIED** |
-| `FREE_PRACTICE_RUNTIME` | **NOT VERIFIED** | **NOT VERIFIED** | **NOT VERIFIED** |
-| `WORD_RANGER_FREE_PRACTICE_TEST_IDENTITY` | **NOT VERIFIED** | **NOT VERIFIED** | **NOT VERIFIED** |
-| `WORD_RANGER_FREE_PRACTICE_E2E` | **NOT VERIFIED** | **NOT VERIFIED** | **NOT VERIFIED** |
-| `WORD_RANGER_FREE_PRACTICE_E2E_PROBE` | **NOT VERIFIED** | **NOT VERIFIED** | **NOT VERIFIED** |
-| `NEXT_PUBLIC_SUPABASE_URL` | **NOT VERIFIED** | **NOT VERIFIED** | **NOT VERIFIED** |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **NOT VERIFIED** | **NOT VERIFIED** | **NOT VERIFIED** |
-| `SUPABASE_SERVICE_ROLE_KEY` | **NOT VERIFIED** | **NOT VERIFIED** | **NOT VERIFIED** |
+| `FREE_PRACTICE_ENABLED` | **absent** | **absent** | **absent** |
+| `FREE_PRACTICE_RUNTIME` | **absent** | **absent** | **absent** |
+| `WORD_RANGER_FREE_PRACTICE_TEST_IDENTITY` | **absent** | **absent** | **absent** |
+| `WORD_RANGER_FREE_PRACTICE_E2E` | **absent** | **absent** | **absent** |
+| `WORD_RANGER_FREE_PRACTICE_E2E_PROBE` | **absent** | **absent** | **absent** |
+| `NEXT_PUBLIC_SUPABASE_URL` | **absent** | **absent** | **present** |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **absent** | **absent** | **present** |
+| `SUPABASE_SERVICE_ROLE_KEY` | **absent** | **absent** | **present** |
 
-Cannot confirm from Vercel metadata whether production/preview accidentally enable Free Practice, memory, test identity, or the E2E probe.
+Confirmed from names only:
 
-Process env in this audit shell: all of the above names **absent**.
+1. Production does **not** list `FREE_PRACTICE_ENABLED`.
+2. Preview lists **no** env names, so Free Practice is not accidentally on.
+3. `FREE_PRACTICE_RUNTIME=memory` is not configured on preview/production.
+4. Test identity and E2E probe names are absent on preview/production.
+5. Supabase URL / anon / service-role names exist on **production only**.
+
+This matches `www.engsme.cn/practice` **404**. It does not prove remote
+schema or RLS.
 
 ## 9. HTTP route findings
 
@@ -158,14 +176,17 @@ Preview HTTP: **NOT VERIFIED**.
 
 No remote schema drift can be confirmed, because remote schema was not read.
 
-Confirmed **authorization blockers** for this inventory:
+Confirmed **authorization blockers** remaining:
 
-1. Supabase CLI missing and project not linked.
-2. Vercel project not linked; env metadata unread.
-3. Direct GET without proxy often times out from this workspace.
-4. The Vercel git-main alias is behind Deployment Protection.
-5. Public `www.engsme.cn/practice` is **404**. That is consistent with
-   flags remaining off, but Vercel env names are still unread.
+1. Supabase CLI missing and project not linked (schema / RLS / grants).
+2. Direct GET without proxy often times out from this workspace.
+3. The Vercel git-main alias is behind Deployment Protection.
+
+Confirmed **Vercel / HTTP facts**:
+
+- Free Practice flag names absent in development, preview, production.
+- Production has Supabase key **names** only.
+- `www.engsme.cn/practice` is **404**.
 
 Prior production-readiness audit blockers (identity mint, repo RLS absence, service-role data client, unscoped task get) remain **design findings**, not newly verified remote facts.
 
@@ -176,10 +197,7 @@ Prior production-readiness audit blockers (identity mint, repo RLS absence, serv
 - Remote RLS, force RLS, policies
 - Remote grants for `public` / `anon` / `authenticated` / `service_role`
 - Remote RPC security attributes
-- All Vercel env names in development / preview / production
-- Whether preview accidentally enables Free Practice
-- Whether Vercel production/preview env names are unset (HTTP 404 ≠ env ls)
-- Preview `/practice` HTTP
+- Preview `/practice` HTTP (no preview hostname probed; preview env has no FP flags)
 - Live A/B isolation
 - Any finding previously taken from `wordranger.vercel.app`
 
@@ -187,9 +205,9 @@ Prior production-readiness audit blockers (identity mint, repo RLS absence, serv
 
 Not implemented:
 
-1. Link this repo to the existing Supabase and Vercel projects on an authorized machine.
-2. Repeat this inventory with catalog queries and `vercel env ls`.
-3. Only after that, decide whether a persistence / identity slice is next. Do not enable `/practice` from this document.
+1. Install Supabase CLI and link the existing WordRanger project.
+2. Repeat catalog / migration-history / RLS / grant queries only.
+3. Do not enable `/practice` or start a fix slice from this document.
 
 ## 13. Explicit confirmation
 
