@@ -33,15 +33,21 @@ class UniqueRaceLearningTaskRepository implements LearningTaskRepository {
 
   async saveGeneratedTask(input: SaveGeneratedTaskInput): Promise<void> {
     this.saveAttempts += 1;
-    const existing = await this.inner.getTaskForEvaluation(
-      input.task.publicTask.id,
-    );
+    const existing = await this.inner.getTaskForEvaluation({
+      taskId: input.task.publicTask.id,
+      userId: input.assignment.userId,
+      sessionId: input.assignment.sessionId,
+    });
     if (existing) {
       this.uniqueViolations += 1;
       throw Object.assign(new Error("duplicate key"), { code: "23505" });
     }
     await Promise.resolve();
-    const raced = await this.inner.getTaskForEvaluation(input.task.publicTask.id);
+    const raced = await this.inner.getTaskForEvaluation({
+      taskId: input.task.publicTask.id,
+      userId: input.assignment.userId,
+      sessionId: input.assignment.sessionId,
+    });
     if (raced) {
       this.uniqueViolations += 1;
       throw Object.assign(new Error("duplicate key"), { code: "23505" });
@@ -49,8 +55,10 @@ class UniqueRaceLearningTaskRepository implements LearningTaskRepository {
     await this.inner.saveGeneratedTask(input);
   }
 
-  getTaskForEvaluation(taskId: string): Promise<AssignedLearningTask | null> {
-    return this.inner.getTaskForEvaluation(taskId);
+  getTaskForEvaluation(
+    lookup: Parameters<LearningTaskRepository["getTaskForEvaluation"]>[0],
+  ): Promise<AssignedLearningTask | null> {
+    return this.inner.getTaskForEvaluation(lookup);
   }
 
   listTaskIds(): string[] {

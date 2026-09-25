@@ -40,6 +40,12 @@ const taskRepository = new InMemoryLearningTaskRepository();
 const learningRepository = new InMemoryLearningRepository();
 const queryRepository = new InMemoryLearningStateQueryRepository(learningRepository);
 let userMarked: UserMarkedLexeme[] = [];
+let nextSchedulerDebugTaskCreateIdSerial = 0;
+
+function nextSchedulerDebugTaskCreateId(): string {
+  nextSchedulerDebugTaskCreateIdSerial += 1;
+  return `sched-task-${nextSchedulerDebugTaskCreateIdSerial}`;
+}
 
 export interface SchedulerOverview {
   totalLexemes: number;
@@ -157,13 +163,12 @@ export async function generateTaskFromScheduledNeed(input: {
 }> {
   const vocabulary = new InMemoryVocabularyRepository(getVocabularyDataset());
   const generator = new DefaultTaskGenerator(vocabulary);
-  let count = 0;
   const generation = await generator.generate({
     need: input.need,
     desiredDifficulty: 0.45,
     recentTasks: [],
     now: DEBUG_NOW,
-    createId: () => `sched-task-${++count}`,
+    createId: nextSchedulerDebugTaskCreateId,
     random: new SeededRandomSource(input.seed || "scheduler-debug"),
   });
   if (generation.status !== "GENERATED") {
@@ -194,6 +199,14 @@ export async function submitScheduledDebugTask(input: {
     learningTaskRepository: taskRepository,
     learningRepository,
     now: input.action.occurredAt,
+  });
+}
+
+export async function getAssignedSchedulerDebugTask(taskId: string) {
+  return taskRepository.getTaskForEvaluation({
+    taskId,
+    userId: DEBUG_USER_ID,
+    sessionId: DEBUG_SESSION_ID,
   });
 }
 

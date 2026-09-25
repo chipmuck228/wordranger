@@ -104,8 +104,13 @@ async function continueFrom(
 async function choiceIds(
   learningTasks: InMemoryLearningTaskRepository,
   taskId: string,
+  sessionId: string,
 ) {
-  const assigned = await learningTasks.getTaskForEvaluation(taskId);
+  const assigned = await learningTasks.getTaskForEvaluation({
+    taskId,
+    userId: V1_PLACEHOLDER_USER_ID,
+    sessionId,
+  });
   if (!assigned || assigned.task.publicTask.responseContract.kind !== "CHOICE") {
     throw new Error("choice task");
   }
@@ -125,7 +130,7 @@ async function submitChoice(
   correct: boolean,
 ) {
   assertKind(screen, "FROZEN_TASK_PREVIEW");
-  const ids = await choiceIds(learningTasks, screen.task.id);
+  const ids = await choiceIds(learningTasks, screen.task.id, screen.handle.runId);
   return controller.submitFrozenTask({
     runId: screen.handle.runId,
     revision: screen.handle.revision,
@@ -222,7 +227,11 @@ describe("Meal cold Probe orchestration", () => {
     expect(recognition.context.entities.some((entity) => entity.label === "汤")).toBe(
       false,
     );
-    const assigned = await learningTasks.getTaskForEvaluation(recognition.task.id);
+    const assigned = await learningTasks.getTaskForEvaluation({
+      taskId: recognition.task.id,
+      userId: V1_PLACEHOLDER_USER_ID,
+      sessionId: recognition.handle.runId,
+    });
     expect(assigned?.task.publicTask.lexemeId).toBe(
       assigned?.task.answerKey.targetLexemeId,
     );

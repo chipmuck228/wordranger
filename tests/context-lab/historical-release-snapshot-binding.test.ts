@@ -165,7 +165,11 @@ describe("Context Lab historical release snapshot binding", () => {
     screen = await submitTyping(controller, screen, "nope");
     screen = await continueFrom(controller, screen);
     assertKind(screen, "FROZEN_TASK_PREVIEW");
-    const recognition = await learningTasks.getTaskForEvaluation(screen.task.id);
+    const recognition = await learningTasks.getTaskForEvaluation({
+      taskId: screen.task.id,
+      userId: V1_PLACEHOLDER_USER_ID,
+      sessionId: screen.handle.runId,
+    });
     const recognitionTexts =
       recognition?.task.publicTask.responseContract.kind === "CHOICE"
         ? recognition.task.publicTask.responseContract.options.map((item) => item.content.text)

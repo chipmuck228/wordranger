@@ -18,16 +18,13 @@ const LEARNER_TABLES = [
 ] as const;
 
 describe("Free Practice production-readiness audit contracts", () => {
-  it("keeps learner tables without RLS in committed migrations", () => {
+  it("does not add anon or authenticated learner-table policies", () => {
     const dir = join(ROOT, "supabase/migrations");
     const sql = readdirSync(dir)
       .filter((name) => name.endsWith(".sql"))
       .map((name) => readFileSync(join(dir, name), "utf8"))
       .join("\n");
     for (const table of LEARNER_TABLES) {
-      expect(sql, table).not.toMatch(
-        new RegExp(`alter table ${table} enable row level security`, "i"),
-      );
       expect(sql, table).not.toMatch(
         new RegExp(`create policy .* on ${table}`, "i"),
       );
@@ -81,13 +78,14 @@ describe("Free Practice production-readiness audit contracts", () => {
     expect(home).not.toContain("/practice");
   });
 
-  it("loads evaluation tasks by id only and prefers the service-role data client", () => {
+  it("binds evaluation task reads to server user and session before answer_key", () => {
     const tasks = read("src/server/tasks/supabase-learning-task-repository.ts");
     const server = read("src/lib/supabase/server.ts");
     const getBody = tasks.slice(tasks.indexOf("getTaskForEvaluation"));
-    expect(getBody).toContain(".eq(\"id\", taskId)");
+    expect(getBody).toContain('.eq("id", lookup.taskId)');
+    expect(getBody).toContain('.eq("user_id", lookup.userId)');
+    expect(getBody).toContain('.eq("session_id", lookup.sessionId)');
     expect(getBody).toContain("answer_key");
-    expect(getBody).not.toContain(".eq(\"user_id\"");
     expect(server).toContain("const key = serviceRoleKey ?? anonKey");
   });
 });

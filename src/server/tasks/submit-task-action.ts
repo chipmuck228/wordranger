@@ -40,25 +40,15 @@ export interface SubmitTaskActionResult {
 export async function submitTaskAction(
   input: SubmitTaskActionInput,
 ): Promise<SubmitTaskActionResult> {
-  const assigned = await input.learningTaskRepository.getTaskForEvaluation(
-    input.taskId,
-  );
+  const assigned = await input.learningTaskRepository.getTaskForEvaluation({
+    taskId: input.taskId,
+    userId: input.userId,
+    sessionId: input.sessionId,
+  });
   if (!assigned) {
     throw new TaskProtocolError(
       "TASK_NOT_FOUND",
       `Task ${input.taskId} was not found`,
-    );
-  }
-  if (assigned.assignment.userId !== input.userId) {
-    throw new TaskProtocolError(
-      "TASK_USER_MISMATCH",
-      `Task ${input.taskId} is assigned to a different user`,
-    );
-  }
-  if (assigned.assignment.sessionId !== input.sessionId) {
-    throw new TaskProtocolError(
-      "TASK_SESSION_MISMATCH",
-      `Task ${input.taskId} is assigned to a different session`,
     );
   }
   if (input.action.taskId !== input.taskId) {

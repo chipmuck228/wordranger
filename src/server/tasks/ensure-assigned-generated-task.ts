@@ -22,7 +22,11 @@ export async function ensureAssignedGeneratedTask(input: {
   task: GeneratedLearningTask;
   assignment: TaskAssignment;
 }): Promise<EnsureAssignedGeneratedTaskResult> {
-  const existing = await input.tasks.getTaskForEvaluation(input.task.publicTask.id);
+  const existing = await input.tasks.getTaskForEvaluation({
+    taskId: input.task.publicTask.id,
+    userId: input.assignment.userId,
+    sessionId: input.assignment.sessionId,
+  });
   if (existing) {
     return compatibleAssignment(existing.task, existing.assignment, input)
       ? { ok: true, reused: true }
@@ -40,7 +44,11 @@ export async function ensureAssignedGeneratedTask(input: {
     if (!isUniqueViolation(error)) {
       throw error;
     }
-    const raced = await input.tasks.getTaskForEvaluation(input.task.publicTask.id);
+    const raced = await input.tasks.getTaskForEvaluation({
+      taskId: input.task.publicTask.id,
+      userId: input.assignment.userId,
+      sessionId: input.assignment.sessionId,
+    });
     if (raced && compatibleAssignment(raced.task, raced.assignment, input)) {
       return { ok: true, reused: true };
     }

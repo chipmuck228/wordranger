@@ -5,13 +5,19 @@ import type {
   SaveGeneratedTaskInput,
 } from "@/domain/tasks/task-assignment";
 import { assertTaskAssignment } from "@/domain/tasks/task-assignment";
-import type { LearningTaskRepository } from "@/domain/tasks/learning-task-repository";
+import type {
+  LearningTaskRepository,
+  TaskEvaluationLookup,
+} from "@/domain/tasks/learning-task-repository";
+import { isCompleteTaskEvaluationLookup } from "@/domain/tasks/learning-task-repository";
 import type { PublicLearningTask } from "@/domain/tasks/public-learning-task";
 import type { TaskAnswerKey } from "@/domain/tasks/task-answer-key";
 import type { TaskGenerationTrace } from "@/domain/tasks/task-generation-result";
 
 /**
  * Server-only adapter. Never select answer_key into a browser client.
+ * Evaluation reads must bind taskId + server userId + sessionId in one query
+ * so answer_key is not loaded for a foreign or missing row.
  */
 export class SupabaseLearningTaskRepository implements LearningTaskRepository {
   constructor(private readonly client: SupabaseClient) {}
@@ -43,14 +49,19 @@ export class SupabaseLearningTaskRepository implements LearningTaskRepository {
   }
 
   async getTaskForEvaluation(
-    taskId: string,
+    lookup: TaskEvaluationLookup,
   ): Promise<AssignedLearningTask | null> {
+    if (!isCompleteTaskEvaluationLookup(lookup)) {
+      return null;
+    }
     const { data, error } = await this.client
       .from("learning_tasks")
       .select(
         "user_id, session_id, public_payload, answer_key, generation_trace",
       )
-      .eq("id", taskId)
+      .eq("id", lookup.taskId)
+      .eq("user_id", lookup.userId)
+      .eq("session_id", lookup.sessionId)
       .maybeSingle();
     if (error) {
       throw error;

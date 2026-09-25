@@ -770,7 +770,11 @@ export class FreePracticeSessionController {
     taskId: string,
     record: FreePracticeSessionRecord,
   ) {
-    const assigned = await this.deps.tasks.getTaskForEvaluation(taskId);
+    const assigned = await this.deps.tasks.getTaskForEvaluation({
+      taskId,
+      userId: record.userId,
+      sessionId: record.sessionId,
+    });
     const current = record.state.items[record.state.currentIndex];
     if (
       !assigned ||

@@ -120,10 +120,11 @@ export function sampleAwaitingActionState(
 
 export async function choiceIntentForTask(
   tasks: LearningTaskRepository,
-  taskId: string,
+  lookup: { taskId: string; userId: string; sessionId: string },
   correct: boolean,
 ): Promise<StudentActionIntent> {
-  const assigned = await tasks.getTaskForEvaluation(taskId);
+  const assigned = await tasks.getTaskForEvaluation(lookup);
+  const taskId = lookup.taskId;
   if (!assigned || assigned.task.publicTask.responseContract.kind !== "CHOICE") {
     throw new Error(`No CHOICE task ${taskId}`);
   }

@@ -102,7 +102,7 @@ describe("R3 hanging task persistence", () => {
     const world = createMatchingWorld();
     const tasks: LearningTaskRepository = {
       saveGeneratedTask: () => hang(),
-      getTaskForEvaluation: (taskId) => world.tasks.getTaskForEvaluation(taskId),
+      getTaskForEvaluation: (lookup) => world.tasks.getTaskForEvaluation(lookup),
     };
     const controller = new MatchingSessionController({
       userId: world.userId,

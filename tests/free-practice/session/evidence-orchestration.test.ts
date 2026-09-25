@@ -19,6 +19,16 @@ import {
   USER_B,
 } from "./helpers";
 
+function ownedChoice(
+  tasks: Parameters<typeof choiceIntentForTask>[0],
+  taskId: string,
+  sessionId: string,
+  correct: boolean,
+  userId = USER_A,
+) {
+  return choiceIntentForTask(tasks, { taskId, userId, sessionId }, correct);
+}
+
 class ConflictOnceSessionStore extends InMemoryFreePracticeSessionStore {
   failNextSave = false;
 
@@ -74,6 +84,7 @@ async function submitCurrent(
   session: { sessionId: string; revision: number; currentTaskId: string | null },
   tasks: ReturnType<typeof createSessionHarness>["tasks"],
   correct: boolean,
+  userId = USER_A,
 ) {
   if (!session.currentTaskId) {
     throw new Error("missing currentTaskId");
@@ -82,7 +93,15 @@ async function submitCurrent(
     sessionId: session.sessionId,
     revision: session.revision,
     taskId: session.currentTaskId,
-    intent: await choiceIntentForTask(tasks, session.currentTaskId, correct),
+    intent: await choiceIntentForTask(
+      tasks,
+      {
+        taskId: session.currentTaskId,
+        userId,
+        sessionId: session.sessionId,
+      },
+      correct,
+    ),
   });
 }
 
@@ -277,7 +296,12 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
       sessionId: started.session.sessionId,
       revision: started.session.revision,
       taskId: started.task.id,
-      intent: await choiceIntentForTask(harness.tasks, started.task.id, true),
+      intent: await ownedChoice(
+          harness.tasks,
+          started.task.id,
+          started.session.sessionId,
+          true,
+        ),
     };
     const [first, second] = await Promise.all([
       harness.controller.submit(payload),
@@ -302,7 +326,12 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
       sessionId: started.session.sessionId,
       revision: started.session.revision,
       taskId: started.task.id,
-      intent: await choiceIntentForTask(harness.tasks, started.task.id, true),
+      intent: await ownedChoice(
+          harness.tasks,
+          started.task.id,
+          started.session.sessionId,
+          true,
+        ),
     };
     const [first, second] = await Promise.all([
       harness.controller.submit(payload),
@@ -453,7 +482,12 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
         sessionId: started.session.sessionId,
         revision: started.session.revision,
         taskId: started.task.id,
-        intent: await choiceIntentForTask(harness.tasks, started.task.id, true),
+        intent: await ownedChoice(
+          harness.tasks,
+          started.task.id,
+          started.session.sessionId,
+          true,
+        ),
         userId: USER_A,
       }),
     ).toEqual({ status: "INVALID", reason: "INVALID_REQUEST" });
@@ -461,7 +495,12 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
       sessionId: started.session.sessionId,
       revision: started.session.revision,
       taskId: started.task.id,
-      intent: await choiceIntentForTask(harness.tasks, started.task.id, true),
+      intent: await ownedChoice(
+          harness.tasks,
+          started.task.id,
+          started.session.sessionId,
+          true,
+        ),
     });
     expect(owned.status).toBe("NOT_FOUND");
     expect(
@@ -490,7 +529,12 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
         sessionId: started.session.sessionId,
         revision: 0,
         taskId: started.task.id,
-        intent: await choiceIntentForTask(harness.tasks, started.task.id, true),
+        intent: await ownedChoice(
+          harness.tasks,
+          started.task.id,
+          started.session.sessionId,
+          true,
+        ),
       }),
     ).toEqual({ status: "CONFLICT" });
     expect(
@@ -579,7 +623,12 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
         sessionId: started.session.sessionId,
         revision: started.session.revision,
         taskId: started.task.id,
-        intent: await choiceIntentForTask(harness.tasks, started.task.id, true),
+        intent: await ownedChoice(
+          harness.tasks,
+          started.task.id,
+          started.session.sessionId,
+          true,
+        ),
         gameId: "FREE_PRACTICE",
         hintCount: 9,
         outcome: "INDEPENDENT_CORRECT",
@@ -608,7 +657,12 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
         sessionId: submitted.session.sessionId,
         revision: submitted.session.revision,
         taskId: submitted.task.id,
-        intent: await choiceIntentForTask(harness.tasks, submitted.task.id, true),
+        intent: await ownedChoice(
+          harness.tasks,
+          submitted.task.id,
+          submitted.session.sessionId,
+          true,
+        ),
       }),
     ).toMatchObject({ status: "AWAITING_CONTINUE" });
     expect(
@@ -691,7 +745,12 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
       sessionId: started.session.sessionId,
       revision: submitted.session.revision,
       taskId: started.task.id,
-      intent: await choiceIntentForTask(harness.tasks, started.task.id, true),
+      intent: await ownedChoice(
+          harness.tasks,
+          started.task.id,
+          started.session.sessionId,
+          true,
+        ),
     });
     expectFeedback(retry, true);
     expect(harness.learning.listEvidenceForUser(USER_A)).toHaveLength(1);
@@ -821,7 +880,12 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
       sessionId: submittedA.session.sessionId,
       revision: submittedA.session.revision,
       taskId: startedA.task.id,
-      intent: await choiceIntentForTask(first.tasks, startedA.task.id, true),
+      intent: await ownedChoice(
+        first.tasks,
+        startedA.task.id,
+        startedA.session.sessionId,
+        true,
+      ),
     });
     expectFeedback(duplicate, true);
     expect(learning.listEvidenceForUser(USER_A)).toHaveLength(2);
@@ -854,7 +918,12 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
       sessionId: started.session.sessionId,
       revision: submittedA.session.revision,
       taskId: started.task.id,
-      intent: await choiceIntentForTask(harness.tasks, started.task.id, true),
+      intent: await ownedChoice(
+          harness.tasks,
+          started.task.id,
+          started.session.sessionId,
+          true,
+        ),
     });
     expect(["RESUMED", "CONFLICT"]).toContain(delayed.status);
     if (delayed.status === "RESUMED") {
@@ -916,7 +985,12 @@ describe("Free Practice Slice 3B/5A evidence orchestration", () => {
           sessionId: started.session.sessionId,
           revision: submitted.session.revision,
           taskId: lastTaskId,
-          intent: await choiceIntentForTask(harness.tasks, lastTaskId, true),
+          intent: await ownedChoice(
+            harness.tasks,
+            lastTaskId,
+            started.session.sessionId,
+            true,
+          ),
         });
         expect(delayed.status).toBe("COMPLETED");
         if (delayed.status === "COMPLETED" && next.status === "COMPLETED") {

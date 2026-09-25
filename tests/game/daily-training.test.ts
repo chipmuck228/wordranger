@@ -352,7 +352,11 @@ describe("Daily Training controller", () => {
     let current = started;
     const missLexemeId = firstLexemes[firstLexemes.length - 1];
     for (let index = 0; index < 4; index += 1) {
-      const assigned = await world.tasks.getTaskForEvaluation(current.task.id);
+      const assigned = await world.tasks.getTaskForEvaluation({
+        taskId: current.task.id,
+        userId: world.userId,
+        sessionId: current.session.sessionId,
+      });
       expect(assigned).toBeTruthy();
       const key = assigned!.task.answerKey;
       const correct = current.task.lexemeId !== missLexemeId;

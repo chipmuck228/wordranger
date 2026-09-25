@@ -426,7 +426,11 @@ export class MealContextLabController {
     }
 
     const assigned = await withPersistenceTimeout(
-      this.learningTasks.getTaskForEvaluation(input.taskId),
+      this.learningTasks.getTaskForEvaluation({
+        taskId: input.taskId,
+        userId: this.userId,
+        sessionId: record.id,
+      }),
     );
     if (!assigned) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
@@ -794,7 +798,11 @@ export class MealContextLabController {
     record: ContextLabRunRecord,
     taskId: string,
   ): Promise<LearningEvidence | null> {
-    const assigned = await this.learningTasks.getTaskForEvaluation(taskId);
+    const assigned = await this.learningTasks.getTaskForEvaluation({
+      taskId,
+      userId: this.userId,
+      sessionId: record.id,
+    });
     if (!assigned) {
       return null;
     }
@@ -985,7 +993,11 @@ export class MealContextLabController {
       });
     }
     if (run.status === "FROZEN_TASK_ISSUED" && current?.taskId) {
-      const assigned = await this.learningTasks.getTaskForEvaluation(current.taskId);
+      const assigned = await this.learningTasks.getTaskForEvaluation({
+        taskId: current.taskId,
+        userId: this.userId,
+        sessionId: run.id,
+      });
       if (!assigned) {
         return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
           message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
@@ -1140,7 +1152,11 @@ export class MealContextLabController {
     if (!probe?.issued) {
       return notFoundRunScreen();
     }
-    const assigned = await this.learningTasks.getTaskForEvaluation(probe.issued.taskId);
+    const assigned = await this.learningTasks.getTaskForEvaluation({
+      taskId: probe.issued.taskId,
+      userId: this.userId,
+      sessionId: record.id,
+    });
     if (!assigned) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
         message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
@@ -1321,7 +1337,11 @@ export class MealContextLabController {
         recoverable: true,
       });
     }
-    const assigned = await this.learningTasks.getTaskForEvaluation(input.taskId);
+    const assigned = await this.learningTasks.getTaskForEvaluation({
+      taskId: input.taskId,
+      userId: this.userId,
+      sessionId: record.id,
+    });
     if (!assigned) {
       return errorScreen(CONTEXT_LAB_ERROR_CODES.CONTEXT_LAB_TASK_CONFLICT, {
         message: CONTEXT_LAB_SUBMIT_REJECTED_MESSAGE,
