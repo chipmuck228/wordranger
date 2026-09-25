@@ -14,10 +14,17 @@ the migration, change Vercel env, or enable `/practice`.
   `supabase/migrations/202609250001_learner_table_server_only_access.sql`
 - Migration SHA-256:
   `b6c348f538da8185aac45d06dbf03f1cdbd2e567844bc64e2db2ec5e8c0e7210`
-- Remote apply status: **NOT APPLIED**
+- Pre-apply snapshot (this document's original 2026-09-25 pass):
+  **NOT APPLIED**
+- Current remote apply status: **APPLIED** through the authorized
+  Dashboard SQL Editor. Catalog and runtime verification:
+  `docs/FREE_PRACTICE_SECURITY_MIGRATION_APPLY_EVIDENCE.md`.
+  Migration history remains absent. `db push` remains forbidden.
+  `/practice` remains disabled. Homepage still links to `/train`.
+  Candidate / not a Standard.
 
-Do not copy the migration SQL into this file. Apply, if later
-authorized, uses that committed file only.
+Do not copy the migration SQL into this file. The authorized apply used
+that committed file only.
 
 ## 1. Exact six-table scope
 
@@ -35,6 +42,9 @@ other WordRanger tables (`lexemes`, `context_lab_runs`, content-release
 tables) are out of scope.
 
 ## 2. Remote drift vs last inventory
+
+This section is the **pre-apply snapshot**. It is not the current
+post-apply catalog.
 
 Read-only Management API catalog (`information_schema` / `pg_catalog` /
 `pg_policies`). No learner rows. No `answer_key` data.
@@ -224,7 +234,7 @@ change. `/practice` stays closed.
 | Decision | This document |
 | --- | --- |
 | Write this preflight | done |
-| Apply the migration | **not authorized** |
+| Apply the migration | later authorized; Dashboard apply recorded |
 | Enable `/practice` | **not authorized**; separate later decision |
 | Change Vercel env | **not authorized** |
 | Homepage integration | **not authorized** |
