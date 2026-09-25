@@ -5,7 +5,10 @@ Candidate / not a Standard. This slice is **validated in repo, not deployed**.
 - Branch: `security/free-practice-production-hardening-1`
 - Base: `origin/main` @ `36d1fa97cfc7ccd0a797bdf46c411d93b59ed121`
 - Remote identity: Vercel production Supabase hostname **MATCH** to linked `blaze` (inventory §14)
-- Migration file is committed only. Not `db push`, not applied on `blaze`.
+- Migration file is **committed, not remotely applied**. Not `db push`.
+- SQL targets `public.<table>` so a shared `blaze` `search_path` cannot
+  resolve a different schema. Deployment status is Markdown-only; it is
+  not written into database object comments.
 
 ## Why server-only + revoke
 
@@ -56,12 +59,12 @@ From repo migrations + remote inventory. No name patterns.
 
 | Table | Repo RLS before | Remote (`blaze`) | This migration |
 | --- | --- | --- | --- |
-| `learning_tasks` | off | off, client ALL | ENABLE RLS; revoke client; grant service_role |
-| `game_sessions` | off | on, 0 policies, client ALL | same revoke/grant |
-| `learning_evidence` | off | on, 0 policies, client ALL | same |
-| `student_lexeme_models` | off | on, 0 policies, client ALL | same |
-| `student_lexeme_skill_states` | off | on, 0 policies, client ALL | same |
-| `student_lexeme_weaknesses` | off | on, 0 policies, client ALL | same |
+| `public.learning_tasks` | off | off, client ALL | ENABLE RLS; revoke client; grant service_role |
+| `public.game_sessions` | off | on, 0 policies, client ALL | same revoke/grant |
+| `public.learning_evidence` | off | on, 0 policies, client ALL | same |
+| `public.student_lexeme_models` | off | on, 0 policies, client ALL | same |
+| `public.student_lexeme_skill_states` | off | on, 0 policies, client ALL | same |
+| `public.student_lexeme_weaknesses` | off | on, 0 policies, client ALL | same |
 
 No sequences exist for these uuid PK tables.
 

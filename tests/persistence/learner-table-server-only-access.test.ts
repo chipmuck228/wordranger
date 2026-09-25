@@ -11,6 +11,7 @@ const LEARNER_TABLES = [
   "student_lexeme_skill_states",
   "student_lexeme_weaknesses",
 ] as const;
+const QUALIFIED = LEARNER_TABLES.map((table) => `public.${table}`);
 const FORBIDDEN = [
   "campus",
   "enrollment",
@@ -22,43 +23,94 @@ const FORBIDDEN = [
   "pg_catalog",
   "create policy",
   "force row level security",
+  "execute format",
+  "execute immediate",
 ];
+
+function executableLines(source: string): string[] {
+  return source
+    .split("\n")
+    .map((line) => line.replace(/--.*$/, "").trim())
+    .filter((line) => line.length > 0)
+    .map((line) => line.toLowerCase());
+}
+
+function tableRefs(line: string): string[] {
+  return [
+    ...line.matchAll(
+      /\b(?:alter table|on table|comment on table)\s+((?:public\.)?[a-z_][a-z0-9_]*)/g,
+    ),
+  ].map((match) => match[1]);
+}
 
 describe("learner table server-only access migration", () => {
   const sql = readFileSync(path.join(process.cwd(), FILE), "utf8");
+  const lines = executableLines(sql);
 
-  it("enables RLS and revokes client CRUD on the six learner tables only", () => {
+  it("schema-qualifies every ALTER/REVOKE/GRANT on the six learner tables", () => {
+    const privilege = lines.filter((line) =>
+      /^(alter table|revoke all on table|grant )\b/.test(line),
+    );
+    expect(privilege.length).toBe(30);
     for (const table of LEARNER_TABLES) {
-      expect(sql).toContain(`alter table ${table} enable row level security`);
-      expect(sql).toContain(`revoke all on table ${table} from anon`);
-      expect(sql).toContain(`revoke all on table ${table} from authenticated`);
-      expect(sql).toContain(
-        `grant select, insert, update, delete on table ${table} to service_role`,
+      const qualified = `public.${table}`;
+      expect(privilege).toContain(
+        `alter table ${qualified} enable row level security;`,
+      );
+      expect(privilege).toContain(`revoke all on table ${qualified} from public;`);
+      expect(privilege).toContain(`revoke all on table ${qualified} from anon;`);
+      expect(privilege).toContain(
+        `revoke all on table ${qualified} from authenticated;`,
+      );
+      expect(privilege).toContain(
+        `grant select, insert, update, delete on table ${qualified} to service_role;`,
+      );
+      expect(privilege.some((line) => line.includes(`table ${table} `))).toBe(
+        false,
       );
     }
-    expect(sql).not.toMatch(/create policy/i);
-    expect(sql).not.toMatch(/force row level security/i);
+    for (const line of privilege) {
+      const refs = tableRefs(line);
+      expect(refs.length).toBeGreaterThan(0);
+      for (const ref of refs) {
+        expect(QUALIFIED, ref).toContain(ref);
+      }
+    }
+  });
+
+  it("wraps privilege changes in an explicit transaction", () => {
+    const begin = lines.indexOf("begin;");
+    const commit = lines.indexOf("commit;");
+    expect(begin).toBe(0);
+    expect(commit).toBe(lines.length - 1);
+    expect(commit).toBeGreaterThan(begin);
+    const body = lines.slice(begin + 1, commit);
+    expect(body.every((line) => /^(alter table|revoke all on table|grant )\b/.test(line))).toBe(
+      true,
+    );
+    expect(body.some((line) => line.startsWith("alter table"))).toBe(true);
+    expect(body.some((line) => line.startsWith("revoke all on table"))).toBe(true);
+    expect(body.some((line) => line.startsWith("grant "))).toBe(true);
+  });
+
+  it("does not write deployment status or unqualified table comments", () => {
+    expect(lines.some((line) => line.startsWith("comment on"))).toBe(false);
+    expect(sql).not.toMatch(/not applied remotely until an authorized migrate/i);
   });
 
   it("does not reference shared blaze objects, secrets, or dynamic catalog scans", () => {
-    const statements = sql
-      .split("\n")
-      .filter((line) => !line.trim().startsWith("--"))
-      .join("\n")
-      .toLowerCase();
+    const statements = lines.join("\n");
     for (const token of FORBIDDEN) {
       expect(statements, token).not.toContain(token);
     }
-    expect(sql).not.toMatch(/supabase\.co|eyJ|postgres:\/\//i);
-    expect(sql).not.toMatch(/lcjysnyb|project.ref|service_role_key/i);
+    expect(statements).not.toMatch(/supabase\.co|eyj|postgres:\/\//i);
+    expect(statements).not.toMatch(/lcjysnyb|project.ref|service_role_key/i);
+    expect(statements).not.toMatch(/\bdo\s+\$\$|\bexecute\b|\bformat\s*\(/i);
   });
 
-  it("does not name any table outside the explicit learner list", () => {
-    const named = [...sql.matchAll(/on table ([a-z_]+)/g)].map((m) => m[1]);
-    const altered = [...sql.matchAll(/alter table ([a-z_]+)/g)].map((m) => m[1]);
-    for (const name of [...named, ...altered]) {
-      expect(LEARNER_TABLES, name).toContain(name);
-    }
+  it("names only the explicit public learner tables", () => {
+    const refs = lines.flatMap(tableRefs);
+    expect(new Set(refs)).toEqual(new Set(QUALIFIED));
   });
 
   it("is the only new learner-hardening file and is not applied by package scripts", () => {
