@@ -13,7 +13,14 @@ This inventory does not approve preview or production enablement. It records wha
 
 **Conclusion: `BLOCKED_NOT_VERIFIED`**
 
-The workspace does not have a linked Supabase project or a linked Vercel project. No remote catalog, migration history, RLS, grant, or Vercel env metadata was read. One official public hostname from GitHub repo `homepage` was probed without credentials; that is not a substitute for schema or env inventory.
+The workspace does not have a linked Supabase project or a linked Vercel project. No remote catalog, migration history, RLS, grant, or Vercel env metadata was read.
+
+The maintainer-identified main host is
+`https://wordranger-git-main-zhen-lius-projects.vercel.app`.
+GitHub repository `homepage` (`https://wordranger.vercel.app`) is **not**
+that host and must not be used as production evidence. Unauthenticated
+GETs to the identified host hit Vercel Deployment Protection (login /
+403), not the Next.js app. That is not a `/practice` 404.
 
 ## 2. Authorization availability
 
@@ -128,19 +135,25 @@ Process env in this audit shell: all of the above names **absent**.
 
 ## 9. HTTP route findings
 
-GitHub repository `homepage` is `https://wordranger.vercel.app`. That is the only official public origin used. Preview hostnames were **not guessed**.
+Identified main host (maintainer-provided, this pass):
+`https://wordranger-git-main-zhen-lius-projects.vercel.app`
 
-Local `curl` / `fetch` from this workspace **timed out**. A separate unauthenticated GET (WebFetch) reached that origin:
+GitHub `homepage` `https://wordranger.vercel.app` was used in the first
+pass and is **withdrawn** as production evidence.
+
+Local `curl` / `fetch` from this workspace **timed out** on both hosts.
+Unauthenticated WebFetch of the identified host:
 
 | Route | Result | Notes |
 | --- | --- | --- |
-| `GET /practice` | **404** | Matches a closed Candidate route. No POST. |
-| `GET /practice/e2e-probe` | **404** | Probe should be closed on deployed hosts. |
-| `GET /` | **200** | Homepage Daily Training copy. Converted page text has no `/practice` path. Raw `href` scan from this host **NOT VERIFIED**. |
-| `GET /train` | **200** | Existing Daily Training surface (product label still 自由练习). |
-| `GET /play/context-lab` | **404** | Observed closed/gated response. Not treated as a Free Practice change. |
+| `GET /practice` | **Vercel login page** | Not WordRanger `/practice`. Not a Next.js 404. App closed/open is **NOT VERIFIED**. |
+| `GET /practice/e2e-probe` | **403** | Deployment Protection. Probe closed/open is **NOT VERIFIED**. |
+| `GET /` | **403** | Same wall. Homepage `/practice` href is **NOT VERIFIED**. |
+| `GET /train` | **403** | Same wall. `/train` behavior is **NOT VERIFIED**. |
+| `GET /play/context-lab` | **403** | Same wall. Context Lab is **NOT VERIFIED**. |
 
-No login, no server action, no session/task/Evidence create. Preview HTTP: **NOT VERIFIED**.
+No Vercel login, no POST, no server action, no session/task/Evidence
+create. Preview hostnames were not guessed. Preview HTTP: **NOT VERIFIED**.
 
 ## 10. Confirmed drift / blockers
 
@@ -150,7 +163,9 @@ Confirmed **authorization blockers** for this inventory:
 
 1. Supabase CLI missing and project not linked.
 2. Vercel project not linked; env metadata unread.
-3. This host cannot complete direct TCP GET to the official hostname (timeout). WebFetch 404s are the only live HTTP evidence.
+3. This host cannot complete direct TCP GET (timeout).
+4. The identified main alias is behind Vercel Deployment Protection.
+   Unauthenticated responses are login/403, not application status.
 
 Prior production-readiness audit blockers (identity mint, repo RLS absence, service-role data client, unscoped task get) remain **design findings**, not newly verified remote facts.
 
@@ -163,10 +178,11 @@ Prior production-readiness audit blockers (identity mint, repo RLS absence, serv
 - Remote RPC security attributes
 - All Vercel env names in development / preview / production
 - Whether preview accidentally enables Free Practice
-- Whether production env still has flags unset (HTTP 404 is consistent with unset **or** with other fail-closed paths)
+- Whether production/main flags keep `/practice` closed (Protection hides the app)
 - Preview `/practice` HTTP
-- Raw Homepage `href="/practice"` absence
+- Homepage `href="/practice"` absence on the real host
 - Live A/B isolation
+- Any finding previously taken from `wordranger.vercel.app`
 
 ## 12. Minimum corrective slices
 
