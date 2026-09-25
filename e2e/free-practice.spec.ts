@@ -51,13 +51,36 @@ async function seedSeen(page: Page, count: number): Promise<void> {
   expect(response.ok()).toBeTruthy();
 }
 
-async function evidenceSnapshot(page: Page): Promise<{
+async function practiceSnapshot(page: Page): Promise<{
   evidenceCount: number;
+  sessionCount: number;
+  taskCount: number;
+  sessionIds: string[];
+  taskIds: string[];
   items: Array<{ taskId: string; sessionId: string }>;
 }> {
   const response = await page.request.get(`${PRACTICE}/practice/e2e-probe`);
   expect(response.ok()).toBeTruthy();
-  return response.json();
+  const body = (await response.json()) as {
+    evidenceCount: number;
+    sessionCount: number;
+    taskCount: number;
+    sessionIds: string[];
+    taskIds: string[];
+    items: Array<{ taskId: string; sessionId: string }>;
+  };
+  const serialized = JSON.stringify(body);
+  expect(serialized).not.toMatch(
+    /userId|answerKey|correctOptionIds|FreePracticeSessionState|StudentLexemeModel/,
+  );
+  return body;
+}
+
+async function evidenceSnapshot(page: Page): Promise<{
+  evidenceCount: number;
+  items: Array<{ taskId: string; sessionId: string }>;
+}> {
+  return practiceSnapshot(page);
 }
 
 async function openSelector(page: Page): Promise<void> {
@@ -90,6 +113,12 @@ async function headline(page: Page): Promise<string> {
 
 async function answerCurrent(page: Page, correct: boolean): Promise<void> {
   const options = page.getByRole("group", { name: "选项" }).getByRole("button");
+  const input = page.getByLabel("英文答案");
+  if ((await options.count()) > 0) {
+    await expect(options.first()).toBeEnabled({ timeout: 30_000 });
+  } else {
+    await expect(input).toBeEnabled({ timeout: 30_000 });
+  }
   const prompt = await headline(page);
   const pair = PAIRS.find(([en, zh]) => prompt.includes(en) || prompt.includes(zh));
   if ((await options.count()) > 0) {
@@ -109,7 +138,6 @@ async function answerCurrent(page: Page, correct: boolean): Promise<void> {
     await options.last().click();
     return;
   }
-  const input = page.getByLabel("英文答案");
   if (await input.isVisible()) {
     await input.fill(correct && pair ? pair[0] : "zzzz");
     await page.getByRole("button", { name: "提交" }).click();
@@ -265,6 +293,52 @@ test.describe("Free Practice /practice Candidate UI", () => {
     await page.reload();
     await expect(page.getByRole("heading", { name: "本组练习完成" })).toBeVisible();
     await expect(page.getByText("完成 5 个")).toBeVisible();
+  });
+
+  test("double click start creates one session and one task", async ({
+    page,
+  }) => {
+    await resetPractice(page);
+    await openSelector(page);
+    await page.getByRole("radio", { name: "练习新单词" }).check();
+    await page.getByRole("radio", { name: "5 个" }).check();
+    const start = page.getByRole("button", { name: "开始练习" });
+    await start.dblclick();
+    await waitForTask(page);
+    await expect(page.locator('[data-progress="1/5"]')).toBeVisible();
+    await expect(page.getByRole("button", { name: "开始练习" })).toHaveCount(0);
+    const snapshot = await practiceSnapshot(page);
+    expect(snapshot.sessionCount).toBe(1);
+    expect(snapshot.taskCount).toBe(1);
+    expect(snapshot.evidenceCount).toBe(0);
+    expect(new Set(snapshot.sessionIds).size).toBe(1);
+    expect(new Set(snapshot.taskIds).size).toBe(1);
+    const stored = await page.evaluate((key) => sessionStorage.getItem(key), SESSION_KEY);
+    expect(stored).toBe(snapshot.sessionIds[0]);
+  });
+
+  test("start network failure can retry once", async ({ page }) => {
+    await resetPractice(page);
+    await openSelector(page);
+    await page.getByRole("radio", { name: "练习新单词" }).check();
+    await page.getByRole("radio", { name: "5 个" }).check();
+    let failed = false;
+    await page.route("**/practice", (route) => {
+      if (route.request().method() === "POST" && !failed) {
+        failed = true;
+        return route.abort();
+      }
+      return route.continue();
+    });
+    await page.getByRole("button", { name: "开始练习" }).click();
+    await expect(page.getByText("暂时无法加载")).toBeVisible({ timeout: 20_000 });
+    await page.unroute("**/practice");
+    await page.getByRole("button", { name: "重试" }).click();
+    await waitForTask(page);
+    const snapshot = await practiceSnapshot(page);
+    expect(snapshot.sessionCount).toBe(1);
+    expect(snapshot.taskCount).toBe(1);
+    expect(snapshot.evidenceCount).toBe(0);
   });
 
   test("duplicate submit writes one Evidence", async ({ page }) => {

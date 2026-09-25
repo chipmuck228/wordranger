@@ -107,15 +107,6 @@ export function FreePracticeClient() {
   );
   const inFlight = useRef(false);
 
-  useEffect(() => {
-    const stored = readFreePracticeSessionId();
-    if (!stored) {
-      return;
-    }
-    void resume(stored);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only hydrate
-  }, []);
-
   function applyResult(
     result: FreePracticeSessionPublicResult,
     options?: { fromStart?: boolean },
@@ -173,6 +164,8 @@ export function FreePracticeClient() {
       return true;
     }
     setFeedback(null);
+    // Telemetry only; not used for scoring.
+    // eslint-disable-next-line react-hooks/purity -- event-handler helper, not render
     startedAt.current = performance.now();
     setScreen("playing");
     return true;
@@ -208,8 +201,14 @@ export function FreePracticeClient() {
   }
 
   async function start(nextSource = source, nextCount = requestedCount): Promise<void> {
+    if (inFlight.current) {
+      return;
+    }
+    inFlight.current = true;
     const id = ++requestId.current;
     retryKind.current = "start";
+    sourceRef.current = nextSource;
+    countRef.current = nextCount;
     setSource(nextSource);
     setRequestedCount(nextCount);
     setScreen("preparing");
@@ -221,12 +220,24 @@ export function FreePracticeClient() {
       return;
     }
     if (bounded.timedOut) {
+      inFlight.current = false;
       setError("暂时无法加载");
       setScreen("error");
       return;
     }
+    inFlight.current = false;
     applyResult(bounded.value, { fromStart: true });
   }
+
+  useEffect(() => {
+    const stored = readFreePracticeSessionId();
+    if (!stored) {
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount hydrate via server load
+    void resume(stored);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only hydrate
+  }, []);
 
   async function submit(intent: StudentActionIntent): Promise<void> {
     if (!session || !task || screen === "submitting" || inFlight.current) {
@@ -244,7 +255,10 @@ export function FreePracticeClient() {
         revision: session.revision,
         taskId: task.id,
         intent,
-        responseTimeMs: Math.round(performance.now() - startedAt.current),
+        responseTimeMs: Math.round(
+          // eslint-disable-next-line react-hooks/purity -- event-handler helper, not render
+          performance.now() - startedAt.current,
+        ),
       }),
     );
     if (id !== requestId.current) {
@@ -445,6 +459,7 @@ export function FreePracticeClient() {
             <Button
               type="button"
               className="h-12 w-full rounded-2xl text-base sm:w-auto sm:min-w-40"
+              disabled={busy}
               onClick={() => void start(sourceRef.current, countRef.current)}
             >
               开始练习
@@ -570,7 +585,13 @@ export function FreePracticeClient() {
             <Button
               type="button"
               className="h-12 rounded-2xl"
-              onClick={() => void start(session.source, session.requestedCount as FreePracticeRequestedCount)}
+              disabled={busy}
+              onClick={() =>
+                void start(
+                  session.source,
+                  session.requestedCount as FreePracticeRequestedCount,
+                )
+              }
             >
               再练一组
             </Button>

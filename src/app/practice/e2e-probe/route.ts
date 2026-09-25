@@ -22,12 +22,15 @@ export async function GET(): Promise<NextResponse> {
   return NextResponse.json({
     ok: true,
     evidenceCount: evidence.length,
+    sessionCount: runtime?.sessions.count() ?? 0,
+    taskCount: runtime?.tasks.listTaskIds().length ?? 0,
+    sessionIds: runtime?.sessions.ids() ?? [],
+    taskIds: runtime?.tasks.listTaskIds() ?? [],
     items: evidence.map((item) => ({
       taskId: item.taskId,
       sessionId: item.sessionId,
       gameId: item.gameId,
       outcome: item.outcome,
-      lexemeId: item.lexemeId,
     })),
   });
 }

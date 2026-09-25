@@ -51,6 +51,12 @@ revision, current task/input, and UI state.
 `sessionStorage` key `wordranger.free-practice.session-id` stores
 the handle only. Refresh calls `load`.
 
+`开始练习` / `再练一组` share the existing `inFlight` lock. A second
+click while start is in flight does not call `startFreePractice`.
+The start button is disabled once the request is issued. Failure
+clears the lock so Retry can start once. The client never generates
+or chooses a `sessionId`.
+
 ## Isolation
 
 Homepage still links Daily Training (`/train`). `/train` does not

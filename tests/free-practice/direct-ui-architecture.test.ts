@@ -56,6 +56,32 @@ describe("Free Practice Direct UI architecture", () => {
     expect(client).toContain("InlineTrainingFeedback");
     expect(storage).toContain("wordranger.free-practice.session-id");
     expect(client).toContain("hideCorrection");
+    const startFn = client.slice(
+      client.indexOf("async function start("),
+      client.indexOf("async function submit("),
+    );
+    expect(startFn).toContain("if (inFlight.current)");
+    expect(startFn.indexOf("inFlight.current = true")).toBeLessThan(
+      startFn.indexOf("startFreePractice"),
+    );
+    expect(client).toContain("disabled={busy}");
+  });
+
+  it("keeps the E2E probe on counts and opaque ids", () => {
+    const probe = readFileSync(join(PRACTICE_DIR, "e2e-probe/route.ts"), "utf8");
+    const getBody = probe.slice(
+      probe.indexOf("export async function GET"),
+      probe.indexOf("export async function POST"),
+    );
+    expect(getBody).toContain("sessionCount");
+    expect(getBody).toContain("taskCount");
+    expect(getBody).toContain("sessionIds");
+    expect(getBody).toContain("taskIds");
+    expect(getBody).not.toContain("answerKey");
+    expect(getBody).not.toContain("correctOptionIds");
+    expect(getBody).not.toContain("FreePracticeSessionState");
+    expect(getBody).not.toContain("StudentLexemeModel");
+    expect(getBody).not.toMatch(/userId[,:]/);
   });
 
   it("keeps server actions as a thin controller facade", () => {
