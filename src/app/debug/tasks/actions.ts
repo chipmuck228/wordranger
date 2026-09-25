@@ -21,6 +21,12 @@ import { DEBUG_GAME_ID, DEBUG_SESSION_ID, DEBUG_USER_ID } from "./debug-ids";
 
 const debugTaskRepository = new InMemoryLearningTaskRepository();
 const debugLearningRepository = new InMemoryLearningRepository();
+let nextDebugTaskCreateIdSerial = 0;
+
+function nextDebugTaskCreateId(): string {
+  nextDebugTaskCreateIdSerial += 1;
+  return `debug-task-${nextDebugTaskCreateIdSerial}`;
+}
 
 export async function generateDebugTask(input: {
   lexemeId: string;
@@ -35,7 +41,6 @@ export async function generateDebugTask(input: {
 }> {
   const vocabulary = new InMemoryVocabularyRepository(getVocabularyDataset());
   const generator = new DefaultTaskGenerator(vocabulary);
-  let count = 0;
   const generation = await generator.generate({
     need: {
       id: "debug-need",
@@ -57,7 +62,7 @@ export async function generateDebugTask(input: {
     desiredDifficulty: input.difficulty,
     recentTasks: [],
     now: "2026-03-01T09:00:00.000Z",
-    createId: () => `debug-task-${++count}`,
+    createId: nextDebugTaskCreateId,
     random: new SeededRandomSource(input.seed || "debug"),
   });
   if (generation.status !== "GENERATED") {
@@ -88,6 +93,14 @@ export async function submitDebugTaskAction(input: {
     learningTaskRepository: debugTaskRepository,
     learningRepository: debugLearningRepository,
     now: input.action.occurredAt,
+  });
+}
+
+export async function getAssignedDebugTask(taskId: string) {
+  return debugTaskRepository.getTaskForEvaluation({
+    taskId,
+    userId: DEBUG_USER_ID,
+    sessionId: DEBUG_SESSION_ID,
   });
 }
 
