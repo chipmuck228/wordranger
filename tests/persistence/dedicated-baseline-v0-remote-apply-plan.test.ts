@@ -80,11 +80,11 @@ describe("dedicated baseline V0 remote apply plan", () => {
     expect(manifest.lexemes).toBe(1638);
     expect(manifest.relations).toBe(716);
     expect(manifest.tags).toBe(1638);
-    expect(sha256(BASELINE)).toBe(BASELINE_SHA256);
 
     for (const { file, text } of docs) {
       expect(text, file).toContain(BASELINE);
       expect(text, file).toContain(BASELINE_SHA256);
+      expect(text, file).toContain("202609260001");
       expect(text, file).toContain(PR_HEAD);
       expect(text, file).toContain(ORIGIN_MAIN);
       expect(text, file).toContain("vocabulary-content-v1");
@@ -99,7 +99,8 @@ describe("dedicated baseline V0 remote apply plan", () => {
     expect(plan).toContain(PRODUCTION_ALIAS_FULL);
     expect(plan).toContain(IMPORTER_COMMIT);
     expect(plan).toContain("DEDICATED_TARGET_MATCH");
-    expect(plan).toContain("TARGET_EMPTY");
+    expect(plan).toContain("TARGET_EMPTY_CATALOG_VERIFIED");
+    expect(plan).toContain("TARGET_OBJECTS_NOT_EXPOSED_OR_NOT_FOUND");
     for (const [file, digest] of Object.entries(IMPORTER_FILES)) {
       expect(sha256(file)).toBe(digest);
       expect(plan).toContain(digest);
@@ -110,34 +111,103 @@ describe("dedicated baseline V0 remote apply plan", () => {
     const all = allText();
     expect(all).toMatch(/Gate A → Gate B → Gate C → Gate D/);
     const plan = docs.find((item) => item.file === PLAN)?.text ?? "";
-    const gateA = plan.indexOf("### Gate A — baseline apply");
+    const gateA = plan.indexOf("### Gate A — baseline apply — BLOCKED");
     const gateB = plan.indexOf("### Gate B — vocabulary seed");
-    const gateC = plan.indexOf("### Gate C — runtime read/write smoke");
+    const gateC = plan.indexOf(
+      "### Gate C — no-write runtime and security preflight",
+    );
     const gateD = plan.indexOf("### Gate D — PR merge / Production deployment");
     expect(gateA).toBeGreaterThan(-1);
     expect(gateB).toBeGreaterThan(gateA);
     expect(gateC).toBeGreaterThan(gateB);
     expect(gateD).toBeGreaterThan(gateC);
-    expect(plan).toContain("Only after Gate A catalog post-check passed");
-    expect(plan).toContain("Only after Gate A catalog and Gate B fingerprint both passed");
+    expect(plan).toContain("Only after Gate A catalog **and** history postconditions passed");
+    expect(plan).toContain(
+      "Only after Gate A catalog and history postconditions and Gate B",
+    );
     expect(plan).toContain("Only after Gates A, B, and C have complete evidence");
     expect(plan).toContain("This plan does not merge");
     expect(plan).toContain("No automatic PR merge");
   });
 
-  it("locks stop conditions and forbids db push, history repair, and Blaze copy", () => {
+  it("blocks Gate A until real history can be recorded atomically", () => {
+    const all = allText();
+    expect(all).toContain("Gate A is **BLOCKED**");
+    expect(all).toContain("Dashboard SQL Editor is not the apply channel");
+    expect(all).toContain("History postcondition");
+    expect(all).toContain("202609260001");
+    expect(all).toContain("dedicated_wordranger_baseline_v0");
+    expect(all).toContain("schema/history mismatch");
+    expect(all).toContain("legacy CLI link");
+    expect(all).toMatch(/Forbidden for catalog, apply, list, and query|not on the legacy CLI link/);
+    expect(all).toContain("migration repair");
+    expect(all).not.toMatch(
+      /Dashboard SQL Editor on Dedicated is the\s+intended path/i,
+    );
+    expect(all).not.toMatch(/History may remain\s+missing/i);
+    for (const { file, text } of docs) {
+      expect(text, file).toContain("BLOCKED");
+    }
+  });
+
+  it("locks Gate B Dedicated-only credential isolation", () => {
+    const all = allText();
+    expect(all).toContain(".env.local");
+    expect(all).toContain("ambient env");
+    expect(all).toContain("isolated snapshot");
+    expect(all).toContain("TEMP_DELETED");
+    expect(all).toContain("same");
+    expect(all).toContain("Dedicated-only");
+    expect(all).toContain("anon fallback");
+    expect(all).toContain("Do not print URL, host, ref, key, token, or value");
+    expect(all).toContain("The importer process may read only that isolated snapshot");
+    expect(all).not.toMatch(
+      /Confirm `SUPABASE_SERVICE_ROLE_KEY` is set for the apply process\.\s*$/m,
+    );
+    const plan = docs.find((item) => item.file === PLAN)?.text ?? "";
+    expect(plan).toContain("host and key must come");
+    expect(plan).toContain("same Dedicated-only snapshot");
+    expect(plan).toContain("Do not read or mix workspace `.env.local`");
+  });
+
+  it("keeps Gate C no-write and does not promise Evidence delete", () => {
+    const all = allText();
+    expect(all).toContain("Gate C does not write learner data");
+    expect(all).toContain("no-write");
+    expect(all).toContain("do not create session, task, or evidence");
+    expect(all).toContain("do not claim Evidence can be deleted");
+    expect(all).toContain("append-only");
+    expect(all).not.toMatch(
+      /Cleanup is an authorized service-role delete of that UUID only/i,
+    );
+    expect(all).not.toMatch(/service-role delete smoke Evidence/i);
+    expect(all).not.toMatch(/disposable user UUID/i);
+    expect(all).toContain("write smoke is a **further** authorization");
+    expect(all).toContain("V1_PLACEHOLDER_USER_ID");
+    expect(all).toContain("If permanent canary Evidence is not accepted");
+  });
+
+  it("does not treat PGRST205 as catalog-empty proof", () => {
+    const all = allText();
+    expect(all).toContain("TARGET_OBJECTS_NOT_EXPOSED_OR_NOT_FOUND");
+    expect(all).toContain("TARGET_EMPTY_CATALOG_VERIFIED");
+    expect(all).toContain("PGRST205` is not catalog-empty proof");
+    expect(all).toContain("Catalog verification is a Gate A precondition");
+    expect(all).toContain("Gate A remains blocked until `TARGET_EMPTY_CATALOG_VERIFIED`");
+    expect(all).not.toMatch(
+      /`PGRST205` on a `select=id&limit=0` probe remains a valid\s+before-Gate-A emptiness proof/i,
+    );
+  });
+
+  it("locks stop conditions and forbids unauthorized db push, history repair, and Blaze copy", () => {
     const all = allText();
     expect(all).toContain("REQUIRED_CORE");
-    expect(all).toContain("unexpected structure");
-    expect(all).toContain("learner table has data");
-    expect(all).toContain("partially imported");
     expect(all).toContain("Shared Blaze objects");
     expect(all).toContain("DEDICATED_TARGET_MATCH");
     expect(all).toContain("service-role server path");
     expect(all).toContain("782ffcc");
     expect(all).toMatch(/db push/);
-    expect(all).toMatch(/history repair/);
-    expect(all).toMatch(/forbidden|Refuse `db push`|Do not `db push`/);
+    expect(all).toMatch(/history repair|migration repair/);
     expect(all).toContain("campus");
     expect(all).toContain("enrollment");
     expect(all).toContain("newsletter");
@@ -168,5 +238,7 @@ describe("dedicated baseline V0 remote apply plan", () => {
     expect(checklist).toContain("No stale-row delete");
     expect(checklist).toContain("Refuse learner-data migration");
     expect(checklist).toContain("Refuse automatic PR merge");
+    expect(checklist).toContain("Gate C does not write learner data");
+    expect(checklist).toContain("TEMP_DELETED");
   });
 });

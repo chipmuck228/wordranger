@@ -3,8 +3,8 @@
 Candidate / Not a Standard. **Checklist only. Nothing below is done.**
 
 Companion to `docs/DEDICATED_WORDRANGER_BASELINE_V0_REMOTE_APPLY_PLAN.md`.
-A checked box is not authorization. Each gate needs its own later
-authorization.
+A checked box is not authorization. Gate A is **BLOCKED**. Do not
+apply. Dashboard SQL Editor is not the apply channel.
 
 Immutable identity for this checklist:
 
@@ -12,16 +12,20 @@ Immutable identity for this checklist:
 - PR #17 head: `bb6e522e4db350ca915dade672cbed786f6a7bd1`
 - Baseline:
   `supabase/migrations/202609260001_dedicated_wordranger_baseline_v0.sql`
+- Baseline version: `202609260001`
 - Baseline SHA-256:
   `0ca22a8adba187ad4cc9255d357ab4c9da94dbc2e0a401fe65e6afc73e096b35`
 - Vocabulary: `vocabulary-content-v1` /
   `9704c2025628676800918e4e7fc0e744c8358c025d8b01ebf43936d8474754cb`
   / `1600` / `1638` / `716` / `1638`
-- Dedicated target: `DEDICATED_TARGET_MATCH` / `TARGET_EMPTY`
+- Dedicated target: `DEDICATED_TARGET_MATCH`
+- API probe: `TARGET_OBJECTS_NOT_EXPOSED_OR_NOT_FOUND`
+- Catalog: not `TARGET_EMPTY_CATALOG_VERIFIED`
 - Production alias rollback: `782ffcca670c`
 
 Gates must run in order: **Gate A → Gate B → Gate C → Gate D**.
 Do not skip ahead. Do not merge PR #17 from this checklist.
+Refuse automatic PR merge.
 
 ## 0. Hard stops — abort and do not apply
 
@@ -29,71 +33,91 @@ Do not skip ahead. Do not merge PR #17 from this checklist.
       authorization
 - [ ] Confirm Production alias is still `782ffcc`
 - [ ] Confirm Dedicated identity is still `DEDICATED_TARGET_MATCH`
-- [ ] Confirm Dedicated schema is still `TARGET_EMPTY` or an
-      expected post-gate state, never a drifted partial schema
-- [ ] Confirm baseline SHA-256, PR head, and vocabulary fingerprint
-      have not drifted
+- [ ] Confirm catalog is `TARGET_EMPTY_CATALOG_VERIFIED` before
+      any Gate A attempt. `PGRST205` is not catalog-empty proof
+- [ ] Confirm baseline SHA-256, PR head, version `202609260001`,
+      and vocabulary fingerprint have not drifted
 - [ ] Confirm the operator is not on the legacy CLI link
-- [ ] Refuse `db push` / `migration up` / history repair
+- [ ] Refuse Dashboard SQL Editor as the apply channel
+- [ ] Refuse `migration repair` and any apply-then-fake-history
+      split
+- [ ] Refuse unauthorized `db push` / `migration up`, including
+      `--linked`
+- [ ] Refuse apply unless schema and history are proven to commit
+      or roll back together
+- [ ] Schema/history mismatch is a stop
 - [ ] Refuse any apply that would copy campus / enrollment /
       newsletter / traffic / `public.users` or other shared Blaze
       objects
 - [ ] Refuse learner-data migration
 - [ ] Refuse automatic PR merge
+- [ ] Refuse `.env.local` or ambient env as a Gate B credential
+      source
 
-## 1. Preflight (read-only)
+## 1. Preflight (read-only catalog)
 
-- [ ] Required extensions current state recorded
-- [ ] REQUIRED_CORE tables absent or exactly the reviewed V0 shape
-- [ ] Migration history empty or missing; no fabricated Blaze rows
-- [ ] Learner rows absent
-- [ ] Vocabulary rows absent
-- [ ] V0 trigger / function / index names absent before Gate A
+- [ ] Authorized Dedicated-only catalog query, never legacy link
+- [ ] REQUIRED_CORE tables absent
 - [ ] Shared Blaze objects absent
-- [ ] `anon` / `authenticated` / `service_role` exist
+- [ ] Conflicting functions / triggers / indexes absent
+- [ ] History precondition: `schema_migrations` missing or empty
+- [ ] Roles `anon` / `authenticated` / `service_role` exist
 - [ ] Production `SUPABASE_SERVICE_ROLE_KEY` name present
 - [ ] Production configuration still `POINTS_TO_DEDICATED_TARGET`
+- [ ] Record `TARGET_EMPTY_CATALOG_VERIFIED` only after the above
 
-Stop if any REQUIRED_CORE table has unexpected structure, any
-learner table has data, vocabulary is partially imported, shared
-Blaze objects appear, target identity mismatches, hashes drifted,
-the service-role server path cannot be confirmed, or Production
-alias left `782ffcc`.
+Catalog verification is a Gate A precondition. Stop if any
+REQUIRED_CORE table exists, shared Blaze objects appear, history
+is not empty, target identity mismatches, hashes drifted, the
+service-role server path cannot be confirmed, or Production alias
+left `782ffcc`.
 
-## 2. Gate A — baseline apply
+## 2. Gate A — baseline apply — BLOCKED
 
-- [ ] Separate authorization recorded
-- [ ] Exact baseline file, SHA matches
+- [ ] Do not apply while blocked
+- [ ] Separate authorization recorded only after a later review
+      proves an atomic schema-plus-history channel
+- [ ] Exact baseline file, version `202609260001`, SHA matches
 - [ ] Dedicated target only
-- [ ] Single transaction; SQL not edited
-- [ ] No `db push`
-- [ ] No history repair and no fake `schema_migrations` rows
+- [ ] No Dashboard SQL Editor
+- [ ] No `migration repair`
+- [ ] No archive replay
+- [ ] History postcondition: exactly one row `202609260001` /
+      `dedicated_wordranger_baseline_v0`
 - [ ] Catalog post-check passed
-- [ ] On failure: transaction fully rolled back and Dedicated is
-      `TARGET_EMPTY` again
+- [ ] Schema/history mismatch stop: do not repair
 
 ## 3. Gate B — vocabulary seed
 
-- [ ] Gate A catalog post-check already passed
+- [ ] Gate A catalog and history postconditions already passed
 - [ ] Importer from the reviewed PR head
+- [ ] Credential source is a Dedicated-only isolated snapshot
+      (Vercel Production pull to a git-external temp file, or
+      another approved Dedicated-only source)
+- [ ] Not `.env.local`, not ambient env, not the legacy CLI link
+- [ ] URL host and service-role key from the same snapshot
+- [ ] No anon fallback in that snapshot
+- [ ] Values not printed
+- [ ] Importer process reads only the isolated snapshot
+- [ ] Temp file deleted; `TEMP_DELETED` recorded
+- [ ] Target identity re-checked before and after
 - [ ] `npm run import:vocabulary -- --fingerprint` matches the
       locked `vocabulary-content-v1` identity
-- [ ] Empty-target confirmed immediately before `--apply`
-- [ ] Service-role path confirmed; no anon fallback
 - [ ] Empty-target seed + deterministic upsert only
 - [ ] No stale-row delete
 - [ ] No learner-table writes
 - [ ] Database read-back recomputes the same fingerprint
-- [ ] Learner counts still zero
 
-## 4. Gate C — runtime smoke
+## 4. Gate C — no-write runtime and security preflight
 
 - [ ] Gate A and Gate B evidence both complete
-- [ ] Service-role read-only counts checked first
+- [ ] Service-role read-only counts checked
 - [ ] Anon / authenticated denied on learner and vocabulary tables
-- [ ] No writes under the production placeholder identity
-- [ ] Smoke identity separately authorized, disposable, and
-      cleanable
+- [ ] Adapter/config validation only
+- [ ] Gate C does not write learner data
+- [ ] No session / task / evidence created
+- [ ] No disposable identity minted
+- [ ] No claim that smoke Evidence can be deleted
 - [ ] This checklist does not execute smoke
 
 ## 5. Gate D — merge / Production
@@ -102,19 +126,24 @@ alias left `782ffcc`.
 - [ ] Separate authorization to merge PR #17
 - [ ] Reconfirm Production env `POINTS_TO_DEDICATED_TARGET`
 - [ ] Remember merge triggers Git Production deployment
-- [ ] After deploy: unauthenticated GET only, then a separately
-      authorized `/train` smoke
+- [ ] After deploy: unauthenticated GET only
+- [ ] `/train` write smoke is a further authorization, uses the
+      existing `/train` identity contract, and leaves append-only
+      Evidence if run
+- [ ] If permanent canary Evidence is not accepted, skip write
+      smoke
 - [ ] Keep `782ffcc` instant rollback until the new Production
       deploy is accepted
 - [ ] Do not enable `/practice`, Auth, or Context Lab
 
 ## 6. Rollback reminders
 
-- [ ] Gate A in-transaction failure → rollback transaction
-- [ ] Gate A success / Gate B failure → keep schema, no runtime,
-      rerun deterministic seed after fix
+- [ ] Gate A blocked or failed at precondition → no remote change
+- [ ] Schema/history mismatch → stop; no repair
+- [ ] Gate A success / Gate B failure → keep schema and honest
+      history, no runtime, rerun deterministic seed after fix
 - [ ] Gate B success / Gate C failure → do not delete data, do
       not merge, investigate adapter/config
 - [ ] Production deploy failure → instant rollback to `782ffcc`
 - [ ] Learner writes already on Dedicated → stop writes; no
-      overwrite/rebuild rollback
+      overwrite/rebuild; Evidence is append-only
