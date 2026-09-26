@@ -34,7 +34,7 @@ Leave every Candidate / memory / write-gate flag unset on Vercel. Homepage è‡ªç”
 ALLOW_SUPABASE_PROGRESS_WRITES=1 npm run test:progress
 ```
 
-That requires both `RUN_SUPABASE_PROGRESS=1` (set by the script) and `ALLOW_SUPABASE_PROGRESS_WRITES=1`. Without the write flag, the suite refuses to mutate whichever project is in `.env.local`. Apply `supabase/migrations/202609170004_cleanup_progress_test_user.sql` so leftover test evidence can be removed; the RPC still refuses the placeholder student user.
+That requires both `RUN_SUPABASE_PROGRESS=1` (set by the script) and `ALLOW_SUPABASE_PROGRESS_WRITES=1`. Without the write flag, the suite refuses to mutate whichever project is in `.env.local`. Apply the archived `supabase/migrations_archive/pre_dedicated_baseline/202609170004_cleanup_progress_test_user.sql` so leftover test evidence can be removed; the RPC still refuses the placeholder student user. It is not part of the Dedicated production baseline.
 
 ## Docs
 

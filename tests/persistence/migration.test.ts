@@ -2,15 +2,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+const ARCHIVE = "supabase/migrations_archive/pre_dedicated_baseline";
 const sql = [
-  "supabase/migrations/202609160001_vocabulary_domain.sql",
-  "supabase/migrations/202609160002_learning_tasks.sql",
-  "supabase/migrations/202609170001_game_sessions.sql",
-  "supabase/migrations/202609170002_game_sessions_revision.sql",
-  "supabase/migrations/202609170003_learning_evidence_session_correlation.sql",
-  "supabase/migrations/202609170004_cleanup_progress_test_user.sql",
-  "supabase/migrations/202609170005_vocabulary_placement_reviews.sql",
-  "supabase/migrations/202609200001_context_lab_runs.sql",
+  `${ARCHIVE}/202609160001_vocabulary_domain.sql`,
+  `${ARCHIVE}/202609160002_learning_tasks.sql`,
+  `${ARCHIVE}/202609170001_game_sessions.sql`,
+  `${ARCHIVE}/202609170002_game_sessions_revision.sql`,
+  `${ARCHIVE}/202609170003_learning_evidence_session_correlation.sql`,
+  `${ARCHIVE}/202609170004_cleanup_progress_test_user.sql`,
+  `${ARCHIVE}/202609170005_vocabulary_placement_reviews.sql`,
+  `${ARCHIVE}/202609200001_context_lab_runs.sql`,
 ]
   .map((file) => readFileSync(path.join(process.cwd(), file), "utf8"))
   .join("\n");
