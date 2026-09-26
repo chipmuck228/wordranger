@@ -347,7 +347,10 @@ describe("dedicated baseline V0 isolated PGlite apply", () => {
       `drop table public._pre_baseline_service_role_default_priv_witness;`,
     );
 
-    await exec(isolatedSql);
+    expect(baselineSql).not.toMatch(/^begin;/m);
+    expect(baselineSql).not.toMatch(/^commit;/m);
+    // Test-owned wrapper only. Production SQL stays transaction-control-free.
+    await exec(`begin;\n${isolatedSql}\ncommit;`);
   }, 60_000);
 
   afterAll(async () => {

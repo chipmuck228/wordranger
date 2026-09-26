@@ -89,8 +89,17 @@ describe("dedicated WordRanger consolidated baseline V0", () => {
   });
 
   it("is a deterministic empty-database create, not a fake history replay", () => {
-    expect(baseline).toMatch(/^begin;/m);
-    expect(baseline).toMatch(/^commit;/m);
+    const executable = baseline
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("--"));
+    expect(executable[0]).toBe("create extension if not exists pgcrypto;");
+    expect(executable.at(-1)).toBe(
+      "grant select, insert, update, delete on table public.student_lexeme_weaknesses to service_role;",
+    );
+    expect(baseline).not.toMatch(/^begin;/m);
+    expect(baseline).not.toMatch(/^commit;/m);
+    expect(baseline).not.toMatch(/^start transaction;/im);
     expect(baseline).toContain("create extension if not exists pgcrypto");
     expect(baseline).not.toContain("if not exists public.");
     expect(baseline).not.toContain("create table if not exists");
@@ -99,6 +108,19 @@ describe("dedicated WordRanger consolidated baseline V0", () => {
     expect(baseline).not.toMatch(/https?:\/\//i);
     expect(baseline).not.toMatch(/supabase\.co|eyj|postgres:\/\//i);
     expect(baseline).not.toMatch(/lcjysnyb|service_role_key|project.ref/i);
+  });
+
+  it("is suitable for CLI-managed transaction and history execution", () => {
+    expect(baseline).not.toMatch(/^begin;/m);
+    expect(baseline).not.toMatch(/^commit;/m);
+    expect(baseline).not.toMatch(/^do\s+\$\$/im);
+    expect(baseline).not.toMatch(/insert into\s+supabase_migrations/i);
+    expect(sqlFiles(ACTIVE_DIR)).toEqual([
+      "202609260001_dedicated_wordranger_baseline_v0.sql",
+    ]);
+    expect(sqlFiles(ARCHIVE_DIR).some((name) => name.startsWith("202609260001"))).toBe(
+      false,
+    );
   });
 
   it("creates every required V0 object and the evidence correlation contract", () => {

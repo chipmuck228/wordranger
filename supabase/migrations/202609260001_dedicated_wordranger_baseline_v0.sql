@@ -2,8 +2,6 @@
 -- Apply once to a truly empty database. This is not a replay of
 -- Blaze history and does not insert learner or vocabulary rows.
 
-begin;
-
 create extension if not exists pgcrypto;
 
 create table public.vocabulary_source_entries (
@@ -345,5 +343,3 @@ revoke all on table public.student_lexeme_weaknesses from public;
 revoke all on table public.student_lexeme_weaknesses from anon;
 revoke all on table public.student_lexeme_weaknesses from authenticated;
 grant select, insert, update, delete on table public.student_lexeme_weaknesses to service_role;
-
-commit;
