@@ -5,13 +5,19 @@ Candidate / Not a Standard. **Design only.**
 - Date: **2026-09-26**
 - Base: `origin/main` @ `782ffcca670c8272a3ba7ca07bedaef4debdc95f`
 - Branch: `design/dedicated-wordranger-supabase-migration-candidate`
-- Design commit that was pushed: `dfd46ece93932fbefe1da980f1609805de594d22`
-- That commit is on `origin`. It triggered **one Vercel Preview**
-  build (Ready / success). A successful Preview build does **not**
-  mean schema or `/train` runtime is ready.
-- Dedicated target remains `TARGET_EMPTY`. Do not use that Preview
-  for `/train` writes or as an acceptance environment.
-- Production was **not** redeployed. `main` was **not** merged.
+- This design branch **has been pushed** and **has already triggered
+  Vercel Preview**. Automatic Git deployments remain `ENABLED`, so
+  later pushes may trigger additional Preview builds.
+- Preview count and the latest Preview commit are **observations**,
+  not a stable contract of this Candidate. Historical first observed
+  Preview: design commit `dfd46ec` (Ready). That SHA is not required
+  to remain the latest Preview.
+- **No** Preview of this branch is schema or `/train` runtime
+  acceptance. While the Dedicated target is `TARGET_EMPTY`, do not
+  Start `/train` or write learner data from any such Preview.
+- Production / `main` deployment freeze remains **ACTIVE**.
+  Production has **not** been redeployed because of this Candidate.
+  `main` was **not** merged.
 - Target project: **already exists**. This program did **not** create
   a Supabase project and did **not** run Supabase DDL/DML.
 - Vercel Marketplace Integration: **already exists**. Env names were
@@ -34,7 +40,7 @@ Candidate / Not a Standard. **Design only.**
 | `/practice` | disabled |
 | Context Lab | disabled |
 | Production / `main` deployment freeze | **ACTIVE** |
-| Design-branch Preview | **occurred** (one Ready build for the pushed design commit) |
+| Design-branch Preview | **has occurred**; later pushes may add more. Not acceptance. |
 | Production redeploy after Integration or after this push | **none** |
 | `main` merge | **none** |
 | Supabase DDL/DML after Integration | **none** |
@@ -74,11 +80,13 @@ Integration also wrote unused aliases (`SUPABASE_URL`,
 Those aliases do not change application precedence. Host identity of
 the two URL names agrees (`DEDICATED_TARGET`).
 
-A Preview for this design branch already exists and still points at
-`TARGET_EMPTY`. Production has not been redeployed. If Production
-redeploys, or if anyone Starts `/train` on that Preview, the server
-client talks to an empty schema and fail-closes. Do not Start
-`/train` on Preview. Affected runtime paths if writes are attempted:
+This design branch already has Preview deployment(s) whose
+configuration points at `TARGET_EMPTY`. Later pushes may create
+more. Production has not been redeployed for this Candidate. If
+Production redeploys, or if anyone Starts `/train` on any such
+Preview while the target is empty, the server client talks to an
+empty schema and fail-closes. Do not Start `/train` on those
+Previews. Affected runtime paths if writes are attempted:
 
 - Daily Training `/train` (Start / submit / continue / resume)
 - Free-play `/play/*` durable adapters
@@ -89,7 +97,7 @@ client talks to an empty schema and fail-closes. Do not Start
 This design continues as documentation only. Recovery of Vercel env
 or a Production rollback remains a **separately authorized**
 decision. Do not change env here. Keep the Production / `main`
-freeze. Do not treat the existing Preview as a runtime gate.
+freeze. Do not treat any branch Preview as a runtime gate.
 
 ## 3. Repository migration inventory (summary)
 
@@ -280,17 +288,19 @@ Order. Writes stay paused on WordRanger Blaze paths from stage 7.
 7. **Final incremental sync** — only if learner migration was
    authorized and Blaze still received `/train` writes.
 8. **Vercel Production cutover** — separate Production
-   authorization. Not this design revision. A Preview already exists
-   for the pushed design branch; it is **not** an acceptance
-   environment and must not receive `/train` writes.
+   authorization. Not this design revision. Branch Preview
+   deployment(s) already exist and later pushes may add more; they
+   are **not** acceptance environments and must not receive `/train`
+   writes while `TARGET_EMPTY`.
 9. **Runtime smoke** — only after schema + vocabulary exist, and
    only under a later authorization. GET `/train` is not a DB smoke
-   test. The current empty-target Preview is forbidden for Start.
+   test. Any empty-target Preview of this branch is forbidden for
+   Start.
 10. **Auth activation** — independent later program. Not bundled.
 
 Failure stop: any catalog mismatch, fingerprint mismatch, unexpected
 row-count class, Production deploy against `TARGET_EMPTY`, or
-`/train` writes on the current empty-target Preview.
+`/train` writes on any empty-target Preview of this branch.
 
 Recovery: leave Blaze untouched; drop or rebuild only the dedicated
 target (separately authorized); keep Production / `main` frozen
@@ -342,9 +352,13 @@ Do not enable any of these with schema baseline or Vercel cutover.
 - No Homepage change
 - No frozen learning-semantics change
 - No Blaze deletion
-- No second Supabase project
+- No Supabase project was created by this design pass.
+- The Dedicated WordRanger target pre-existed this design pass and
+  was observed as `DEDICATED_TARGET_MATCH` / `TARGET_EMPTY`.
 - No CLI relink
 - No PR / no merge to `main`
-- Design branch **was pushed**; one Preview **did** occur
-- Production **was not** redeployed
+- Design branch **was pushed** and Preview **has occurred**; later
+  pushes may trigger additional Preview. Preview count is not a
+  contract.
+- Production has **not** been redeployed because of this Candidate
 - Do not claim there were zero deployments of any kind

@@ -77,16 +77,31 @@ describe("dedicated WordRanger Supabase migration candidate", () => {
     expect(candidate).toContain("No Vercel Production cutover");
     expect(candidate).not.toContain("This branch is **local only**");
     expect(candidate).not.toMatch(/This branch is \*\*local only\*\*/);
+    expect(candidate).not.toMatch(/No second Supabase project/);
+    expect(candidate).toContain(
+      "No Supabase project was created by this design pass.",
+    );
+    expect(candidate).toContain(
+      "The Dedicated WordRanger target pre-existed this design pass",
+    );
+    expect(candidate).toContain("DEDICATED_TARGET_MATCH");
+    expect(candidate).toContain("TARGET_EMPTY");
   });
 
-  it("records that Preview occurred and Production did not", () => {
+  it("records that branch Preview has occurred and later pushes may add more", () => {
     const all = allText();
-    expect(all).toContain("dfd46ece93932fbefe1da980f1609805de594d22");
-    expect(all).toMatch(/Preview/);
-    expect(all).toMatch(/triggered \*\*one Vercel Preview\*\*|triggered \*\*one\*\*\s+Vercel Preview/);
+    expect(all).toMatch(/Preview \*\*has occurred\*\*|has already triggered\s+Vercel Preview/);
+    expect(all).toMatch(/later pushes may trigger additional Preview|later pushes may add more/);
+    expect(all).toContain("ENABLED");
     expect(all).toContain("TARGET_EMPTY");
-    expect(all).toMatch(/Production was \*\*not\*\* redeployed|Production was not redeployed/);
+    expect(all).toMatch(
+      /Production has \*\*not\*\* been redeployed because of this Candidate|Production was not redeployed because of this Candidate/,
+    );
     expect(all).toMatch(/`main` was \*\*not\*\* merged|`main` was not merged/);
+    expect(all).not.toContain("dfd46ece93932fbefe1da980f1609805de594d22");
+    expect(all).not.toMatch(/one Vercel Preview/i);
+    expect(all).not.toMatch(/exactly one Preview/i);
+    expect(all).not.toMatch(/Preview 数量必须为 1/);
     expect(all).not.toMatch(/This branch is \*\*local only\*\*/);
     expect(all).not.toMatch(/Keep this design branch unpushed/);
     expect(all).not.toMatch(/local only — do not push/);
@@ -97,8 +112,8 @@ describe("dedicated WordRanger Supabase migration candidate", () => {
 
   it("forbids treating Preview as acceptance and keeps production cutover prohibited", () => {
     const all = allText();
-    expect(all).toMatch(/not an acceptance environment|not\*\* an acceptance|is \*\*not\*\* an acceptance/);
-    expect(all).toMatch(/Do not Start `\/train`|Forbidden on the current empty-target Preview|must not receive `\/train` writes/);
+    expect(all).toMatch(/not.*acceptance|not a contract/);
+    expect(all).toMatch(/Do not Start `\/train`|forbidden for\s+Start|must not receive `\/train` writes|write learner data/);
     expect(all).toContain("No Vercel Production cutover");
     expect(all).toContain("do not merge to `main`");
     expect(all).toMatch(/Production \/ `main` deployment freeze|Production \/ `main` freeze/);
@@ -183,6 +198,15 @@ describe("dedicated WordRanger Supabase migration candidate", () => {
     expect(inventory).toContain("TARGET_OPTIONAL_EXPERIMENTAL");
     expect(inventory).toContain("Dashboard-applied");
     expect(inventory).toContain("must move all twelve out of active");
+  });
+
+  it("does not claim this design pass created no Dedicated project at all", () => {
+    for (const { file, text } of docs) {
+      expect(text, file).not.toMatch(/No second Supabase project/);
+    }
+    const candidate = docs.find((d) => d.file === CANDIDATE)?.text ?? "";
+    expect(candidate).toContain("pre-existed this design pass");
+    expect(candidate).toContain("DEDICATED_TARGET_MATCH");
   });
 
   it("leaves every cutover checkbox unchecked", () => {

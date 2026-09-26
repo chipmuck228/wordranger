@@ -11,10 +11,12 @@ its own later authorization.
 Current freeze (this design pass):
 
 - Automatic Git deployments: `ENABLED`
-- Design branch: **pushed**. Head
-  `dfd46ece93932fbefe1da980f1609805de594d22` triggered **one**
-  Vercel Preview (Ready). That build is **not** schema/runtime
-  acceptance.
+- Design branch: **pushed**; Vercel Preview **has occurred**.
+  Later pushes may trigger additional Preview. Preview count and
+  latest Preview commit are not a contract. No branch Preview is
+  schema/runtime acceptance.
+- Historical first observed Preview commit: `dfd46ec` (not required
+  to remain latest).
 - Production / `main` deployment freeze: **ACTIVE**
 - Production configuration: `POINTS_TO_DEDICATED_TARGET`
 - Dedicated schema: `TARGET_EMPTY`
@@ -24,17 +26,18 @@ Current freeze (this design pass):
   DDL/DML. No Vercel env edit.
 
 Until schema + reference data are ready: **do not merge to `main`**,
-**do not Production-redeploy**, **do not promote**. Do not Start
-`/train` on the existing empty-target Preview. Do not claim that no
-deployment of any kind occurred.
+**do not Production-redeploy**, **do not promote**. While
+`TARGET_EMPTY`, do not Start `/train` or write learner data from
+any Preview of this branch. Do not claim that no deployment of any
+kind occurred.
 
 ## 0. Freeze (Production / main still active)
 
 - [ ] Keep merges to `main` blocked
 - [ ] Do not Production-redeploy or promote
-- [ ] Do not Start `/train` or write learner rows on the existing
-      Preview
-- [ ] Do not treat Preview Ready as Dedicated runtime readiness
+- [ ] Do not Start `/train` or write learner rows on any Preview of
+      this branch while `TARGET_EMPTY`
+- [ ] Do not treat any Preview Ready as Dedicated runtime readiness
 - [ ] Do not modify Vercel env or Integration
 - [ ] Do not relink the CLI
 - [ ] Do not `db push` / `migration up` / repair history / insert
@@ -86,12 +89,12 @@ Separately authorized. Dedicated project only. Never Blaze.
 
 ## 4. Preview environment targeting the dedicated project
 
-- [ ] Preview already exists for the pushed design commit and
-      already has Integration names pointing at the dedicated
-      project
-- [ ] That Preview is **not** an acceptance environment while the
+- [ ] Branch Preview has occurred; later pushes may add more
+- [ ] Those Previews already have Integration names pointing at the
+      dedicated project
+- [ ] No such Preview is an acceptance environment while the
       target is `TARGET_EMPTY`
-- [ ] Do not Start `/train` or write learner rows there
+- [ ] Do not Start `/train` or write learner rows on them
 - [ ] Later Preview HTTP after schema + vocabulary exist still
       needs a separate authorization
 - [ ] Keep `FREE_PRACTICE_*` and `CONTEXT_LAB_ENABLED` unset
@@ -99,7 +102,7 @@ Separately authorized. Dedicated project only. Never Blaze.
 ## 5. `/train` smoke (controlled identity)
 
 - [ ] GET `/train` is not the smoke test
-- [ ] Forbidden on the current empty-target Preview
+- [ ] Forbidden on any empty-target Preview of this branch
 - [ ] One authorized Start only after schema + vocabulary exist
 - [ ] Confirm session / task / evidence increment on the **target**
 - [ ] Confirm no write landed on Blaze

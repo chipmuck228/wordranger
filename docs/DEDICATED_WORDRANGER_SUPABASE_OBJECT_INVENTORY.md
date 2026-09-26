@@ -20,9 +20,12 @@ SQL. Blaze column/index/RLS facts remain those prior catalogs plus
 repository SQL. Dedicated-target emptiness is the last verified
 classification (`TARGET_EMPTY`); no DDL/DML was performed.
 
-The design branch **has been pushed**. That commit triggered one
-Vercel Preview (Ready). Production was not redeployed. `main` was
-not merged. Vercel env was not edited.
+The design branch **has been pushed** and Preview **has occurred**.
+Automatic Git deployments remain `ENABLED`; later pushes may
+trigger additional Preview. Preview count is not a contract. No
+branch Preview is runtime acceptance. Production was not
+redeployed because of this Candidate. `main` was not merged.
+Vercel env was not edited.
 
 `/practice` remains disabled. This inventory does not enable it.
 
@@ -36,7 +39,7 @@ not merged. Vercel env was not edited.
 | Vercel Preview configuration | `POINTS_TO_DEDICATED_TARGET` |
 | Vercel Production configuration | `POINTS_TO_DEDICATED_TARGET` |
 | Active production snapshot | `ACTIVE_PRODUCTION_TARGET_NOT_VERIFIED` |
-| Design-branch Preview | occurred (not a runtime acceptance) |
+| Design-branch Preview | has occurred; later pushes may add more; not acceptance |
 | Production redeploy | none |
 | Active migration lineage (future) | one consolidated baseline; twelve current files must leave `supabase/migrations/` |
 
