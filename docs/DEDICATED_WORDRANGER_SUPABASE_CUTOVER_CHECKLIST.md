@@ -50,9 +50,12 @@ kind occurred.
 
 Separately authorized. Dedicated project only. Never Blaze.
 
-- [ ] Author one reviewed consolidated baseline (not this pass)
+- [ ] Author one reviewed consolidated baseline (local V0 authored;
+      remote Dedicated apply is still not this pass)
 - [ ] Move the twelve historical files out of active
-      `supabase/migrations/` into an archival/reference location
+      `supabase/migrations/` into
+      `supabase/migrations_archive/pre_dedicated_baseline/`
+      (local Git move done; not a remote apply)
 - [ ] Do not leave old files and the baseline both in the active
       directory
 - [ ] Do not include `cleanup_progress_test_user` in the production

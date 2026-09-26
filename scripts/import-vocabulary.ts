@@ -1,9 +1,15 @@
 import { loadVocabularyDataset } from "../src/server/vocabulary/load-vocabulary-dataset";
 import { applyVocabularyImport } from "../src/server/vocabulary/import/apply-import";
 import { planVocabularyImport } from "../src/server/vocabulary/import/plan-import";
+import { buildVocabularyRebuildManifest } from "../src/server/vocabulary/import/rebuild-contract";
 import { createSupabaseServerClient } from "../src/lib/supabase/server";
 
-function parseMode(argv: string[]): "validate" | "dry-run" | "apply" {
+function parseMode(
+  argv: string[],
+): "validate" | "dry-run" | "apply" | "fingerprint" {
+  if (argv.includes("--fingerprint")) {
+    return "fingerprint";
+  }
   if (argv.includes("--validate")) {
     return "validate";
   }
@@ -16,6 +22,12 @@ function parseMode(argv: string[]): "validate" | "dry-run" | "apply" {
 async function main() {
   const mode = parseMode(process.argv.slice(2));
   const dataset = loadVocabularyDataset();
+
+  if (mode === "fingerprint") {
+    console.log(JSON.stringify(buildVocabularyRebuildManifest(dataset), null, 2));
+    return;
+  }
+
   const plan = planVocabularyImport(dataset, mode);
   console.log(JSON.stringify(plan, null, 2));
 

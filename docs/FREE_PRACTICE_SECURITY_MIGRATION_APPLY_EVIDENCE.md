@@ -9,7 +9,7 @@ apply and post-apply runtime verification. It does not enable
   repository audit operator (read-only verification)
 - Production identity: **PROJECT_MATCH**
 - Migration path:
-  `supabase/migrations/202609250001_learner_table_server_only_access.sql`
+  `supabase/migrations_archive/pre_dedicated_baseline/202609250001_learner_table_server_only_access.sql`
 - Migration SHA-256:
   `b6c348f538da8185aac45d06dbf03f1cdbd2e567844bc64e2db2ec5e8c0e7210`
 - Dashboard result: **Success. No rows returned**

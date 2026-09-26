@@ -9,6 +9,8 @@ const INVENTORY =
 const CHECKLIST =
   "docs/DEDICATED_WORDRANGER_SUPABASE_CUTOVER_CHECKLIST.md";
 const MIGRATIONS_DIR = "supabase/migrations";
+const ARCHIVE_DIR =
+  "supabase/migrations_archive/pre_dedicated_baseline";
 
 const UUID_RE =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
@@ -166,13 +168,13 @@ describe("dedicated WordRanger Supabase migration candidate", () => {
     const candidate = docs.find((d) => d.file === CANDIDATE)?.text ?? "";
     expect(candidate).toContain("C. Hybrid");
     expect(candidate).toContain("**active** migration lineage");
-    expect(candidate).toContain("must** leave the active");
+    expect(candidate).toContain("have left the active");
     expect(candidate).toContain("must not** both remain");
     expect(candidate).toMatch(/db push/);
     expect(candidate).toMatch(/forbidden/);
     expect(candidate).toContain("manually inserting fake migration-history rows");
-    expect(candidate).toContain("does **not** move migration files");
-    expect(candidate).toContain("does **not** create baseline SQL");
+    expect(candidate).toContain("have left the active");
+    expect(candidate).toContain("has **not** been applied to the Dedicated target");
   });
 
   it("excludes cleanup_progress_test_user from the Dedicated production baseline", () => {
@@ -185,11 +187,17 @@ describe("dedicated WordRanger Supabase migration candidate", () => {
 
   it("inventories every repository migration file without treating presence as apply authorization", () => {
     const inventory = docs.find((d) => d.file === INVENTORY)?.text ?? "";
-    const files = readdirSync(path.join(process.cwd(), MIGRATIONS_DIR))
+    const archived = readdirSync(path.join(process.cwd(), ARCHIVE_DIR))
       .filter((name) => name.endsWith(".sql"))
       .sort();
-    expect(files.length).toBe(12);
-    for (const name of files) {
+    const active = readdirSync(path.join(process.cwd(), MIGRATIONS_DIR))
+      .filter((name) => name.endsWith(".sql"))
+      .sort();
+    expect(archived.length).toBe(12);
+    expect(active).toEqual([
+      "202609260001_dedicated_wordranger_baseline_v0.sql",
+    ]);
+    for (const name of archived) {
       expect(inventory).toContain(name);
     }
     expect(inventory).toContain("None are automatically authorized to apply");
@@ -197,7 +205,7 @@ describe("dedicated WordRanger Supabase migration candidate", () => {
     expect(inventory).toContain("TARGET_TEST_ONLY");
     expect(inventory).toContain("TARGET_OPTIONAL_EXPERIMENTAL");
     expect(inventory).toContain("Dashboard-applied");
-    expect(inventory).toContain("must move all twelve out of active");
+    expect(inventory).toContain("have been Git-moved out of active");
   });
 
   it("does not claim this design pass created no Dedicated project at all", () => {

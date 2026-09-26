@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const MIGRATION =
-  "supabase/migrations/202609250001_learner_table_server_only_access.sql";
+  "supabase/migrations_archive/pre_dedicated_baseline/202609250001_learner_table_server_only_access.sql";
 const PREFLIGHT =
   "docs/FREE_PRACTICE_SECURITY_MIGRATION_DEPLOYMENT_PREFLIGHT.md";
 const TABLES = [

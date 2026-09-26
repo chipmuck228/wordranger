@@ -11,7 +11,7 @@ the migration, change Vercel env, or enable `/practice`.
   the linked project named **blaze** (inventory §14). This pass did not
   re-pull Vercel env values.
 - Migration file:
-  `supabase/migrations/202609250001_learner_table_server_only_access.sql`
+  `supabase/migrations_archive/pre_dedicated_baseline/202609250001_learner_table_server_only_access.sql`
 - Migration SHA-256:
   `b6c348f538da8185aac45d06dbf03f1cdbd2e567844bc64e2db2ec5e8c0e7210`
 - Pre-apply snapshot (this document's original 2026-09-25 pass):
