@@ -3,13 +3,17 @@
 Candidate / Not a Standard. **Read-only plan. Nothing below is authorized
 or executed by this document.**
 
-Gate A is **BLOCKED**. No remote apply is authorized. Dashboard SQL
-Editor is not the apply channel.
+Gate A is **BLOCKED**. Status:
+
+`CLI ATOMIC CHANNEL PROVEN LOCALLY`;
+`REMOTE APPLY STILL UNAUTHORIZED`
+
+No remote apply is authorized. Dashboard SQL Editor is not the
+apply channel.
 
 - Date: **2026-09-26**
 - `origin/main`: `a031be4ba791af9ac68aad93e8aba9f3437128cf`
 - PR: **#17** remains OPEN and unmerged
-- PR head: `bb6e522e4db350ca915dade672cbed786f6a7bd1`
 - Branch: `migration/dedicated-wordranger-baseline-candidate-v0`
 - Production alias remains the known-good `782ffcca670c` rollback
 - Active baseline:
@@ -29,19 +33,19 @@ identifiers were not written here.
 
 | Fact | Result |
 | --- | --- |
-| Git identity | `origin/main`, merge-base, PR head, and active baseline match the expected identity |
-| PR #17 | OPEN, not merged, Bugbot thread resolved, no unresolved review threads |
+| Git base | `origin/main` matches the expected base identity |
+| PR #17 | OPEN and unmerged. Review identity is checked externally immediately before apply, not stored as a final head SHA in this file |
 | Production alias | still `782ffcca670c` |
 | Vercel Production configuration | `POINTS_TO_DEDICATED_TARGET` |
 | Vercel Preview configuration | same Dedicated target as Production; not acceptance |
 | Vercel Development | `NOT_CONFIGURED` |
 | Dedicated target identity | `DEDICATED_TARGET_MATCH` |
 | API emptiness probe | `TARGET_OBJECTS_NOT_EXPOSED_OR_NOT_FOUND` (`PGRST205` on REQUIRED_CORE and shared names). Auxiliary only. |
-| Catalog emptiness | not `TARGET_EMPTY_CATALOG_VERIFIED`. Gate A stays blocked until an authorized read-only catalog query proves it. |
+| Catalog emptiness | not `TARGET_EMPTY_CATALOG_VERIFIED`. Gate A stays unauthorized until an authorized read-only catalog query proves it. |
 | Production `SUPABASE_SERVICE_ROLE_KEY` name | present |
 | Local CLI link | legacy source, **not** the Dedicated target. Forbidden for catalog, apply, list, and query. |
 | Observed CLI | `npx supabase` **2.118.0**. Re-check help before any later apply. |
-| Gate A | **BLOCKED** — no proven atomic schema-plus-history channel |
+| Gate A | **BLOCKED** — `CLI ATOMIC CHANNEL PROVEN LOCALLY`; `REMOTE APPLY STILL UNAUTHORIZED` |
 
 `FREE_PRACTICE_ENABLED`, `FREE_PRACTICE_RUNTIME`, and
 `CONTEXT_LAB_ENABLED` remain unset on Production.
@@ -51,28 +55,40 @@ as `TARGET_EMPTY_CATALOG_VERIFIED`.
 
 If any later check disagrees with this table, stop.
 
-## 1. Immutable deployment identity
+## 1. Identity classes
 
-These values are the authorization inputs. Any SHA or fingerprint
-change requires a new review. Do not apply a drifted tree.
+A PR document cannot permanently lock “the current PR head SHA”
+inside files that the same PR will change. That is an impossible self-reference:
+the commit that records the lock cannot equal the later commit that
+contains the lock. Do not hardcode a final PR
+head here. A later evidence commit or external PR report may
+record a reviewed head after the fact. That recorded SHA is not
+required to equal the commit that contains itself.
+
+### 1.1 Content identity — stored and immutable for apply
+
+These values live in the repository. Any change requires a new
+review. They are the apply lock.
 
 | Input | Value |
 | --- | --- |
-| PR head | `bb6e522e4db350ca915dade672cbed786f6a7bd1` |
 | Active baseline path | `supabase/migrations/202609260001_dedicated_wordranger_baseline_v0.sql` |
 | Baseline version | `202609260001` |
-| Baseline SHA-256 | `0ca22a8adba187ad4cc9255d357ab4c9da94dbc2e0a401fe65e6afc73e096b35` |
+| Baseline SHA-256 | `7f62b1818cae5045b5d74e2dd286a510f21da650ff6dea42357ac3e4d8f9a0fe` |
 | Vocabulary `algorithmVersion` | `vocabulary-content-v1` |
 | Vocabulary fingerprint | `9704c2025628676800918e4e7fc0e744c8358c025d8b01ebf43936d8474754cb` |
 | `sourceEntries` | `1600` |
 | `lexemes` | `1638` |
 | `relations` | `716` |
 | `tags` | `1638` |
-| Importer commit identity | `82a9eccfa8cdf6e6e2ed89322742a5cef6e3a46b` (importer sources last changed there; Gate B still uses the PR head tree) |
+| Importer source last-changed commit | `82a9eccfa8cdf6e6e2ed89322742a5cef6e3a46b` (advisory; hashes below are the lock) |
+| Atomicity evidence | no authored top-level `begin;` / `commit;`; CLI 2.118.0 batch is locally proven atomic; see `docs/DEDICATED_BASELINE_V0_HISTORY_ATOMICITY_SPIKE.md` |
+| Archive exclusion | `supabase/migrations_archive/pre_dedicated_baseline/` is not an active CLI directory |
 | Dedicated target identity | `DEDICATED_TARGET_MATCH` |
 | Production alias rollback | `782ffcca670c8272a3ba7ca07bedaef4debdc95f` |
+| Git base | `origin/main` `a031be4ba791af9ac68aad93e8aba9f3437128cf` |
 
-Importer file hashes at PR head, advisory only:
+Importer file hashes, Content identity:
 
 | File | SHA-256 |
 | --- | --- |
@@ -81,8 +97,22 @@ Importer file hashes at PR head, advisory only:
 | `src/server/vocabulary/import/plan-import.ts` | `63bca2c8a7f265da69fd03c8a455b7d10827cce1f702ca906efbd4a8cbc00b08` |
 | `scripts/import-vocabulary.ts` | `660faf1e2bc8f1502249a998ed9ef15caeb644a807d56192d48e6f46a9109a84` |
 
-Gate B must run the importer from the reviewed PR head. A later
-commit that changes importer sources invalidates this identity.
+### 1.2 Review identity — checked externally immediately before apply
+
+Do not store a final PR head SHA in this file. Immediately before
+any later authorized apply, an operator must fetch and verify:
+
+1. PR #17 is OPEN and unmerged.
+2. The remote PR head equals the fetched source-branch head.
+3. There are no unreviewed commits on that head.
+4. All required checks pass.
+5. There are no unresolved review threads.
+6. The final reviewed tree contains the locked Content identity
+   from section 1.1, including baseline SHA-256
+   `7f62b1818cae5045b5d74e2dd286a510f21da650ff6dea42357ac3e4d8f9a0fe`.
+
+Gate B must run the importer from that reviewed tree. A later
+commit that changes importer sources invalidates Content identity.
 
 ## 2. Empty-target preflight
 
@@ -129,84 +159,87 @@ Do not enter Gate A if any of these is true:
 4. Vocabulary is partially imported.
 5. Shared Blaze objects appear on the Dedicated target.
 6. Dedicated target identity is not `DEDICATED_TARGET_MATCH`.
-7. Baseline SHA-256, PR head, or vocabulary fingerprint drifted
-   from section 1.
+7. Content identity drifted from section 1.1, or Review identity
+   failed the external pre-apply check.
 8. The service-role server path cannot be confirmed.
 9. Production alias has left `782ffcc`.
 10. The operator would use the legacy CLI link.
 11. `migration repair`, Dashboard apply, or `db query --file` of
-    the baseline without a proven history insert in the **same**
-    transaction is the proposed method.
-12. Schema objects and history would not be proven to commit or
-    roll back together.
-13. Unauthorized `db push` / `migration up` (including
-    `--linked`).
+    the baseline is the proposed method.
+12. `--linked`, `--include-all`, `--include-seed`, or
+    `--include-roles` would be used.
+13. Active `supabase/migrations/` is not exactly the reviewed
+    baseline file.
+14. Unauthorized `db push` / `migration up`.
 
 ## 3. Migration history investigation
 
-Observed CLI: **2.118.0** (`npx supabase`). Commands that exist:
+Observed CLI: **2.118.0** (`npx supabase`). Local disposable
+PostgreSQL proved the no-authored-transaction path atomic. Remote
+Dedicated apply is still unauthorized.
 
-| Command | Proven facts from `--help` / docs this pass |
+| Command | Proven facts |
 | --- | --- |
-| `supabase db push` | Pushes pending files in `supabase/migrations/` to a remote. `--db-url` targets an explicit connection. `--linked` uses the current CLI link. `--dry-run` lists without applying. `--include-all` includes local files missing from remote history. First successful remote push creates `supabase_migrations.schema_migrations` and inserts a row after a migration applies. |
-| `supabase migration up` | Help text says it applies pending migrations to the **local** database; it also accepts `--db-url` / `--linked`. Not selected. |
-| `supabase migration list` | Lists local vs remote versions. `--db-url` or `--linked`. |
+| `supabase db push` | Pending files in `supabase/migrations/`. `--db-url` is the only later-candidate remote target. `--linked` uses the current CLI link and is forbidden. `--dry-run` lists without applying. `--include-all` / `--include-seed` / `--include-roles` are forbidden. |
+| `supabase migration up` | Shares the same apply executor. Accepts `--db-url`. Not the recommended future Dedicated channel. |
+| `supabase migration list` | Lists local vs remote versions. `--db-url` or `--linked`. `--linked` forbidden. |
 | `supabase migration repair` | Mutates history without running SQL (`applied` / `reverted`). **Forbidden.** |
 | `supabase db query` | Executes SQL. `--file` can run the baseline without recording history. **Not** an apply channel. `--linked` forbidden. |
 
 Active lineage has **one** file. Archive files live in
 `supabase/migrations_archive/pre_dedicated_baseline/` and are not
-CLI migrations. A future Dedicated-only `db push` would not replay
+CLI migrations. A future Dedicated-only `db push` must not replay
 them.
 
 Rejected channels:
 
 - Dashboard SQL Editor: applies SQL and does **not** write
-  `schema_migrations`. The baseline would never become a real
-  history start. Not recommended. Not authorized.
+  `schema_migrations`. Forbidden.
 - Dashboard apply then `migration repair`: disguises already-run
   SQL as a CLI apply. Forbidden.
 - `db query --file` then a later history insert: same split.
   Forbidden.
 - `db push --linked` or any command on the current CLI link:
   that link is the legacy source. Forbidden.
+- `--include-all`, `--include-seed`, `--include-roles`
+- Archive replay
 
-Candidate that was evaluated and **not proven safe**:
-`supabase db push --db-url` to a Dedicated-only connection, after
-`--dry-run` shows only `202609260001_dedicated_wordranger_baseline_v0`.
+Recommended future channel, not executable here and not
+authorized:
 
-Why it is not proven:
+`supabase db push --db-url <Dedicated direct connection>`
 
-1. The baseline file contains authored `begin;` / `commit;`.
-2. CLI 2.118.0 inserts
-   `supabase_migrations.schema_migrations(version, name, statements)`
-   **after** the file statements. Official text: after successfully
-   applying a migration, a new row is inserted.
-3. A file-level `commit` therefore ends the schema transaction
-   before the history insert. Schema and history are not proven
-   to be one transaction.
-4. Files with authored transaction control are applied
-   sequentially, not inside the CLI batch transaction that
-   otherwise wraps statement batches.
-5. Failure after schema commit and before history insert would
-   leave objects without a `202609260001` row. That is a
-   schema/history mismatch. This plan cannot accept that
-   half-state.
+Do not include or print the real connection. Do not run this
+command in this task.
 
-Therefore no real feasible apply channel is selected.
-**Gate A is BLOCKED. Remote apply is not authorized.**
+Why the local channel is now proven, and why remote is still
+unauthorized:
+
+1. The formal baseline no longer contains authored top-level
+   `begin;` / `commit;`.
+2. CLI 2.118.0 puts those schema statements and
+   `INSERT_MIGRATION_VERSION` in one `execBatch`.
+3. Local PostgreSQL 16.15 failure injection showed schema
+   failure and history-insert failure both leave neither schema
+   nor the `202609260001` row.
+4. Authored `begin;` / `commit;` remains proven unsafe and must
+   not return.
+5. Dedicated catalog emptiness, Dedicated-only `--db-url`
+   identity, and a separate human authorization are still
+   missing. Local proof is not remote authorization.
 
 ### 3.1 History contract (required once a later review unblocks Gate A)
 
 | Item | Requirement |
 | --- | --- |
 | Version | `202609260001` |
-| History precondition | `supabase_migrations.schema_migrations` missing or zero rows. No Blaze versions. |
-| History postcondition | exactly one row: version `202609260001`, name `dedicated_wordranger_baseline_v0`. No other versions. |
+| Name | `dedicated_wordranger_baseline_v0` |
+| History precondition | `supabase_migrations.schema_migrations` missing or zero rows. No Blaze versions. No archive versions. |
+| History postcondition | exactly one row: version `202609260001`, name `dedicated_wordranger_baseline_v0`. `statements` correspond to the transaction-control-free baseline. No other versions. |
 | Schema postcondition | REQUIRED_CORE objects match the exact baseline SHA. |
 | Mismatch stop | objects without that row, that row without objects, extra versions, or archive versions. Stop. Do not repair. |
 | Next migration | only after this postcondition. A later reviewed file in `supabase/migrations/` may then be discussed. Archive files stay out of the active directory. |
-| When `db push` may be discussed | only after a later review proves schema statements and the history insert commit or roll back together on Dedicated, catalog is `TARGET_EMPTY_CATALOG_VERIFIED`, `--db-url` is Dedicated-only, `--linked` is not used, `--dry-run` lists only this baseline, and `--include-all` / `--include-seed` / `--include-roles` are off. That discussion is a new authorization. It is not granted here. |
+| When `db push` may be discussed | only after `TARGET_EMPTY_CATALOG_VERIFIED`, Dedicated direct DB connection identity is verified, CLI is the reviewed 2.118.0, `--db-url` is explicit and Dedicated-only, `--linked` is absent, `--dry-run` lists exactly baseline version `202609260001`, the active migrations directory contains exactly the reviewed baseline, formal baseline SHA matches section 1.1, and a separate human authorization is given. That discussion is a new authorization. It is not granted here. |
 
 ## 4. Apply runbook — not executed
 
@@ -217,20 +250,30 @@ is blocked, Gates B–D remain unauthorized.
 
 ### Gate A — baseline apply — BLOCKED
 
-Dedicated target only. Exact reviewed file. Exact SHA. Only the
-active baseline. No archive replay. No Blaze history. No
-Dashboard channel. No history repair.
+`CLI ATOMIC CHANNEL PROVEN LOCALLY`;
+`REMOTE APPLY STILL UNAUTHORIZED`
+
+Dedicated target only. Exact reviewed file. Exact Content
+identity SHA. Only the active baseline. No archive replay. No
+Blaze history. No Dashboard channel. No history repair.
 
 Required later, and not met now:
 
 1. `TARGET_EMPTY_CATALOG_VERIFIED`.
-2. A proven channel where schema and history postconditions
-   succeed together, or the entire attempt rolls back to the
-   history precondition plus absent REQUIRED_CORE tables.
-3. Recomputed baseline SHA-256 equals section 1.
-4. Catalog post-check plus history postcondition in the same
-   authorization window.
-5. Schema/history mismatch is a stop. Do not `migration repair`.
+2. Dedicated direct DB connection identity verified. Do not
+   invent a connection string.
+3. CLI version remains the reviewed 2.118.0.
+4. `--db-url` is explicit and Dedicated-only. `--linked` is
+   absent.
+5. `--dry-run` lists exactly baseline version `202609260001`.
+6. Active migrations directory contains exactly the reviewed
+   baseline.
+7. Recomputed baseline SHA-256 equals section 1.1.
+8. Review identity passes the external pre-apply check.
+9. Separate human authorization is given.
+10. Catalog post-check plus history postcondition in the same
+    authorization window.
+11. A schema/history mismatch is a stop. Do not `migration repair`.
 
 Do not apply while this gate is blocked.
 
@@ -262,8 +305,8 @@ Credential-source contract (static; not a secret):
 
 Importer steps after credentials pass:
 
-1. Confirm PR head identity.
-2. `npm run import:vocabulary -- --fingerprint` matches section 1.
+1. Confirm Review identity immediately before apply.
+2. `npm run import:vocabulary -- --fingerprint` matches section 1.1.
 3. `--validate` / `--dry-run` stay offline.
 4. Vocabulary and learner catalog counts still zero.
 5. `--apply` is empty-target seed plus deterministic upsert. No
@@ -284,7 +327,7 @@ fingerprint all passed.
 
 Gate C is **no-write**:
 
-- service-role read-only counts (vocabulary matches section 1;
+- service-role read-only counts (vocabulary matches section 1.1;
   learner counts zero)
 - anon / authenticated denied on learner and vocabulary tables
 - adapter/config validation only
@@ -341,10 +384,10 @@ shared Blaze objects. Do not use covering rebuild as rollback.
 
 ## 6. Explicit non-claims
 
-- Baseline was not applied
+- Baseline was not applied remotely
 - Vocabulary was not imported
 - PR #17 was not merged
-- No `db push` / `migration up` / history repair
+- No remote `db push` / `migration up` / history repair
 - Dashboard SQL Editor is not the recommended apply channel
 - No Vercel env edit
 - No Production deployment from this plan

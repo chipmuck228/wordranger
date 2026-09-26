@@ -13,9 +13,8 @@ const BASELINE =
   "supabase/migrations/202609260001_dedicated_wordranger_baseline_v0.sql";
 
 const ORIGIN_MAIN = "a031be4ba791af9ac68aad93e8aba9f3437128cf";
-const PR_HEAD = "bb6e522e4db350ca915dade672cbed786f6a7bd1";
 const BASELINE_SHA256 =
-  "0ca22a8adba187ad4cc9255d357ab4c9da94dbc2e0a401fe65e6afc73e096b35";
+  "7f62b1818cae5045b5d74e2dd286a510f21da650ff6dea42357ac3e4d8f9a0fe";
 const PRODUCTION_ALIAS = "782ffcca670c";
 const PRODUCTION_ALIAS_FULL =
   "782ffcca670c8272a3ba7ca07bedaef4debdc95f";
@@ -71,7 +70,7 @@ describe("dedicated baseline V0 remote apply plan", () => {
     }
   });
 
-  it("locks the exact baseline path, SHA, PR head, and vocabulary identity", () => {
+  it("locks Content identity and refuses a self-referential PR-head SHA", () => {
     const manifest = buildVocabularySeedManifest(loadVocabularyDataset());
     expect(sha256(BASELINE)).toBe(BASELINE_SHA256);
     expect(manifest.algorithmVersion).toBe("vocabulary-content-v1");
@@ -85,7 +84,6 @@ describe("dedicated baseline V0 remote apply plan", () => {
       expect(text, file).toContain(BASELINE);
       expect(text, file).toContain(BASELINE_SHA256);
       expect(text, file).toContain("202609260001");
-      expect(text, file).toContain(PR_HEAD);
       expect(text, file).toContain(ORIGIN_MAIN);
       expect(text, file).toContain("vocabulary-content-v1");
       expect(text, file).toContain(FINGERPRINT);
@@ -93,6 +91,10 @@ describe("dedicated baseline V0 remote apply plan", () => {
       expect(text, file).toContain("1638");
       expect(text, file).toContain("716");
       expect(text, file).toContain(PRODUCTION_ALIAS);
+      expect(text, file).toContain("Content identity");
+      expect(text, file).toContain("Review identity");
+      expect(text, file).toContain("impossible self-reference");
+      expect(text, file).not.toMatch(/PR head:\s*`[0-9a-f]{40}`/);
     }
 
     const plan = docs.find((item) => item.file === PLAN)?.text ?? "";
@@ -130,21 +132,29 @@ describe("dedicated baseline V0 remote apply plan", () => {
     expect(plan).toContain("No automatic PR merge");
   });
 
-  it("blocks Gate A until real history can be recorded atomically", () => {
+  it("keeps Gate A locally proven and remotely unauthorized", () => {
     const all = allText();
     expect(all).toContain("Gate A is **BLOCKED**");
+    expect(all).toContain("CLI ATOMIC CHANNEL PROVEN LOCALLY");
+    expect(all).toContain("REMOTE APPLY STILL UNAUTHORIZED");
     expect(all).toContain("Dashboard SQL Editor is not the apply channel");
     expect(all).toContain("History postcondition");
     expect(all).toContain("202609260001");
     expect(all).toContain("dedicated_wordranger_baseline_v0");
     expect(all).toContain("schema/history mismatch");
     expect(all).toContain("legacy CLI link");
+    expect(all).toContain("transaction-control-free");
+    expect(all).toContain("supabase db push --db-url <Dedicated direct connection>");
+    expect(all).toContain("--include-all");
+    expect(all).toContain("--include-seed");
+    expect(all).toContain("--include-roles");
     expect(all).toMatch(/Forbidden for catalog, apply, list, and query|not on the legacy CLI link/);
     expect(all).toContain("migration repair");
     expect(all).not.toMatch(
       /Dashboard SQL Editor on Dedicated is the\s+intended path/i,
     );
     expect(all).not.toMatch(/History may remain\s+missing/i);
+    expect(all).not.toContain("SAFE HISTORY CHANNEL NOT PROVEN");
     for (const { file, text } of docs) {
       expect(text, file).toContain("BLOCKED");
     }

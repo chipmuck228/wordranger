@@ -8,7 +8,9 @@ Candidate / Not a Standard. **Local authoring and isolated validation only.**
 - Production alias remains the known-good `782ffcca670c` rollback
 - This branch is **local only**. Do not push. Do not open a PR.
 - No remote Dedicated apply. No Blaze write. No Vercel env edit.
-- `db push` / `migration up` / history repair remain **forbidden**.
+- Remote `db push` / `migration up` / history repair remain
+  **forbidden**. A local CLI atomic channel was proven; it is
+  not remote authorization.
 
 ## 0. Work contract
 
@@ -53,6 +55,11 @@ Active file:
 The SQL is a single empty-database create. It is not idempotent.
 A migration runner must not re-apply the same version. A second
 apply is expected to fail with already-exists.
+
+The file has no authored top-level `begin;` / `commit;`. CLI
+2.118.0 owns the apply transaction and history insert. Isolated
+PGlite tests may wrap a copy in a test-owned transaction. That
+wrapper is not production SQL.
 
 No Blaze `schema_migrations` rows were invented.
 
