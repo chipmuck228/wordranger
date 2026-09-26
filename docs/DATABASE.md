@@ -103,7 +103,7 @@ Honest limitation: V1 does **not** fake atomicity. A later `process_evidence` Po
 
 ## Import
 
-`npm run import:vocabulary -- --validate` and `--dry-run` never write. `--apply` upserts by `canonical_key` / deterministic UUID and requires Supabase env vars. Tests use `InMemoryVocabularyRepository` and local JSON only.
+`npm run import:vocabulary -- --validate` and `--dry-run` never write. `--fingerprint` prints the `vocabulary-content-v1` content-bound canonical hash of every imported business column and does not open a database. `--apply` is empty-target seed plus deterministic upsert by `canonical_key` / deterministic UUID. It does not delete stale rows. It requires Supabase env vars and a later authorization. Student `/train` still reads the bundled dataset. Dedicated V0 grants `service_role` SELECT/INSERT/UPDATE on the four vocabulary tables and revokes PUBLIC / anon / authenticated. No vocabulary DELETE in V0. No vocabulary client RLS policies. Tests use `InMemoryVocabularyRepository` and local JSON only.
 
 ## Game sessions
 

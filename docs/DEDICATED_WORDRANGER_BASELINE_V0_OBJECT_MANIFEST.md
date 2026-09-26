@@ -17,7 +17,7 @@ Archive (not active):
 
 | Table | Notes |
 | --- | --- |
-| `public.vocabulary_source_entries` | Rebuild from bundled source |
+| `public.vocabulary_source_entries` | Empty-target seed from bundled source |
 | `public.lexemes` | Unique `canonical_key`; FK to source entries |
 | `public.lexeme_relations` | Unique `(type, from, to, provenance)` |
 | `public.lexeme_tags` | Confidence 0..1 when present |
@@ -36,24 +36,40 @@ Archive (not active):
 | `public.prevent_learning_evidence_mutation` | function |
 | `learning_evidence_no_update` | BEFORE UPDATE OR DELETE trigger |
 | Learner RLS ENABLE | six learner tables, FORCE off |
-| Client revoke | PUBLIC / anon / authenticated |
-| `service_role` DML | SELECT / INSERT / UPDATE / DELETE on the six learner tables |
+| Client revoke | PUBLIC / anon / authenticated on learner and vocabulary tables |
+| Schema USAGE | explicit `GRANT USAGE ON SCHEMA public` to `service_role`, `anon`, and `authenticated` so table probes are not hidden by missing schema access |
+| `service_role` learner DML | SELECT / INSERT / UPDATE / DELETE on the six learner tables |
+| `service_role` vocabulary DML | SELECT / INSERT / UPDATE only. No DELETE in V0. |
+
+Vocabulary data is server/admin importer state. Student `/train`
+and free-play still use the bundled dataset. No vocabulary client
+RLS policies.
 
 ## Vocabulary fingerprint
 
-Algorithm, not a frozen published hash:
+`algorithmVersion`: `vocabulary-content-v1`
 
-1. Load bundled vocabulary only.
-2. Sort `canonical_key` for source entries, lexemes, and relations.
-3. Sort tag `lexeme_id`.
-4. SHA-256 the four labeled blocks.
+Content-bound canonical fingerprint, not a frozen published hash
+and not a hash of keys alone:
+
+1. Map the bundled dataset through `toVocabularyImportRows()`.
+2. Apply abbreviation updates onto lexeme rows.
+3. Sort rows by stable identity (`id` / `lexeme_id`).
+4. Recursively sort object keys. Keep array business order.
+5. Type-tag null, string, number, and boolean. Do not confuse
+   `null` with `""`.
+6. SHA-256 the UTF-8 canonical payload, including
+   `algorithmVersion`.
+
+Imported columns only. `created_at` / `updated_at` are omitted.
 
 Produce locally:
 
 `npm run import:vocabulary -- --fingerprint`
 
-Rebuild must match those counts and that fingerprint. It must leave
-learner tables empty.
+Empty-target seed must match those counts and that fingerprint.
+It must leave learner tables empty. Stale-row delete is out of
+scope.
 
 ## Excluded from V0
 

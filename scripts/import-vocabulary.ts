@@ -1,7 +1,7 @@
 import { loadVocabularyDataset } from "../src/server/vocabulary/load-vocabulary-dataset";
 import { applyVocabularyImport } from "../src/server/vocabulary/import/apply-import";
 import { planVocabularyImport } from "../src/server/vocabulary/import/plan-import";
-import { buildVocabularyRebuildManifest } from "../src/server/vocabulary/import/rebuild-contract";
+import { buildVocabularySeedManifest } from "../src/server/vocabulary/import/rebuild-contract";
 import { createSupabaseServerClient } from "../src/lib/supabase/server";
 
 function parseMode(
@@ -24,7 +24,7 @@ async function main() {
   const dataset = loadVocabularyDataset();
 
   if (mode === "fingerprint") {
-    console.log(JSON.stringify(buildVocabularyRebuildManifest(dataset), null, 2));
+    console.log(JSON.stringify(buildVocabularySeedManifest(dataset), null, 2));
     return;
   }
 

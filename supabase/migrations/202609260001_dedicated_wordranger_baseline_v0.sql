@@ -271,6 +271,34 @@ create trigger learning_evidence_no_update
   for each row
   execute procedure public.prevent_learning_evidence_mutation();
 
+-- Vocabulary tables are server/admin importer + service-role runtime
+-- reference data. Student /train and free-play still read the bundled
+-- dataset. No client RLS policies. DELETE is omitted: V0 is empty-target
+-- seed plus deterministic upsert, not stale-row reconciliation.
+grant usage on schema public to service_role;
+grant usage on schema public to anon;
+grant usage on schema public to authenticated;
+
+revoke all on table public.vocabulary_source_entries from public;
+revoke all on table public.vocabulary_source_entries from anon;
+revoke all on table public.vocabulary_source_entries from authenticated;
+grant select, insert, update on table public.vocabulary_source_entries to service_role;
+
+revoke all on table public.lexemes from public;
+revoke all on table public.lexemes from anon;
+revoke all on table public.lexemes from authenticated;
+grant select, insert, update on table public.lexemes to service_role;
+
+revoke all on table public.lexeme_relations from public;
+revoke all on table public.lexeme_relations from anon;
+revoke all on table public.lexeme_relations from authenticated;
+grant select, insert, update on table public.lexeme_relations to service_role;
+
+revoke all on table public.lexeme_tags from public;
+revoke all on table public.lexeme_tags from anon;
+revoke all on table public.lexeme_tags from authenticated;
+grant select, insert, update on table public.lexeme_tags to service_role;
+
 alter table public.learning_tasks enable row level security;
 alter table public.game_sessions enable row level security;
 alter table public.learning_evidence enable row level security;

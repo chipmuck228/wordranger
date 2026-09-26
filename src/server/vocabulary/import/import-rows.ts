@@ -34,7 +34,7 @@ function lexemeRow(
   };
 }
 
-/** Stable row mapping shared by apply and isolated rebuild verification. */
+/** Stable row mapping shared by apply, seed fingerprint, and isolated verification. */
 export function toVocabularyImportRows(
   dataset: VocabularyDataset,
 ): VocabularyImportRows {

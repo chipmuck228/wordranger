@@ -120,6 +120,34 @@ describe("dedicated WordRanger consolidated baseline V0", () => {
     expect(baseline).toContain("hint_count = 0");
   });
 
+  it("declares vocabulary table privileges without DELETE or client policies", () => {
+    const vocab = [
+      "vocabulary_source_entries",
+      "lexemes",
+      "lexeme_relations",
+      "lexeme_tags",
+    ] as const;
+    expect(baseline).toContain("grant usage on schema public to service_role;");
+    expect(baseline).toContain("grant usage on schema public to anon;");
+    expect(baseline).toContain("grant usage on schema public to authenticated;");
+    for (const table of vocab) {
+      const qualified = `public.${table}`;
+      expect(baseline).toContain(`revoke all on table ${qualified} from public;`);
+      expect(baseline).toContain(`revoke all on table ${qualified} from anon;`);
+      expect(baseline).toContain(
+        `revoke all on table ${qualified} from authenticated;`,
+      );
+      expect(baseline).toContain(
+        `grant select, insert, update on table ${qualified} to service_role;`,
+      );
+      expect(baseline).not.toContain(
+        `grant select, insert, update, delete on table ${qualified} to service_role;`,
+      );
+    }
+    expect(baseline).toContain("empty-target");
+    expect(baseline).toContain("bundled");
+  });
+
   it("inlines learner-table server-only grants without FORCE or client policies", () => {
     for (const table of LEARNER_TABLES) {
       const qualified = `public.${table}`;
@@ -155,6 +183,9 @@ describe("dedicated WordRanger consolidated baseline V0", () => {
       expect(text, file).not.toMatch(/lcjysnyb|service_role_key/i);
       expect(text, file).not.toMatch(/schema baseline applied/i);
       expect(text, file).not.toMatch(/learner rows imported/i);
+      expect(text, file).toContain("vocabulary-content-v1");
+      expect(text, file).not.toMatch(/SHA-256 of sorted canonical keys/i);
+      expect(text, file).not.toMatch(/sorted bundled canonical keys/i);
     }
   });
 

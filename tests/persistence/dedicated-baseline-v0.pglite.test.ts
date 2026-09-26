@@ -1,10 +1,14 @@
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { VocabularyImportRows } from "@/server/vocabulary/import/import-rows";
 import { toVocabularyImportRows } from "@/server/vocabulary/import/import-rows";
-import { buildVocabularyRebuildManifest } from "@/server/vocabulary/import/rebuild-contract";
+import {
+  VOCABULARY_CONTENT_FINGERPRINT_VERSION,
+  buildVocabularySeedManifest,
+  fingerprintVocabularyImportRows,
+} from "@/server/vocabulary/import/rebuild-contract";
 import { loadVocabularyDataset } from "@/server/vocabulary/load-vocabulary-dataset";
 
 const BASELINE =
@@ -19,20 +23,20 @@ const LEARNER_TABLES = [
   "student_lexeme_weaknesses",
 ] as const;
 
-const REQUIRED_TABLES = [
+const VOCAB_TABLES = [
   "vocabulary_source_entries",
   "lexemes",
   "lexeme_relations",
   "lexeme_tags",
-  ...LEARNER_TABLES,
 ] as const;
+
+const REQUIRED_TABLES = [...VOCAB_TABLES, ...LEARNER_TABLES] as const;
 
 let db: PGlite;
 let baselineSql: string;
 let isolatedSql: string;
 
 function forIsolatedEngine(sql: string): string {
-  // PGlite already provides gen_random_uuid and does not package pgcrypto.
   return sql.replace(
     /create extension if not exists pgcrypto;\n\n/,
     "-- pgcrypto skipped on isolated PGlite; gen_random_uuid is built-in\n\n",
@@ -78,6 +82,115 @@ async function insertRows(
   }
 }
 
+function asBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  throw new Error(`Expected boolean, got ${typeof value}`);
+}
+
+function asNumber(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const number = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(number)) {
+    throw new Error(`Expected finite number, got ${String(value)}`);
+  }
+  return number;
+}
+
+function asJson(value: unknown): unknown {
+  if (typeof value === "string") {
+    return JSON.parse(value);
+  }
+  return value;
+}
+
+function asTextArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Expected text array");
+  }
+  return value.map((item) => String(item));
+}
+
+async function withRole<T>(role: string, run: () => Promise<T>): Promise<T> {
+  await exec(`set role ${role}`);
+  try {
+    return await run();
+  } finally {
+    await exec("reset role");
+  }
+}
+
+async function expectDenied(run: () => Promise<unknown>): Promise<void> {
+  await expect(run()).rejects.toThrow(/permission denied/i);
+}
+
+async function observedImportRows(): Promise<VocabularyImportRows> {
+  const sourceEntries = await query<Record<string, unknown>>(`
+    select id, canonical_key, source_index, section, source_page_start,
+           source_page_end, source_word_raw, starred, source_ipa_raw,
+           source_pos_raw, source_meaning_raw, raw_entry, parse_status,
+           parse_issues, source_review_note
+    from public.vocabulary_source_entries
+  `);
+  const lexemes = await query<Record<string, unknown>>(`
+    select id, canonical_key, source_entry_id, source_index, lemma, display,
+           role, starred, parts_of_speech, ipa, meanings_zh, forms, variants,
+           abbreviation_of_lexeme_id, quality_status, quality_issues,
+           correction_applied, correction_note
+    from public.lexemes
+  `);
+  const relations = await query<Record<string, unknown>>(`
+    select id, canonical_key, type, from_lexeme_id, to_lexeme_id,
+           is_symmetric, confidence, provenance, note
+    from public.lexeme_relations
+  `);
+  const tags = await query<Record<string, unknown>>(`
+    select lexeme_id, topics, semantic_categories, game_tags,
+           topic_confidence, semantic_confidence, game_confidence
+    from public.lexeme_tags
+  `);
+  return {
+    sourceEntries: sourceEntries.map((row) => ({
+      ...row,
+      source_index: asNumber(row.source_index),
+      source_page_start: asNumber(row.source_page_start),
+      source_page_end: asNumber(row.source_page_end),
+      starred: asBoolean(row.starred),
+      parse_issues: asJson(row.parse_issues),
+    })),
+    lexemes: lexemes.map((row) => ({
+      ...row,
+      source_index: asNumber(row.source_index),
+      starred: asBoolean(row.starred),
+      parts_of_speech: asTextArray(row.parts_of_speech),
+      ipa: asTextArray(row.ipa),
+      meanings_zh: asJson(row.meanings_zh),
+      forms: asTextArray(row.forms),
+      variants: asTextArray(row.variants),
+      quality_issues: asJson(row.quality_issues),
+      correction_applied: asBoolean(row.correction_applied),
+    })),
+    lexemeAbbreviationUpdates: [],
+    relations: relations.map((row) => ({
+      ...row,
+      is_symmetric: asBoolean(row.is_symmetric),
+      confidence: asNumber(row.confidence),
+    })),
+    tags: tags.map((row) => ({
+      ...row,
+      topics: asTextArray(row.topics),
+      semantic_categories: asTextArray(row.semantic_categories),
+      game_tags: asTextArray(row.game_tags),
+      topic_confidence: asNumber(row.topic_confidence),
+      semantic_confidence: asNumber(row.semantic_confidence),
+      game_confidence: asNumber(row.game_confidence),
+    })),
+  };
+}
+
 describe("dedicated baseline V0 isolated PGlite apply", () => {
   beforeAll(async () => {
     db = new PGlite();
@@ -87,16 +200,19 @@ describe("dedicated baseline V0 isolated PGlite apply", () => {
       do $$
       begin
         if not exists (select from pg_roles where rolname = 'anon') then
-          create role anon;
+          create role anon nologin nosuperuser noinherit;
         end if;
         if not exists (select from pg_roles where rolname = 'authenticated') then
-          create role authenticated;
+          create role authenticated nologin nosuperuser noinherit;
         end if;
         if not exists (select from pg_roles where rolname = 'service_role') then
-          create role service_role login superuser;
+          create role service_role nologin nosuperuser noinherit bypassrls;
         end if;
       end
       $$;
+      grant anon to current_user;
+      grant authenticated to current_user;
+      grant service_role to current_user;
     `);
     await exec(isolatedSql);
   }, 60_000);
@@ -123,72 +239,82 @@ describe("dedicated baseline V0 isolated PGlite apply", () => {
     expect(tables.map((row) => row.relname)).toEqual(
       [...REQUIRED_TABLES].sort(),
     );
-    const trigger = await scalar<string>(
-      `select tgname from pg_trigger
-       where tgname = 'learning_evidence_no_update'`,
-    );
-    expect(trigger).toBe("learning_evidence_no_update");
-    const fn = await scalar<string>(
-      `select proname from pg_proc
-       where proname = 'prevent_learning_evidence_mutation'`,
-    );
-    expect(fn).toBe("prevent_learning_evidence_mutation");
-    const cleanup = await scalar<number>(
-      `select count(*)::int from pg_proc
-       where proname = 'cleanup_progress_test_user'`,
-    );
-    expect(cleanup).toBe(0);
-    const sessionFk = await scalar<number>(
-      `select count(*)::int from pg_constraint
-       where conname = 'learning_evidence_session_id_fkey'`,
-    );
-    expect(sessionFk).toBe(0);
+    expect(
+      await scalar<string>(
+        `select tgname from pg_trigger where tgname = 'learning_evidence_no_update'`,
+      ),
+    ).toBe("learning_evidence_no_update");
+    expect(
+      await scalar<number>(
+        `select count(*)::int from pg_proc where proname = 'cleanup_progress_test_user'`,
+      ),
+    ).toBe(0);
+    expect(
+      await scalar<boolean>(
+        `select rolsuper from pg_roles where rolname = 'service_role'`,
+      ),
+    ).toBe(false);
   });
 
-  it("enables learner RLS without FORCE, policies, or client DML", async () => {
-    const rows = await query<{
-      relname: string;
-      relrowsecurity: boolean;
-      relforcerowsecurity: boolean;
-    }>(
-      `select c.relname, c.relrowsecurity, c.relforcerowsecurity
-       from pg_class c
-       join pg_namespace n on n.oid = c.relnamespace
-       where n.nspname = 'public'
-         and c.relname = any($1::text[])`,
-      [LEARNER_TABLES],
-    );
-    expect(rows).toHaveLength(LEARNER_TABLES.length);
-    for (const row of rows) {
-      expect(row.relrowsecurity).toBe(true);
-      expect(row.relforcerowsecurity).toBe(false);
-    }
-    const policies = await scalar<number>(
-      `select count(*)::int from pg_policies where schemaname = 'public'`,
-    );
-    expect(policies).toBe(0);
-    for (const table of LEARNER_TABLES) {
-      const clientGrants = await scalar<number>(
-        `select count(*)::int
-         from information_schema.role_table_grants
-         where table_schema = 'public'
-           and table_name = $1
-           and grantee in ('PUBLIC', 'anon', 'authenticated')`,
-        [table],
+  it("probes real SQL allow/deny for service_role, anon, and authenticated", async () => {
+    await withRole("service_role", async () => {
+      expect(
+        await scalar<number>(
+          `select count(*)::int from public.vocabulary_source_entries`,
+        ),
+      ).toBe(0);
+      await db.query(
+        `insert into public.vocabulary_source_entries
+          (id, canonical_key, source_index, source_word_raw, source_meaning_raw)
+         values ($1, $2, $3, $4, $5)`,
+        [
+          "00000000-0000-4000-8000-0000000000aa",
+          "src-perm-probe",
+          -1,
+          "probe",
+          "",
+        ],
       );
-      expect(clientGrants, table).toBe(0);
-      const service = await query<{ privilege_type: string }>(
-        `select privilege_type
-         from information_schema.role_table_grants
-         where table_schema = 'public'
-           and table_name = $1
-           and grantee = 'service_role'`,
-        [table],
+      await db.query(
+        `update public.vocabulary_source_entries
+         set source_word_raw = 'probe-updated'
+         where canonical_key = 'src-perm-probe'`,
       );
-      expect(service.map((row) => row.privilege_type).sort()).toEqual(
-        ["DELETE", "INSERT", "SELECT", "UPDATE"].sort(),
+      await expectDenied(() =>
+        db.query(
+          `delete from public.vocabulary_source_entries
+           where canonical_key = 'src-perm-probe'`,
+        ),
       );
-    }
+      for (const table of LEARNER_TABLES) {
+        expect(
+          await scalar<number>(`select count(*)::int from public.${table}`),
+        ).toBe(0);
+      }
+      await db.query(`delete from public.game_sessions where false`);
+    });
+
+    await exec(`
+      delete from public.vocabulary_source_entries
+      where canonical_key = 'src-perm-probe';
+    `);
+
+    await withRole("anon", async () => {
+      await expectDenied(() =>
+        db.query(`select count(*) from public.lexemes`),
+      );
+      await expectDenied(() =>
+        db.query(`select count(*) from public.learning_tasks`),
+      );
+    });
+    await withRole("authenticated", async () => {
+      await expectDenied(() =>
+        db.query(`select count(*) from public.lexeme_tags`),
+      );
+      await expectDenied(() =>
+        db.query(`select count(*) from public.game_sessions`),
+      );
+    });
   });
 
   it("keeps learning_evidence append-only", async () => {
@@ -249,13 +375,14 @@ describe("dedicated baseline V0 isolated PGlite apply", () => {
     ).rejects.toThrow(/append-only/i);
   });
 
-  it("rebuilds bundled vocabulary with a matching fingerprint", async () => {
+  it("seeds bundled vocabulary and matches the shared content fingerprint", async () => {
     await exec(`
       truncate public.learning_evidence, public.lexemes, public.vocabulary_source_entries
-      restart identity cascade;
+      cascade;
     `);
     const dataset = loadVocabularyDataset();
-    const expected = buildVocabularyRebuildManifest(dataset);
+    const expected = buildVocabularySeedManifest(dataset);
+    expect(expected.algorithmVersion).toBe(VOCABULARY_CONTENT_FINGERPRINT_VERSION);
     const rows = toVocabularyImportRows(dataset);
     await insertRows("vocabulary_source_entries", rows.sourceEntries);
     await insertRows("lexemes", rows.lexemes);
@@ -270,50 +397,47 @@ describe("dedicated baseline V0 isolated PGlite apply", () => {
     await insertRows("lexeme_relations", rows.relations);
     await insertRows("lexeme_tags", rows.tags);
 
-    const sourceKeys = (
-      await query<{ canonical_key: string }>(
-        `select canonical_key from public.vocabulary_source_entries`,
-      )
-    ).map((row) => row.canonical_key);
-    const lexemeKeys = (
-      await query<{ canonical_key: string }>(
-        `select canonical_key from public.lexemes`,
-      )
-    ).map((row) => row.canonical_key);
-    const relationKeys = (
-      await query<{ canonical_key: string }>(
-        `select coalesce(canonical_key, '') as canonical_key from public.lexeme_relations`,
-      )
-    ).map((row) => row.canonical_key);
-    const tagKeys = (
-      await query<{ lexeme_id: string }>(
-        `select lexeme_id::text as lexeme_id from public.lexeme_tags`,
-      )
-    ).map((row) => row.lexeme_id);
-    const fingerprint = createHash("sha256")
-      .update(
-        [
-          `sourceEntries:${[...sourceKeys].sort((a, b) => a.localeCompare(b)).join("\n")}`,
-          `lexemes:${[...lexemeKeys].sort((a, b) => a.localeCompare(b)).join("\n")}`,
-          `relations:${[...relationKeys].sort((a, b) => a.localeCompare(b)).join("\n")}`,
-          `tags:${[...tagKeys].sort((a, b) => a.localeCompare(b)).join("\n")}`,
-        ].join("\n"),
-      )
-      .digest("hex");
+    const observedRows = await observedImportRows();
+    const observed = fingerprintVocabularyImportRows(observedRows);
+    expect(observedRows.sourceEntries).toHaveLength(expected.sourceEntries);
+    expect(observedRows.lexemes).toHaveLength(expected.lexemes);
+    expect(observedRows.relations).toHaveLength(expected.relations);
+    expect(observedRows.tags).toHaveLength(expected.tags);
+    expect(observed.algorithmVersion).toBe(expected.algorithmVersion);
+    expect(observed.fingerprint).toBe(expected.fingerprint);
 
-    expect(sourceKeys).toHaveLength(expected.sourceEntries);
-    expect(lexemeKeys).toHaveLength(expected.lexemes);
-    expect(relationKeys).toHaveLength(expected.relations);
-    expect(tagKeys).toHaveLength(expected.tags);
-    expect(fingerprint).toBe(expected.fingerprint);
-    const learnerRows = await scalar<number>(
-      `select (
-         (select count(*) from public.learning_tasks) +
-         (select count(*) from public.game_sessions) +
-         (select count(*) from public.learning_evidence) +
-         (select count(*) from public.student_lexeme_models)
-       )::int`,
+    const original = await scalar<unknown>(
+      `select meanings_zh from public.lexemes order by canonical_key limit 1`,
     );
-    expect(learnerRows).toBe(0);
+    await db.query(
+      `update public.lexemes
+       set meanings_zh = $1::jsonb
+       where id = (select id from public.lexemes order by canonical_key limit 1)`,
+      [JSON.stringify(["fingerprint-drift"])],
+    );
+    expect(
+      fingerprintVocabularyImportRows(await observedImportRows()).fingerprint,
+    ).not.toBe(expected.fingerprint);
+
+    await db.query(
+      `update public.lexemes
+       set meanings_zh = $1::jsonb
+       where id = (select id from public.lexemes order by canonical_key limit 1)`,
+      [JSON.stringify(original)],
+    );
+    expect(
+      fingerprintVocabularyImportRows(await observedImportRows()).fingerprint,
+    ).toBe(expected.fingerprint);
+
+    expect(
+      await scalar<number>(
+        `select (
+           (select count(*) from public.learning_tasks) +
+           (select count(*) from public.game_sessions) +
+           (select count(*) from public.learning_evidence) +
+           (select count(*) from public.student_lexeme_models)
+         )::int`,
+      ),
+    ).toBe(0);
   }, 120_000);
 });

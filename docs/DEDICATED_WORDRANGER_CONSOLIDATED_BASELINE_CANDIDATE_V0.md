@@ -17,16 +17,17 @@ change frozen Core, Scheduler, TaskEvaluator, Homepage, `/practice`,
 or Auth.
 
 Student-path vocabulary remains the bundled dataset. Baseline tables
-exist so Evidence / task FKs and the admin rebuild importer have a
+exist so Evidence / task FKs and the server/admin importer have a
 schema. Production `/train` adapters still read bundled vocabulary.
+Vocabulary rows are managed only by the service-role importer.
 
 ## 1. Phase 0 matrix
 
 | Class | Objects |
 | --- | --- |
 | REQUIRED_CORE | `vocabulary_source_entries`, `lexemes`, `lexeme_relations`, `lexeme_tags`, `learning_tasks`, `game_sessions` plus `revision`, `learning_evidence` with session correlation and unique `task_id`, `student_lexeme_models`, `student_lexeme_skill_states`, `student_lexeme_weaknesses`, append-only trigger, `pgcrypto`, current PK/FK/unique/index/check contracts |
-| REQUIRED_SERVER_SECURITY | RLS ENABLE not FORCE on the six learner tables; PUBLIC / anon / authenticated revoke; `service_role` SELECT/INSERT/UPDATE/DELETE |
-| REBUILD_FROM_REPO | Vocabulary rows via the existing importer + rebuild fingerprint. No learner rows. |
+| REQUIRED_SERVER_SECURITY | RLS ENABLE not FORCE on the six learner tables; PUBLIC / anon / authenticated revoke on learner and vocabulary tables; `service_role` learner DML including DELETE; vocabulary SELECT/INSERT/UPDATE only; explicit `USAGE` on `public` |
+| REBUILD_FROM_REPO | Vocabulary empty-target seed + deterministic upsert. Content fingerprint `vocabulary-content-v1`. No learner rows. No stale-row delete. |
 | OPTIONAL_EXPERIMENTAL | `vocabulary_placement_reviews`, Context Lab, contextual-content objects. Not in V0. |
 | TEST_ONLY_EXCLUDED | `cleanup_progress_test_user` |
 | SHARED_BLAZE_EXCLUDED | campus / enrollment / newsletter / traffic / `public.users` / Blaze-named functions / Blaze history |
@@ -55,16 +56,25 @@ apply is expected to fail with already-exists.
 
 No Blaze `schema_migrations` rows were invented.
 
-## 3. Vocabulary rebuild
+## 3. Vocabulary empty-target seed
 
-Reuse `npm run import:vocabulary`. Added `--fingerprint` prints
-counts and a SHA-256 of sorted bundled canonical keys. That mode
-does not open a database.
+Reuse `npm run import:vocabulary`. This is **empty-target seed +
+deterministic upsert**, not a delete-rebuild.
+
+`--fingerprint` prints counts and a `vocabulary-content-v1`
+content-bound canonical SHA-256 over every imported business
+column from `toVocabularyImportRows()`. That mode does not open a
+database. It is not a hash of canonical keys alone.
 
 `--validate` / `--dry-run` remain offline. `--apply` still requires
 an explicit later authorization and is not used by this Candidate.
 
-Rebuild writes only vocabulary tables. It does not write Evidence,
+V0 first import is only for an empty Dedicated target. A count or
+fingerprint mismatch fails. Upsert does **not** delete repository-
+removed stale rows. Reconciliation/delete is a later authorized
+task.
+
+Seed writes only vocabulary tables. It does not write Evidence,
 snapshots, sessions, or Scheduler state.
 
 ## 4. Isolated validation
@@ -83,11 +93,13 @@ Verified in isolation:
 - required tables / trigger / indexes exist
 - shared Blaze and cleanup RPC absent
 - learner RLS on, FORCE off, zero policies
-- PUBLIC / anon / authenticated have no learner DML
-- `service_role` has the six-table DML grants
+- PUBLIC / anon / authenticated have no learner or vocabulary DML
+- `service_role` is not superuser in isolation; BYPASSRLS only
+- `service_role` can SELECT/INSERT/UPDATE vocabulary and use learner DML
 - Evidence append-only
-- bundled vocabulary rebuild counts and fingerprint match
-- zero learner rows after rebuild
+- bundled vocabulary seed counts and `vocabulary-content-v1` fingerprint match
+- mutating stored meanings then restoring is the only rematch path
+- zero learner rows after seed
 
 Remote Dedicated target was not contacted. Production remains on
 `782ffcca670c`.
