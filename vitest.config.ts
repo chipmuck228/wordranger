@@ -9,6 +9,8 @@ export default defineConfig({
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     restoreMocks: true,
     testTimeout: 20000,
+    hookTimeout: 60000,
+    teardownTimeout: 180000,
   },
   resolve: {
     alias: {

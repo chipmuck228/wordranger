@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   assertLocalDbUrl,
+  buildChildEnv,
   classifyCase,
   classifyFormalCase,
   FORMAL_BASELINE_FILE,
@@ -10,14 +11,22 @@ import {
   FORMAL_BASELINE_PATH,
   FORMAL_BASELINE_SHA256,
   fixtureMentionsArchive,
+  leftoverReport,
   postgresHarnessAvailable,
   readInstalledCliVersion,
+  REQUIRED_CORE_TABLES,
+  REQUIRED_FUNCTIONS,
+  REQUIRED_INDEXES,
+  REQUIRED_TRIGGERS,
   runAtomicitySpike,
   runFormalBaselineAtomicityMatrix,
   SPIKE_BASELINE_VERSION,
   SPIKE_CLI_VERSION,
+  startDisposablePostgres,
   type CaseResult,
+  type DisposablePostgres,
   type FormalCaseResult,
+  type TeardownEvidence,
 } from "./dedicated-baseline-history-atomicity-harness";
 
 const LIVE =
@@ -68,18 +77,27 @@ describe("Dedicated Baseline V0 history atomicity spike", () => {
         "grant select, insert, update, delete on table public.student_lexeme_weaknesses to service_role;",
       ),
     ).toBe(true);
-    expect(body).not.toMatch(/^begin;/m);
-    expect(body).not.toMatch(/^commit;/m);
     expect(source).not.toMatch(/^begin;/m);
     expect(source).not.toMatch(/^commit;/m);
     expect(source).not.toMatch(/insert into\s+supabase_migrations/i);
     expect(createHash("sha256").update(readFileSync(FORMAL_BASELINE_PATH)).digest("hex")).toBe(
       FORMAL_BASELINE_SHA256,
     );
-    expect(FORMAL_BASELINE_PATH).toContain(SPIKE_BASELINE_VERSION);
+    for (const table of REQUIRED_CORE_TABLES) {
+      expect(source).toContain(`create table ${table}`);
+    }
+    for (const fn of REQUIRED_FUNCTIONS) {
+      expect(source).toContain(`function ${fn}()`);
+    }
+    for (const trigger of REQUIRED_TRIGGERS) {
+      expect(source).toContain(`create trigger ${trigger}`);
+    }
+    for (const index of REQUIRED_INDEXES) {
+      expect(source).toContain(index);
+    }
   });
 
-  it("refuses non-local database URLs and accepts loopback only", () => {
+  it("refuses redirected or unknown-parameter local URLs", () => {
     expect(() => assertLocalDbUrl("postgresql://spike@example.com:5432/spike")).toThrow(
       /refusing non-local DB URL/,
     );
@@ -87,11 +105,51 @@ describe("Dedicated Baseline V0 history atomicity spike", () => {
       /refusing non-local DB URL/,
     );
     expect(() =>
-      assertLocalDbUrl("postgresql://spike@127.0.0.1:6543/spike?sslmode=disable"),
+      assertLocalDbUrl("postgresql://spike@127.0.0.1:6543/spike?sslmode=disable&host=example.com"),
+    ).toThrow(/refusing non-local DB URL/);
+    expect(() =>
+      assertLocalDbUrl("postgresql://spike@127.0.0.1:6543/spike?sslmode=disable&hostaddr=10.0.0.1"),
+    ).toThrow(/refusing non-local DB URL/);
+    expect(() =>
+      assertLocalDbUrl("postgresql://spike@127.0.0.1:6543/spike?sslmode=disable&service=remote"),
+    ).toThrow(/refusing non-local DB URL/);
+    expect(() =>
+      assertLocalDbUrl("postgresql://spike@127.0.0.1:6543/spike?sslmode=disable&foo=bar"),
+    ).toThrow(/refusing non-local DB URL/);
+    expect(() => assertLocalDbUrl("postgresql://spike@127.0.0.1/spike?sslmode=disable")).toThrow(
+      /refusing non-local DB URL/,
+    );
+    expect(() =>
+      assertLocalDbUrl("postgresql://spike@127.0.0.1:6543/spike?sslmode=disable", 9999),
+    ).toThrow(/refusing non-local DB URL/);
+    expect(() =>
+      assertLocalDbUrl("postgresql://spike@127.0.0.1:6543/spike?sslmode=disable", 6543),
     ).not.toThrow();
     expect(() =>
-      assertLocalDbUrl("postgresql://spike@localhost:6543/spike?sslmode=disable"),
+      assertLocalDbUrl("postgresql://spike@localhost:6543/spike?sslmode=disable", 6543),
     ).not.toThrow();
+  });
+
+  it("does not copy remote database sentinels into the child environment", () => {
+    const keys = ["SUPABASE_ACCESS_TOKEN", "PGHOST", "PGSERVICE"] as const;
+    const previous: Partial<Record<(typeof keys)[number], string | undefined>> = {};
+    for (const key of keys) {
+      previous[key] = process.env[key];
+      process.env[key] = "1";
+    }
+    try {
+      const env = buildChildEnv({ npm_config_yes: "true" });
+      for (const key of keys) {
+        expect(Object.hasOwn(env, key)).toBe(false);
+      }
+      expect(env.npm_config_yes).toBe("true");
+      expect(env.PATH).toBeTypeOf("string");
+    } finally {
+      for (const key of keys) {
+        if (previous[key] === undefined) delete process.env[key];
+        else process.env[key] = previous[key];
+      }
+    }
   });
 
   it("uses the installed Supabase CLI 2.118.0", () => {
@@ -100,16 +158,34 @@ describe("Dedicated Baseline V0 history atomicity spike", () => {
 });
 
 describe.skipIf(!LIVE)("local PostgreSQL CLI apply matrix", () => {
+  let postgres: DisposablePostgres;
+  let teardown: TeardownEvidence | undefined;
+
+  beforeAll(async () => {
+    postgres = await startDisposablePostgres();
+  }, 60_000);
+
+  afterAll(async () => {
+    if (postgres) {
+      teardown = await postgres.teardown(true);
+      if (!teardown.clusterStopped || !teardown.portClosed || !teardown.clusterRemoved) {
+        throw new Error("disposable postgres teardown incomplete");
+      }
+    }
+  }, 60_000);
+
   it(
     "records schema/history states for authored and no-authored fixtures",
     async () => {
       const summary = await runAtomicitySpike({
         commands: ["db-push", "migration-up"],
+        postgres,
       });
 
       expect(summary.cliVersion).toBe(SPIKE_CLI_VERSION);
       expect(summary.host).toBe("127.0.0.1");
       expect(summary.cases).toHaveLength(12);
+      expect(summary.teardown.fixtureWorkdirsRemoved).toBe(true);
 
       for (const result of summary.cases) {
         expect(result.after.listenAddresses).toBe("127.0.0.1");
@@ -128,41 +204,26 @@ describe.skipIf(!LIVE)("local PostgreSQL CLI apply matrix", () => {
           const historyFailClass = classifyCase(historyFail);
 
           expect(success.cliFailed).toBe(false);
-          expect(successClass.schemaPresent).toBe(true);
+          expect(successClass.schemaState).toBe("COMPLETE");
+          expect(successClass.applyState).toBe("COMPLETE");
           expect(successClass.exactlyOneHistoryRow).toBe(true);
           expect(success.after.historyRows[0]?.version).toBe(success.version);
           expect(success.after.historyRows[0]?.name).toBe("spike_success");
-          expect(success.after.historyRows[0]?.statements.length).toBeGreaterThan(0);
-          if (shape === "authored-begin-commit") {
-            expect(success.after.historyRows[0]?.statements.some((sql) => /^begin\b/i.test(sql))).toBe(
-              true,
-            );
-            expect(success.after.historyRows[0]?.statements.some((sql) => /^commit\b/i.test(sql))).toBe(
-              true,
-            );
-          } else {
-            expect(success.after.historyRows[0]?.statements.some((sql) => /^begin\b/i.test(sql))).toBe(
-              false,
-            );
-            expect(success.after.historyRows[0]?.statements.some((sql) => /^commit\b/i.test(sql))).toBe(
-              false,
-            );
-          }
 
           expect(schemaFail.cliFailed).toBe(true);
-          expect(schemaFailClass.schemaPresent).toBe(false);
+          expect(schemaFailClass.schemaState).toBe("ABSENT");
+          expect(schemaFailClass.applyState).toBe("ABSENT");
           expect(schemaFailClass.historyPresent).toBe(false);
-          expect(schemaFailClass.halfState).toBe(false);
 
           expect(historyFail.cliFailed).toBe(true);
-          expect(historyFailClass.historyPresent).toBe(false);
           expect(historyFail.cliTail).toContain("SPIKE_HISTORY_INSERT_REJECTED");
+          expect(historyFailClass.historyPresent).toBe(false);
           if (shape === "authored-begin-commit") {
-            expect(historyFailClass.schemaPresent).toBe(true);
-            expect(historyFailClass.halfState).toBe(true);
+            expect(historyFailClass.schemaState).toBe("COMPLETE");
+            expect(historyFailClass.applyState).toBe("PARTIAL");
           } else {
-            expect(historyFailClass.schemaPresent).toBe(false);
-            expect(historyFailClass.halfState).toBe(false);
+            expect(historyFailClass.schemaState).toBe("ABSENT");
+            expect(historyFailClass.applyState).toBe("ABSENT");
           }
         }
       }
@@ -175,11 +236,13 @@ describe.skipIf(!LIVE)("local PostgreSQL CLI apply matrix", () => {
     async () => {
       const summary = await runFormalBaselineAtomicityMatrix({
         commands: ["db-push", "migration-up"],
+        postgres,
       });
 
       expect(summary.cliVersion).toBe(SPIKE_CLI_VERSION);
       expect(summary.host).toBe("127.0.0.1");
       expect(summary.cases).toHaveLength(6);
+      expect(summary.teardown.fixtureWorkdirsRemoved).toBe(true);
 
       for (const result of summary.cases) {
         expect(result.listedMigrationFiles).toEqual([FORMAL_BASELINE_FILE]);
@@ -191,6 +254,9 @@ describe.skipIf(!LIVE)("local PostgreSQL CLI apply matrix", () => {
         expect(result.after.historyRows.some((row) => fixtureMentionsArchive(row.version))).toBe(
           false,
         );
+        if (result.after.schemaState === "PARTIAL") {
+          throw new Error(`PARTIAL leftover ${leftoverReport(result)}`);
+        }
         if (result.command === "db-push") {
           expect(result.dryRunTail).toContain(FORMAL_BASELINE_FILE);
           expect(fixtureMentionsArchive(result.dryRunTail)).toBe(false);
@@ -205,42 +271,44 @@ describe.skipIf(!LIVE)("local PostgreSQL CLI apply matrix", () => {
         const schemaFailClass = classifyFormalCase(schemaFail);
         const historyFailClass = classifyFormalCase(historyFail);
 
-        expect(success.cliFailed).toBe(false);
-        expect(successClass.schemaPresent).toBe(true);
+        expect(success.cliFailed, leftoverReport(success)).toBe(false);
+        expect(successClass.schemaState).toBe("COMPLETE");
+        expect(successClass.applyState).toBe("COMPLETE");
+        expect(success.after.presentTables).toEqual([...REQUIRED_CORE_TABLES].sort());
+        expect(success.after.missingTables).toEqual([]);
+        expect(success.after.presentFunctions).toEqual([...REQUIRED_FUNCTIONS]);
+        expect(success.after.presentTriggers).toEqual([...REQUIRED_TRIGGERS]);
+        expect(success.after.presentIndexes).toEqual([...REQUIRED_INDEXES].sort());
+        expect(success.after.extensionPresent).toBe(true);
         expect(successClass.exactlyOneHistoryRow).toBe(true);
         expect(success.after.historyRows[0]?.version).toBe(SPIKE_BASELINE_VERSION);
         expect(success.after.historyRows[0]?.name).toBe(FORMAL_BASELINE_NAME);
-        expect(
-          success.after.historyRows[0]?.statements.some((sql) => /^begin\b/i.test(sql)),
-        ).toBe(false);
-        expect(
-          success.after.historyRows[0]?.statements.some((sql) => /^commit\b/i.test(sql)),
-        ).toBe(false);
-        expect(success.after.historyRows[0]?.statements[0]).toMatch(
-          /create extension if not exists pgcrypto/i,
-        );
 
-        expect(schemaFail.cliFailed).toBe(true);
-        expect(schemaFailClass.schemaPresent).toBe(false);
+        expect(schemaFail.cliFailed, leftoverReport(schemaFail)).toBe(true);
+        expect(schemaFailClass.schemaState).toBe("ABSENT");
+        expect(schemaFailClass.applyState).toBe("ABSENT");
+        expect(schemaFail.after.presentTables).toEqual([]);
+        expect(schemaFail.after.extensionPresent).toBe(false);
         expect(schemaFailClass.historyPresent).toBe(false);
-        expect(schemaFailClass.halfState).toBe(false);
 
-        expect(historyFail.cliFailed).toBe(true);
+        expect(historyFail.cliFailed, leftoverReport(historyFail)).toBe(true);
         expect(historyFail.cliTail).toContain("SPIKE_HISTORY_INSERT_REJECTED");
-        expect(historyFailClass.schemaPresent).toBe(false);
+        expect(historyFailClass.schemaState).toBe("ABSENT");
+        expect(historyFailClass.applyState).toBe("ABSENT");
+        expect(historyFail.after.presentTables).toEqual([]);
+        expect(historyFail.after.extensionPresent).toBe(false);
         expect(historyFailClass.historyPresent).toBe(false);
-        expect(historyFailClass.halfState).toBe(false);
-
-        process.stdout.write(
-          [
-            `formal ${command} A: schema=${successClass.schemaPresent} history=${successClass.historyPresent} version=${success.after.historyRows[0]?.version} name=${success.after.historyRows[0]?.name} statements=${success.after.historyRows[0]?.statements.length}`,
-            `formal ${command} B: schema=${schemaFailClass.schemaPresent} history=${schemaFailClass.historyPresent} half=${schemaFailClass.halfState}`,
-            `formal ${command} C: schema=${historyFailClass.schemaPresent} history=${historyFailClass.historyPresent} half=${historyFailClass.halfState}`,
-            "",
-          ].join("\n"),
-        );
       }
     },
     240_000,
   );
+
+  it("stops the shared disposable cluster", async () => {
+    const evidence = await postgres.teardown(true);
+    expect(evidence.clusterStopped).toBe(true);
+    expect(evidence.portClosed).toBe(true);
+    expect(evidence.clusterRemoved).toBe(true);
+    expect(evidence.fixtureWorkdirsRemoved).toBe(true);
+    teardown = evidence;
+  });
 });
