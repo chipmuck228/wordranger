@@ -273,8 +273,14 @@ create trigger learning_evidence_no_update
 
 -- Vocabulary tables are server/admin importer + service-role runtime
 -- reference data. Student /train and free-play still read the bundled
--- dataset. No client RLS policies. DELETE is omitted: V0 is empty-target
--- seed plus deterministic upsert, not stale-row reconciliation.
+-- dataset. No client RLS policies. Dedicated does not rely on a fresh
+-- Supabase project starting with no service_role table grants. Each
+-- vocabulary table first revokes ALL from PUBLIC, anon, authenticated,
+-- and service_role (clearing default/existing ALL, including DELETE),
+-- then grants only SELECT, INSERT, UPDATE. DELETE, TRUNCATE,
+-- REFERENCES, and TRIGGER are not granted. The importer does not need
+-- DELETE. V0 remains empty-target seed plus deterministic upsert, not
+-- stale-row reconciliation.
 grant usage on schema public to service_role;
 grant usage on schema public to anon;
 grant usage on schema public to authenticated;
@@ -282,21 +288,25 @@ grant usage on schema public to authenticated;
 revoke all on table public.vocabulary_source_entries from public;
 revoke all on table public.vocabulary_source_entries from anon;
 revoke all on table public.vocabulary_source_entries from authenticated;
+revoke all on table public.vocabulary_source_entries from service_role;
 grant select, insert, update on table public.vocabulary_source_entries to service_role;
 
 revoke all on table public.lexemes from public;
 revoke all on table public.lexemes from anon;
 revoke all on table public.lexemes from authenticated;
+revoke all on table public.lexemes from service_role;
 grant select, insert, update on table public.lexemes to service_role;
 
 revoke all on table public.lexeme_relations from public;
 revoke all on table public.lexeme_relations from anon;
 revoke all on table public.lexeme_relations from authenticated;
+revoke all on table public.lexeme_relations from service_role;
 grant select, insert, update on table public.lexeme_relations to service_role;
 
 revoke all on table public.lexeme_tags from public;
 revoke all on table public.lexeme_tags from anon;
 revoke all on table public.lexeme_tags from authenticated;
+revoke all on table public.lexeme_tags from service_role;
 grant select, insert, update on table public.lexeme_tags to service_role;
 
 alter table public.learning_tasks enable row level security;

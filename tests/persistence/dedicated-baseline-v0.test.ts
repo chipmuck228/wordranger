@@ -130,18 +130,38 @@ describe("dedicated WordRanger consolidated baseline V0", () => {
     expect(baseline).toContain("grant usage on schema public to service_role;");
     expect(baseline).toContain("grant usage on schema public to anon;");
     expect(baseline).toContain("grant usage on schema public to authenticated;");
+    expect(baseline).toContain("does not rely on a fresh");
+    expect(baseline).toContain("clearing default/existing ALL");
     for (const table of vocab) {
       const qualified = `public.${table}`;
-      expect(baseline).toContain(`revoke all on table ${qualified} from public;`);
-      expect(baseline).toContain(`revoke all on table ${qualified} from anon;`);
-      expect(baseline).toContain(
-        `revoke all on table ${qualified} from authenticated;`,
+      const revokePublic = `revoke all on table ${qualified} from public;`;
+      const revokeAnon = `revoke all on table ${qualified} from anon;`;
+      const revokeAuthenticated = `revoke all on table ${qualified} from authenticated;`;
+      const revokeServiceRole = `revoke all on table ${qualified} from service_role;`;
+      const grantMinimum = `grant select, insert, update on table ${qualified} to service_role;`;
+      const revokeServiceRoleAt = baseline.indexOf(revokeServiceRole);
+      const grantMinimumAt = baseline.indexOf(grantMinimum);
+
+      expect(baseline, table).toContain(revokePublic);
+      expect(baseline, table).toContain(revokeAnon);
+      expect(baseline, table).toContain(revokeAuthenticated);
+      expect(revokeServiceRoleAt, `${table} revoke service_role`).toBeGreaterThan(
+        -1,
       );
-      expect(baseline).toContain(
-        `grant select, insert, update on table ${qualified} to service_role;`,
+      expect(grantMinimumAt, `${table} grant minimum`).toBeGreaterThan(
+        revokeServiceRoleAt,
       );
-      expect(baseline).not.toContain(
+      expect(baseline, table).not.toContain(
         `grant select, insert, update, delete on table ${qualified} to service_role;`,
+      );
+      expect(baseline, table).not.toContain(
+        `grant all on table ${qualified} to service_role;`,
+      );
+      expect(baseline.toLowerCase(), table).not.toMatch(
+        new RegExp(
+          `grant[^;]*(?:delete|truncate|references|trigger)[^;]*on table ${qualified.replaceAll(".", "\\.")}[^;]*service_role`,
+          "i",
+        ),
       );
     }
     expect(baseline).toContain("empty-target");

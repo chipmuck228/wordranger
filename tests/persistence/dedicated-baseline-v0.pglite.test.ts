@@ -32,15 +32,61 @@ const VOCAB_TABLES = [
 
 const REQUIRED_TABLES = [...VOCAB_TABLES, ...LEARNER_TABLES] as const;
 
+const TABLE_PRIVILEGES = [
+  "SELECT",
+  "INSERT",
+  "UPDATE",
+  "DELETE",
+  "TRUNCATE",
+  "REFERENCES",
+  "TRIGGER",
+] as const;
+
+const SERVICE_ROLE_ALLOWED_VOCAB_PRIVILEGES = [
+  "SELECT",
+  "INSERT",
+  "UPDATE",
+] as const;
+
 let db: PGlite;
 let baselineSql: string;
 let isolatedSql: string;
+let preBaselineDefaultGrantMode:
+  | "alter_default_privileges"
+  | "explicit_create_time_grant" = "alter_default_privileges";
+let preBaselineWitnessPrivileges: Record<
+  (typeof TABLE_PRIVILEGES)[number],
+  boolean
+> | null = null;
+let triggerProbeResult: "denied" | "unsupported" | "allowed" | null = null;
+let referencesProbeResult: "denied" | "unsupported" | "allowed" | null = null;
 
 function forIsolatedEngine(sql: string): string {
   return sql.replace(
     /create extension if not exists pgcrypto;\n\n/,
     "-- pgcrypto skipped on isolated PGlite; gen_random_uuid is built-in\n\n",
   );
+}
+
+function grantAllAfterVocabularyCreates(sql: string): string {
+  let next = sql;
+  for (const table of VOCAB_TABLES) {
+    const marker = `create table public.${table} (`;
+    const start = next.indexOf(marker);
+    if (start < 0) {
+      throw new Error(`Isolated SQL is missing ${marker}`);
+    }
+    const end = next.indexOf("\n);", start);
+    if (end < 0) {
+      throw new Error(`Isolated SQL has no terminator for ${table}`);
+    }
+    const insertAt = end + "\n);".length;
+    next =
+      next.slice(0, insertAt) +
+      `\ngrant all on table public.${table} to service_role;` +
+      next.slice(insertAt);
+  }
+  return next;
 }
 
 async function exec(sql: string): Promise<void> {
@@ -125,6 +171,51 @@ async function withRole<T>(role: string, run: () => Promise<T>): Promise<T> {
 
 async function expectDenied(run: () => Promise<unknown>): Promise<void> {
   await expect(run()).rejects.toThrow(/permission denied/i);
+}
+
+async function hasTablePrivilege(
+  role: string,
+  table: string,
+  privilege: (typeof TABLE_PRIVILEGES)[number],
+): Promise<boolean> {
+  const value = await scalar<boolean | string>(
+    `select has_table_privilege($1, $2, $3)`,
+    [role, `public.${table}`, privilege],
+  );
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (value === "t" || value === "true") {
+    return true;
+  }
+  if (value === "f" || value === "false") {
+    return false;
+  }
+  throw new Error(`Unexpected privilege result ${String(value)}`);
+}
+
+async function tablePrivilegeMap(
+  role: string,
+  table: string,
+): Promise<Record<(typeof TABLE_PRIVILEGES)[number], boolean>> {
+  const privileges = {} as Record<(typeof TABLE_PRIVILEGES)[number], boolean>;
+  for (const privilege of TABLE_PRIVILEGES) {
+    privileges[privilege] = await hasTablePrivilege(role, table, privilege);
+  }
+  return privileges;
+}
+
+async function publicGranteePrivilegeCount(table: string): Promise<number> {
+  return scalar<number>(
+    `select count(*)::int
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+     cross join lateral aclexplode(coalesce(c.relacl, '{}'::aclitem[])) e
+     where n.nspname = 'public'
+       and c.relname = $1
+       and e.grantee = 0`,
+    [table],
+  );
 }
 
 async function observedImportRows(): Promise<VocabularyImportRows> {
@@ -214,6 +305,48 @@ describe("dedicated baseline V0 isolated PGlite apply", () => {
       grant authenticated to current_user;
       grant service_role to current_user;
     `);
+
+    let defaultPrivilegesApplied = false;
+    try {
+      await exec(`
+        alter default privileges in schema public
+          grant all on tables to service_role;
+      `);
+      defaultPrivilegesApplied = true;
+    } catch {
+      defaultPrivilegesApplied = false;
+    }
+
+    await exec(`
+      create table public._pre_baseline_service_role_default_priv_witness (
+        id int primary key
+      );
+    `);
+    preBaselineWitnessPrivileges = await tablePrivilegeMap(
+      "service_role",
+      "_pre_baseline_service_role_default_priv_witness",
+    );
+    const defaultPrivilegesGrantedAll = TABLE_PRIVILEGES.every(
+      (privilege) => preBaselineWitnessPrivileges?.[privilege] === true,
+    );
+    if (!defaultPrivilegesApplied || !defaultPrivilegesGrantedAll) {
+      isolatedSql = grantAllAfterVocabularyCreates(isolatedSql);
+      preBaselineDefaultGrantMode = "explicit_create_time_grant";
+      await exec(`
+        grant all on table public._pre_baseline_service_role_default_priv_witness
+          to service_role;
+      `);
+      preBaselineWitnessPrivileges = await tablePrivilegeMap(
+        "service_role",
+        "_pre_baseline_service_role_default_priv_witness",
+      );
+    } else {
+      preBaselineDefaultGrantMode = "alter_default_privileges";
+    }
+    await exec(
+      `drop table public._pre_baseline_service_role_default_priv_witness;`,
+    );
+
     await exec(isolatedSql);
   }, 60_000);
 
@@ -256,7 +389,49 @@ describe("dedicated baseline V0 isolated PGlite apply", () => {
     ).toBe(false);
   });
 
+  it("simulates fresh Supabase service_role ALL before baseline clears it", async () => {
+    expect(preBaselineDefaultGrantMode).toMatch(
+      /alter_default_privileges|explicit_create_time_grant/,
+    );
+    expect(preBaselineWitnessPrivileges).not.toBeNull();
+    for (const privilege of TABLE_PRIVILEGES) {
+      expect(
+        preBaselineWitnessPrivileges?.[privilege],
+        `pre-baseline witness ${privilege}`,
+      ).toBe(true);
+    }
+    if (preBaselineDefaultGrantMode === "explicit_create_time_grant") {
+      for (const table of VOCAB_TABLES) {
+        expect(isolatedSql).toContain(
+          `grant all on table public.${table} to service_role;`,
+        );
+      }
+    }
+  });
+
   it("probes real SQL allow/deny for service_role, anon, and authenticated", async () => {
+    for (const table of VOCAB_TABLES) {
+      const serviceRole = await tablePrivilegeMap("service_role", table);
+      for (const privilege of SERVICE_ROLE_ALLOWED_VOCAB_PRIVILEGES) {
+        expect(serviceRole[privilege], `${table} ${privilege}`).toBe(true);
+      }
+      expect(serviceRole.DELETE, `${table} DELETE`).toBe(false);
+      expect(serviceRole.TRUNCATE, `${table} TRUNCATE`).toBe(false);
+      expect(serviceRole.REFERENCES, `${table} REFERENCES`).toBe(false);
+      expect(serviceRole.TRIGGER, `${table} TRIGGER`).toBe(false);
+      expect(await publicGranteePrivilegeCount(table), `${table} PUBLIC`).toBe(
+        0,
+      );
+      for (const role of ["anon", "authenticated"] as const) {
+        const privileges = await tablePrivilegeMap(role, table);
+        for (const privilege of TABLE_PRIVILEGES) {
+          expect(privileges[privilege], `${role} ${table} ${privilege}`).toBe(
+            false,
+          );
+        }
+      }
+    }
+
     await withRole("service_role", async () => {
       expect(
         await scalar<number>(
@@ -280,12 +455,12 @@ describe("dedicated baseline V0 isolated PGlite apply", () => {
          set source_word_raw = 'probe-updated'
          where canonical_key = 'src-perm-probe'`,
       );
-      await expectDenied(() =>
-        db.query(
-          `delete from public.vocabulary_source_entries
-           where canonical_key = 'src-perm-probe'`,
-        ),
-      );
+      for (const table of VOCAB_TABLES) {
+        await expectDenied(() =>
+          db.query(`delete from public.${table} where false`),
+        );
+        await expectDenied(() => db.exec(`truncate public.${table}`));
+      }
       for (const table of LEARNER_TABLES) {
         expect(
           await scalar<number>(`select count(*)::int from public.${table}`),
@@ -293,6 +468,65 @@ describe("dedicated baseline V0 isolated PGlite apply", () => {
       }
       await db.query(`delete from public.game_sessions where false`);
     });
+
+    await exec(`
+      create function public.vocab_privilege_probe_noop()
+      returns trigger
+      language plpgsql
+      as $$
+      begin
+        return NEW;
+      end;
+      $$;
+      grant create on schema public to service_role;
+    `);
+    await withRole("service_role", async () => {
+      try {
+        await db.exec(`
+          create table public._vocab_references_probe (
+            lexeme_id uuid references public.lexemes (id)
+          );
+        `);
+        referencesProbeResult = "allowed";
+        await db.exec(`drop table public._vocab_references_probe;`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        referencesProbeResult = /permission denied/i.test(message)
+          ? "denied"
+          : "unsupported";
+      }
+      try {
+        await db.exec(`
+          create trigger vocab_privilege_probe
+          after insert on public.lexemes
+          for each row execute function public.vocab_privilege_probe_noop();
+        `);
+        triggerProbeResult = "allowed";
+        await db.exec(`drop trigger vocab_privilege_probe on public.lexemes;`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        triggerProbeResult = /permission denied/i.test(message)
+          ? "denied"
+          : "unsupported";
+      }
+    });
+    await exec(`revoke create on schema public from service_role;`);
+    expect(referencesProbeResult).not.toBe("allowed");
+    expect(triggerProbeResult).not.toBe("allowed");
+    if (referencesProbeResult === "unsupported") {
+      expect(
+        await hasTablePrivilege("service_role", "lexemes", "REFERENCES"),
+      ).toBe(false);
+    } else {
+      expect(referencesProbeResult).toBe("denied");
+    }
+    if (triggerProbeResult === "unsupported") {
+      expect(await hasTablePrivilege("service_role", "lexemes", "TRIGGER")).toBe(
+        false,
+      );
+    } else {
+      expect(triggerProbeResult).toBe("denied");
+    }
 
     await exec(`
       delete from public.vocabulary_source_entries

@@ -39,7 +39,7 @@ Archive (not active):
 | Client revoke | PUBLIC / anon / authenticated on learner and vocabulary tables |
 | Schema USAGE | explicit `GRANT USAGE ON SCHEMA public` to `service_role`, `anon`, and `authenticated` so table probes are not hidden by missing schema access |
 | `service_role` learner DML | SELECT / INSERT / UPDATE / DELETE on the six learner tables |
-| `service_role` vocabulary DML | SELECT / INSERT / UPDATE only. No DELETE in V0. |
+| `service_role` vocabulary DML | First `REVOKE ALL` from `service_role` on each vocabulary table, clearing default/existing ALL from a fresh Supabase project. Then SELECT / INSERT / UPDATE only. No DELETE / TRUNCATE / REFERENCES / TRIGGER. The importer does not need DELETE. Empty-target seed + deterministic upsert is unchanged. |
 
 Vocabulary data is server/admin importer state. Student `/train`
 and free-play still use the bundled dataset. No vocabulary client

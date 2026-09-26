@@ -26,7 +26,7 @@ Vocabulary rows are managed only by the service-role importer.
 | Class | Objects |
 | --- | --- |
 | REQUIRED_CORE | `vocabulary_source_entries`, `lexemes`, `lexeme_relations`, `lexeme_tags`, `learning_tasks`, `game_sessions` plus `revision`, `learning_evidence` with session correlation and unique `task_id`, `student_lexeme_models`, `student_lexeme_skill_states`, `student_lexeme_weaknesses`, append-only trigger, `pgcrypto`, current PK/FK/unique/index/check contracts |
-| REQUIRED_SERVER_SECURITY | RLS ENABLE not FORCE on the six learner tables; PUBLIC / anon / authenticated revoke on learner and vocabulary tables; `service_role` learner DML including DELETE; vocabulary SELECT/INSERT/UPDATE only; explicit `USAGE` on `public` |
+| REQUIRED_SERVER_SECURITY | RLS ENABLE not FORCE on the six learner tables; PUBLIC / anon / authenticated revoke on learner and vocabulary tables; `service_role` learner DML including DELETE; vocabulary tables first `REVOKE ALL` from `service_role` (and PUBLIC / anon / authenticated) then `GRANT SELECT, INSERT, UPDATE` only. Dedicated does not rely on a fresh Supabase project starting with no `service_role` table grants. The importer does not need DELETE. No vocabulary DELETE / TRUNCATE / REFERENCES / TRIGGER. explicit `USAGE` on `public` |
 | REBUILD_FROM_REPO | Vocabulary empty-target seed + deterministic upsert. Content fingerprint `vocabulary-content-v1`. No learner rows. No stale-row delete. |
 | OPTIONAL_EXPERIMENTAL | `vocabulary_placement_reviews`, Context Lab, contextual-content objects. Not in V0. |
 | TEST_ONLY_EXCLUDED | `cleanup_progress_test_user` |
@@ -94,8 +94,11 @@ Verified in isolation:
 - shared Blaze and cleanup RPC absent
 - learner RLS on, FORCE off, zero policies
 - PUBLIC / anon / authenticated have no learner or vocabulary DML
+- isolated PGlite applies `ALTER DEFAULT PRIVILEGES` so later public tables start with `service_role` ALL, matching a fresh Supabase project
+- baseline itself clears those existing/default vocabulary `service_role` privileges, then grants only SELECT/INSERT/UPDATE
 - `service_role` is not superuser in isolation; BYPASSRLS only
 - `service_role` can SELECT/INSERT/UPDATE vocabulary and use learner DML
+- vocabulary DELETE / TRUNCATE / REFERENCES / TRIGGER are denied; the importer does not need DELETE
 - Evidence append-only
 - bundled vocabulary seed counts and `vocabulary-content-v1` fingerprint match
 - mutating stored meanings then restoring is the only rematch path
