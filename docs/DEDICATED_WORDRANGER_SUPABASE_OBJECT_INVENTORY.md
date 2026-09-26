@@ -12,12 +12,17 @@ Catalog sources:
 - Repository migrations and adapters (this pass)
 - Authorized Blaze catalogs already recorded in Free Practice inventory,
   security apply-evidence, and anonymous-auth preflight
-- Dedicated-target existence probes (`select=id` `limit=0` only) during
-  the emergency check and this recheck
+- Dedicated-target existence probes (`select=id` `limit=0` only)
+  during the emergency check and the first design pass
 
-This pass did not re-run a full Management API `information_schema`
-dump. Blaze column/index/RLS facts below are those prior catalogs plus
-repository SQL. Dedicated-target facts are existence-only.
+This revision did not re-run Management API catalog, env pull, or
+SQL. Blaze column/index/RLS facts remain those prior catalogs plus
+repository SQL. Dedicated-target emptiness is the last verified
+classification (`TARGET_EMPTY`); no DDL/DML was performed.
+
+The design branch **has been pushed**. That commit triggered one
+Vercel Preview (Ready). Production was not redeployed. `main` was
+not merged. Vercel env was not edited.
 
 `/practice` remains disabled. This inventory does not enable it.
 
@@ -31,11 +36,17 @@ repository SQL. Dedicated-target facts are existence-only.
 | Vercel Preview configuration | `POINTS_TO_DEDICATED_TARGET` |
 | Vercel Production configuration | `POINTS_TO_DEDICATED_TARGET` |
 | Active production snapshot | `ACTIVE_PRODUCTION_TARGET_NOT_VERIFIED` |
+| Design-branch Preview | occurred (not a runtime acceptance) |
+| Production redeploy | none |
+| Active migration lineage (future) | one consolidated baseline; twelve current files must leave `supabase/migrations/` |
 
 ## 2. Repository migrations in order
 
 All files are WordRanger-owned. None reference shared Blaze tables.
-None are automatically authorized to apply.
+None are automatically authorized to apply. A later baseline task
+must move all twelve out of active `supabase/migrations/` before
+the consolidated baseline becomes the only active file. This
+revision does not move them.
 
 ### `202609160001_vocabulary_domain.sql`
 
@@ -109,6 +120,10 @@ None are automatically authorized to apply.
 - Grants: execute to `service_role` only
 - Test-only: **yes**
 - Class: `TARGET_TEST_ONLY`
+- Dedicated **production** baseline: **exclude**. Do not copy this
+  RPC onto the production target. Production smoke must not use it.
+- Later cleanup, if needed: separate test project, or a separately
+  authorized test-only migration
 - Blaze: **ABSENT** (repo file never applied)
 - Would succeed on empty project only after learner tables exist
 
@@ -213,7 +228,7 @@ creates the FK. **Do not migrate rows.**
 
 | Object | Class |
 | --- | --- |
-| `cleanup_progress_test_user` | `WORDRANGER_TEST_ONLY` |
+| `cleanup_progress_test_user` | `WORDRANGER_TEST_ONLY` (not in Dedicated production baseline) |
 
 ### Not used by WordRanger
 

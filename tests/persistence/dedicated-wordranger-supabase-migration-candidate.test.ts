@@ -28,6 +28,10 @@ const docs = [CANDIDATE, INVENTORY, CHECKLIST].map((file) => ({
   text: readFileSync(path.join(process.cwd(), file), "utf8"),
 }));
 
+function allText(): string {
+  return docs.map((d) => d.text).join("\n");
+}
+
 describe("dedicated WordRanger Supabase migration candidate", () => {
   it("is design-only and does not embed secrets, URLs, or refs", () => {
     for (const { file, text } of docs) {
@@ -57,7 +61,7 @@ describe("dedicated WordRanger Supabase migration candidate", () => {
     expect(inventory).not.toMatch(/copy campus .* onto the dedicated target/i);
   });
 
-  it("does not claim a migration, history repair, or Vercel cutover ran", () => {
+  it("does not claim a migration, history repair, or production cutover ran", () => {
     for (const { file, text } of docs) {
       expect(text, file).not.toMatch(/migration was executed/i);
       expect(text, file).not.toMatch(/history was fabricated/i);
@@ -68,10 +72,44 @@ describe("dedicated WordRanger Supabase migration candidate", () => {
     }
     const candidate = docs.find((d) => d.file === CANDIDATE)?.text ?? "";
     expect(candidate).toContain("No schema baseline, data export/import");
-    expect(candidate).toContain("No migration executed");
+    expect(candidate).toContain("No schema/data migration executed");
     expect(candidate).toContain("No migration history fabricated");
-    expect(candidate).toContain("No Vercel cutover");
-    expect(candidate).toContain("This branch is **local only**");
+    expect(candidate).toContain("No Vercel Production cutover");
+    expect(candidate).not.toContain("This branch is **local only**");
+    expect(candidate).not.toMatch(/This branch is \*\*local only\*\*/);
+  });
+
+  it("records that Preview occurred and Production did not", () => {
+    const all = allText();
+    expect(all).toContain("dfd46ece93932fbefe1da980f1609805de594d22");
+    expect(all).toMatch(/Preview/);
+    expect(all).toMatch(/triggered \*\*one Vercel Preview\*\*|triggered \*\*one\*\*\s+Vercel Preview/);
+    expect(all).toContain("TARGET_EMPTY");
+    expect(all).toMatch(/Production was \*\*not\*\* redeployed|Production was not redeployed/);
+    expect(all).toMatch(/`main` was \*\*not\*\* merged|`main` was not merged/);
+    expect(all).not.toMatch(/This branch is \*\*local only\*\*/);
+    expect(all).not.toMatch(/Keep this design branch unpushed/);
+    expect(all).not.toMatch(/local only — do not push/);
+    expect(all).not.toMatch(/do not push this branch/i);
+    expect(all).not.toMatch(/NO_REMOTE_CHANGES/);
+    expect(all).not.toMatch(/No new Production\/Preview deploy since Integration/);
+  });
+
+  it("forbids treating Preview as acceptance and keeps production cutover prohibited", () => {
+    const all = allText();
+    expect(all).toMatch(/not an acceptance environment|not\*\* an acceptance|is \*\*not\*\* an acceptance/);
+    expect(all).toMatch(/Do not Start `\/train`|Forbidden on the current empty-target Preview|must not receive `\/train` writes/);
+    expect(all).toContain("No Vercel Production cutover");
+    expect(all).toContain("do not merge to `main`");
+    expect(all).toMatch(/Production \/ `main` deployment freeze|Production \/ `main` freeze/);
+    expect(all).not.toMatch(/zero deployments of any kind occurred/);
+  });
+
+  it("records no Supabase migration or data write", () => {
+    const all = allText();
+    expect(all).toMatch(/did \*\*not\*\* run Supabase DDL\/DML|No remote DDL\/DML|no DDL\/DML was performed/);
+    expect(all).toContain("No schema/data migration executed");
+    expect(all).toContain("TARGET_EMPTY");
   });
 
   it("keeps /practice disabled and Auth activation separate", () => {
@@ -88,14 +126,13 @@ describe("dedicated WordRanger Supabase migration candidate", () => {
     expect(candidate).toContain("Do not enable any of these with schema baseline");
   });
 
-  it("records freeze, empty target, and configuration switch without claiming a proven snapshot", () => {
-    const all = docs.map((d) => d.text).join("\n");
+  it("records empty target and configuration switch without claiming a proven snapshot", () => {
+    const all = allText();
     expect(all).toContain("TARGET_EMPTY");
     expect(all).toContain("POINTS_TO_DEDICATED_TARGET");
     expect(all).toContain("ACTIVE_PRODUCTION_TARGET_NOT_VERIFIED");
     expect(all).toContain("PRODUCTION_TARGET_SWITCHED_BEFORE_MIGRATION");
     expect(all).toContain("NOT_CONFIGURED");
-    expect(all).toMatch(/DEPLOYMENTS_REMAIN_FROZEN|Deployment freeze|Keep merges/);
     expect(all).toContain("LEGACY_SOURCE_MATCH");
     expect(all).toContain("DEDICATED_TARGET_MATCH");
   });
@@ -110,13 +147,25 @@ describe("dedicated WordRanger Supabase migration candidate", () => {
     expect(candidate).not.toMatch(/Option 4 is approved/i);
   });
 
-  it("recommends a hybrid baseline and forbids fake history and db push", () => {
+  it("requires a single active consolidated baseline and forbids fake history and db push", () => {
     const candidate = docs.find((d) => d.file === CANDIDATE)?.text ?? "";
     expect(candidate).toContain("C. Hybrid");
-    expect(candidate).toContain("historical reference");
+    expect(candidate).toContain("**active** migration lineage");
+    expect(candidate).toContain("must** leave the active");
+    expect(candidate).toContain("must not** both remain");
     expect(candidate).toMatch(/db push/);
     expect(candidate).toMatch(/forbidden/);
-    expect(candidate).toContain("Do not insert fake rows");
+    expect(candidate).toContain("manually inserting fake migration-history rows");
+    expect(candidate).toContain("does **not** move migration files");
+    expect(candidate).toContain("does **not** create baseline SQL");
+  });
+
+  it("excludes cleanup_progress_test_user from the Dedicated production baseline", () => {
+    const all = allText();
+    expect(all).toContain("cleanup_progress_test_user");
+    expect(all).toMatch(/exclude from Dedicated production baseline|not part of the Dedicated \*\*production\*\* baseline|Dedicated \*\*production\*\* baseline: \*\*exclude\*\*/);
+    expect(all).toMatch(/Do \*\*not\*\* copy this RPC|Do not copy this RPC|never copy that RPC to production/);
+    expect(all).toMatch(/separate test Supabase project/);
   });
 
   it("inventories every repository migration file without treating presence as apply authorization", () => {
@@ -133,13 +182,14 @@ describe("dedicated WordRanger Supabase migration candidate", () => {
     expect(inventory).toContain("TARGET_TEST_ONLY");
     expect(inventory).toContain("TARGET_OPTIONAL_EXPERIMENTAL");
     expect(inventory).toContain("Dashboard-applied");
+    expect(inventory).toContain("must move all twelve out of active");
   });
 
   it("leaves every cutover checkbox unchecked", () => {
     const checklist = docs.find((d) => d.file === CHECKLIST)?.text ?? "";
     expect(checklist).toContain("Nothing below is done");
     expect(checklist).not.toMatch(/^- \[[xX]\]/m);
-    expect(checklist).toContain("do not push");
     expect(checklist).toContain("Do not delete Blaze");
+    expect(checklist).not.toContain("Keep this design branch unpushed");
   });
 });

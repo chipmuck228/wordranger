@@ -4,13 +4,18 @@ Candidate / Not a Standard. **Design only.**
 
 - Date: **2026-09-26**
 - Base: `origin/main` @ `782ffcca670c8272a3ba7ca07bedaef4debdc95f`
-- Local branch: `design/dedicated-wordranger-supabase-migration-candidate`
-- This branch is **local only**. It must not be pushed. A push can create
-  a Preview deployment against `TARGET_EMPTY`.
-- Target project: **already exists**. This pass did **not** create a
-  Supabase project.
-- Vercel Marketplace Integration: **already exists**. This pass did
-  **not** modify Integration or environment variables.
+- Branch: `design/dedicated-wordranger-supabase-migration-candidate`
+- Design commit that was pushed: `dfd46ece93932fbefe1da980f1609805de594d22`
+- That commit is on `origin`. It triggered **one Vercel Preview**
+  build (Ready / success). A successful Preview build does **not**
+  mean schema or `/train` runtime is ready.
+- Dedicated target remains `TARGET_EMPTY`. Do not use that Preview
+  for `/train` writes or as an acceptance environment.
+- Production was **not** redeployed. `main` was **not** merged.
+- Target project: **already exists**. This program did **not** create
+  a Supabase project and did **not** run Supabase DDL/DML.
+- Vercel Marketplace Integration: **already exists**. Env names were
+  **not** added, removed, or edited after Integration write.
 - No schema baseline, data export/import, Auth toggle, `/practice`
   enablement, Homepage change, or production-readiness claim.
 
@@ -28,8 +33,12 @@ Candidate / Not a Standard. **Design only.**
 | Automatic Git deployments | `ENABLED` |
 | `/practice` | disabled |
 | Context Lab | disabled |
-| Deployment freeze | `ACTIVE` |
-| New deploy / env edit / schema write / main drift since the emergency check | **none observed** |
+| Production / `main` deployment freeze | **ACTIVE** |
+| Design-branch Preview | **occurred** (one Ready build for the pushed design commit) |
+| Production redeploy after Integration or after this push | **none** |
+| `main` merge | **none** |
+| Supabase DDL/DML after Integration | **none** |
+| Vercel env edit after Integration | **none** |
 
 Temporary Production env files used only to classify hostnames in
 memory were deleted (`TEMP_DELETED`). Values were not printed or
@@ -65,9 +74,11 @@ Integration also wrote unused aliases (`SUPABASE_URL`,
 Those aliases do not change application precedence. Host identity of
 the two URL names agrees (`DEDICATED_TARGET`).
 
-If a production or preview deploy happens now, `/train` Start uses
-`createSupabaseServerClient` against `TARGET_EMPTY` and fail-closes.
-Affected runtime paths after an unauthorized deploy:
+A Preview for this design branch already exists and still points at
+`TARGET_EMPTY`. Production has not been redeployed. If Production
+redeploys, or if anyone Starts `/train` on that Preview, the server
+client talks to an empty schema and fail-closes. Do not Start
+`/train` on Preview. Affected runtime paths if writes are attempted:
 
 - Daily Training `/train` (Start / submit / continue / resume)
 - Free-play `/play/*` durable adapters
@@ -75,9 +86,10 @@ Affected runtime paths after an unauthorized deploy:
 - Context Lab supabase runtime (still flag-gated)
 - Vocabulary import `--apply` and curated-placement apply/export
 
-This design continues as read-only. Recovery of Vercel env or a
-rollback remains a **separately authorized** decision. Do not change
-env here. Keep the freeze.
+This design continues as documentation only. Recovery of Vercel env
+or a Production rollback remains a **separately authorized**
+decision. Do not change env here. Keep the Production / `main`
+freeze. Do not treat the existing Preview as a runtime gate.
 
 ## 3. Repository migration inventory (summary)
 
@@ -92,7 +104,7 @@ authorization to apply. Detail is in
 | `202609170001_game_sessions.sql` | `TARGET_BASELINE_REQUIRED` |
 | `202609170002_game_sessions_revision.sql` | `TARGET_BASELINE_REQUIRED` |
 | `202609170003_learning_evidence_session_correlation.sql` | `TARGET_BASELINE_REQUIRED` |
-| `202609170004_cleanup_progress_test_user.sql` | `TARGET_TEST_ONLY` |
+| `202609170004_cleanup_progress_test_user.sql` | `TARGET_TEST_ONLY` — **exclude from Dedicated production baseline** |
 | `202609170005_vocabulary_placement_reviews.sql` | `TARGET_OPTIONAL_EXPERIMENTAL` until Scheduler consumes curated placement |
 | `202609200001_context_lab_runs.sql` | `TARGET_OPTIONAL_EXPERIMENTAL` |
 | `202609220001_contextual_content_releases.sql` | `TARGET_OPTIONAL_EXPERIMENTAL` |
@@ -126,60 +138,82 @@ traffic tables.
 
 ## 4. Recommended migration-history strategy
 
-**C. Hybrid — reviewed consolidated baseline, then chronological
-future files.**
+**C. Hybrid — one reviewed consolidated baseline becomes the
+Dedicated target's active lineage, then chronological future files.**
 
-Not chosen for this pass (no SQL authored):
+This task writes the rule only. It does **not** move migration files
+and does **not** create baseline SQL.
+
+Not chosen:
 
 - **A.** Replay the twelve existing files in order on the empty
-  target. Reproducible and closest to current concat tests, but it
-  re-applies blaze-oriented comments, split experimental files, and
-  two files Blaze never had, and it still leaves history as a later
-  CLI concern.
-- **B.** Baseline only, with no rule for later files.
+  target. Leaves two lineages in play and keeps Blaze-oriented split
+  files as the active history.
+- **B.** Baseline only, with no archival rule for the twelve files.
 
-### Why C
+### Active vs archival files (later authorized task)
 
-- The target is empty. It should receive a **WordRanger-only** schema,
-  including Dashboard-applied server-only grants, without importing
-  shared Blaze objects.
-- Honest history means recording **only versions that are actually
-  applied to the dedicated project**. Do not insert fake rows for
-  `20260916*` / `20260925*` as if Blaze history were copied.
-- Current repo tests read the existing files. Those files remain
-  **historical reference** until a later authorized task adds the
-  baseline file and updates tests.
-- Future `db push` becomes discussable only after: (1) the reviewed
-  baseline is applied on the dedicated project, (2) history is created
-  from that baseline forward, (3) CLI is linked to the dedicated
-  project by a separate authorization. Until then `db push`,
-  `migration up`, and history repair stay **forbidden**.
+1. Dedicated target **active** migration lineage starts from **one**
+   reviewed consolidated baseline in `supabase/migrations/`.
+2. The existing twelve files **must** leave the active
+   `supabase/migrations/` directory and move to an explicit
+   archival/reference location (path chosen in that later task).
+3. Old files and the consolidated baseline **must not** both remain
+   in the active migration directory.
+4. Do **not** copy or invent Blaze `schema_migrations` rows. Blaze
+   history stays empty/absent. Dedicated history starts only when
+   the baseline is actually applied there.
+5. `db push` may be discussed only after that baseline is applied
+   on the Dedicated target **and** real Dedicated migration history
+   exists. Until then these stay **forbidden**:
+   - `supabase db push`
+   - `migration up`
+   - history repair
+   - manually inserting fake migration-history rows
+6. `cleanup_progress_test_user` is **not** part of the Dedicated
+   production baseline. See §4a.
 
-### Inputs for a later baseline authoring task
+Current repo tests still read the twelve files in place. They stay
+where they are until the later move+baseline authoring task.
 
-- The twelve repository files
+### Inputs for that later baseline authoring task
+
+- The twelve repository files (then archived)
 - Blaze object catalog (WordRanger tables only)
 - Apply-evidence catalog for the six-table revoke
 - Explicit exclusion list of shared Blaze objects
 - Decision on whether experimental Context Lab / content-release
   objects belong in the first baseline or a later optional file
+- Explicit exclusion of the test-only cleanup RPC
 
 ### Validation gates (later, not this pass)
 
 1. Apply to an isolated empty database, never to Blaze.
 2. Catalog: required `/train` objects exist; shared Blaze names
-   absent.
+   absent; cleanup RPC absent on the production target.
 3. Anon `limit=0` on learner tables is denied; service-role DML
    remains.
 4. Append-only evidence trigger present.
-5. History contains only the new baseline version (plus later real
-   files).
+5. Dedicated history contains only the new baseline version (plus
+   later real files). No fabricated Blaze versions.
 6. No learner rows yet unless a retention option is authorized.
 
 ### Rollback of an unapplied baseline
 
 Delete or replace the unreleased baseline file in git. Do not delete
 Blaze data. Do not fabricate compensating history.
+
+## 4a. Production baseline excludes the test cleanup RPC
+
+`cleanup_progress_test_user` is `TARGET_TEST_ONLY`.
+
+- It does **not** enter the Dedicated **production** baseline.
+- Production `/train` smoke must **not** depend on it.
+- Do **not** copy this RPC onto the production Dedicated target.
+- If a later program needs disposable test-row cleanup, use only:
+  1. a separate test Supabase project, or
+  2. a separately authorized test-only migration that is never
+     applied to production.
 
 ## 5. Data ownership and recommended retention
 
@@ -245,18 +279,22 @@ Order. Writes stay paused on WordRanger Blaze paths from stage 7.
 6. **Experimental data** — default omit.
 7. **Final incremental sync** — only if learner migration was
    authorized and Blaze still received `/train` writes.
-8. **Vercel cutover** — separate Production env authorization. Not
-   this branch. Preview must not be created by pushing this branch.
-9. **Runtime smoke** — controlled `/train` Start on an authorized
-   preview or a later production window. GET `/train` is not a DB
-   smoke test.
+8. **Vercel Production cutover** — separate Production
+   authorization. Not this design revision. A Preview already exists
+   for the pushed design branch; it is **not** an acceptance
+   environment and must not receive `/train` writes.
+9. **Runtime smoke** — only after schema + vocabulary exist, and
+   only under a later authorization. GET `/train` is not a DB smoke
+   test. The current empty-target Preview is forbidden for Start.
 10. **Auth activation** — independent later program. Not bundled.
 
 Failure stop: any catalog mismatch, fingerprint mismatch, unexpected
-row-count class, or deploy against `TARGET_EMPTY`.
+row-count class, Production deploy against `TARGET_EMPTY`, or
+`/train` writes on the current empty-target Preview.
 
 Recovery: leave Blaze untouched; drop or rebuild only the dedicated
-target (separately authorized); keep Vercel frozen until ready.
+target (separately authorized); keep Production / `main` frozen
+until ready.
 
 ## 7. Cutover and rollback (design)
 
@@ -296,9 +334,9 @@ Do not enable any of these with schema baseline or Vercel cutover.
 
 ## 9. Explicit non-claims
 
-- No migration executed
+- No schema/data migration executed
 - No migration history fabricated
-- No Vercel cutover
+- No Vercel Production cutover
 - No production-readiness
 - No Free Practice enablement
 - No Homepage change
@@ -306,4 +344,7 @@ Do not enable any of these with schema baseline or Vercel cutover.
 - No Blaze deletion
 - No second Supabase project
 - No CLI relink
-- No push / PR / merge / deploy
+- No PR / no merge to `main`
+- Design branch **was pushed**; one Preview **did** occur
+- Production **was not** redeployed
+- Do not claim there were zero deployments of any kind

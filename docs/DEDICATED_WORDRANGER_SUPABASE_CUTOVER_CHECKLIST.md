@@ -11,23 +11,34 @@ its own later authorization.
 Current freeze (this design pass):
 
 - Automatic Git deployments: `ENABLED`
-- This design branch: **local only — do not push**
+- Design branch: **pushed**. Head
+  `dfd46ece93932fbefe1da980f1609805de594d22` triggered **one**
+  Vercel Preview (Ready). That build is **not** schema/runtime
+  acceptance.
+- Production / `main` deployment freeze: **ACTIVE**
 - Production configuration: `POINTS_TO_DEDICATED_TARGET`
 - Dedicated schema: `TARGET_EMPTY`
 - Active production snapshot: `ACTIVE_PRODUCTION_TARGET_NOT_VERIFIED`
 - Finding: `PRODUCTION_TARGET_SWITCHED_BEFORE_MIGRATION` (configuration)
+- Production was not redeployed. `main` was not merged. No Supabase
+  DDL/DML. No Vercel env edit.
 
-Until schema + reference data are ready, **do not merge to `main`**,
-**do not push this branch**, **do not redeploy**, **do not promote**.
+Until schema + reference data are ready: **do not merge to `main`**,
+**do not Production-redeploy**, **do not promote**. Do not Start
+`/train` on the existing empty-target Preview. Do not claim that no
+deployment of any kind occurred.
 
-## 0. Freeze (active)
+## 0. Freeze (Production / main still active)
 
 - [ ] Keep merges to `main` blocked
-- [ ] Keep this design branch unpushed
-- [ ] Do not create a Preview from this work
+- [ ] Do not Production-redeploy or promote
+- [ ] Do not Start `/train` or write learner rows on the existing
+      Preview
+- [ ] Do not treat Preview Ready as Dedicated runtime readiness
 - [ ] Do not modify Vercel env or Integration
 - [ ] Do not relink the CLI
-- [ ] Do not `db push` / `migration up` / repair history
+- [ ] Do not `db push` / `migration up` / repair history / insert
+      fake `schema_migrations` rows
 - [ ] Do not enable `/practice`
 - [ ] Do not enable Anonymous Sign-In or CAPTCHA
 - [ ] Do not delete Blaze data
@@ -36,13 +47,21 @@ Until schema + reference data are ready, **do not merge to `main`**,
 
 Separately authorized. Dedicated project only. Never Blaze.
 
-- [ ] Author the reviewed hybrid baseline (not this pass)
-- [ ] Apply to the empty dedicated project only
+- [ ] Author one reviewed consolidated baseline (not this pass)
+- [ ] Move the twelve historical files out of active
+      `supabase/migrations/` into an archival/reference location
+- [ ] Do not leave old files and the baseline both in the active
+      directory
+- [ ] Do not include `cleanup_progress_test_user` in the production
+      baseline
+- [ ] Apply the baseline to the empty dedicated project only
 - [ ] Catalog `/train` required tables, indexes, trigger, grants
 - [ ] Confirm shared Blaze names are absent
-- [ ] Confirm `schema_migrations` contains only honestly applied
-      versions
+- [ ] Confirm Dedicated `schema_migrations` contains only the
+      honestly applied baseline (no fabricated Blaze versions)
 - [ ] Stop if any required object is missing
+- [ ] Only after that real Dedicated history exists, discuss later
+      `db push`
 
 ## 2. Target reference-data validation
 
@@ -58,26 +77,34 @@ Separately authorized. Dedicated project only. Never Blaze.
 - [ ] Persistence tests against the dedicated project only if a later
       task authorizes live keys
 - [ ] Anon learner-table `limit=0` denied
-- [ ] Service-role can insert a disposable test user that is not the
-      V1 placeholder, then delete via the test RPC if that RPC is
-      installed
+- [ ] Service-role checks do **not** require
+      `cleanup_progress_test_user` on the production target
+- [ ] If disposable test-row cleanup is needed later: use a
+      separate test Supabase project, or a separately authorized
+      test-only migration — never copy that RPC to production
 - [ ] No Playwright required for design-only
 
 ## 4. Preview environment targeting the dedicated project
 
-- [ ] Preview already has Integration names pointing at the dedicated
+- [ ] Preview already exists for the pushed design commit and
+      already has Integration names pointing at the dedicated
       project
-- [ ] Do **not** create a Preview by pushing this design branch
-- [ ] Preview HTTP only after schema + vocabulary exist
+- [ ] That Preview is **not** an acceptance environment while the
+      target is `TARGET_EMPTY`
+- [ ] Do not Start `/train` or write learner rows there
+- [ ] Later Preview HTTP after schema + vocabulary exist still
+      needs a separate authorization
 - [ ] Keep `FREE_PRACTICE_*` and `CONTEXT_LAB_ENABLED` unset
 
 ## 5. `/train` smoke (controlled identity)
 
 - [ ] GET `/train` is not the smoke test
-- [ ] One authorized Start on Preview (or a later production window)
+- [ ] Forbidden on the current empty-target Preview
+- [ ] One authorized Start only after schema + vocabulary exist
 - [ ] Confirm session / task / evidence increment on the **target**
 - [ ] Confirm no write landed on Blaze
 - [ ] Do not use this smoke to discover identity
+- [ ] Do not depend on `cleanup_progress_test_user`
 
 ## 6. Free Practice identity A/B isolation
 
@@ -113,7 +140,7 @@ Separately authorized. Dedicated project only. Never Blaze.
 ## 10. Redeploy
 
 - [ ] Only after schema + vocabulary (+ optional learner) gates
-- [ ] Only from reviewed `main`, not from this unpushed design branch
+- [ ] Only from reviewed `main`, never from this design Preview
 - [ ] Record production SHA and created time
 - [ ] Confirm the deploy **postdates** readiness, not Integration-only
 
