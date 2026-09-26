@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -156,6 +157,61 @@ export interface DisposablePostgres {
   teardown: (fixtureWorkdirsRemoved?: boolean) => Promise<TeardownEvidence>;
 }
 
+export type DisposablePostgresStartupFailure = "version-probe" | "before-return";
+
+export interface StartDisposablePostgresOptions {
+  failAfterStart?: DisposablePostgresStartupFailure;
+}
+
+export interface LocalSupabaseCli {
+  requestedPath: string;
+  realPath: string;
+  version: string;
+}
+
+export class DisposablePostgresStartupError extends Error {
+  readonly startupError: unknown;
+  readonly cleanupError: unknown | null;
+  readonly cleanup: TeardownEvidence | null;
+  readonly clusterDir: string | null;
+  readonly port: number | null;
+
+  constructor(
+    message: string,
+    details: {
+      startupError: unknown;
+      cleanupError?: unknown;
+      cleanup?: TeardownEvidence | null;
+      clusterDir?: string | null;
+      port?: number | null;
+    },
+  ) {
+    super(message);
+    this.name = "DisposablePostgresStartupError";
+    this.startupError = details.startupError;
+    this.cleanupError = details.cleanupError ?? null;
+    this.cleanup = details.cleanup ?? null;
+    this.clusterDir = details.clusterDir ?? null;
+    this.port = details.port ?? null;
+  }
+}
+
+export class LocalSupabaseCliError extends Error {
+  readonly code:
+    | "LOCAL_SUPABASE_CLI_MISSING"
+    | "LOCAL_SUPABASE_CLI_OUTSIDE_NODE_MODULES"
+    | "LOCAL_SUPABASE_CLI_VERSION_MISMATCH";
+
+  constructor(
+    code: LocalSupabaseCliError["code"],
+    message: string,
+  ) {
+    super(`${code}: ${message}`);
+    this.name = "LocalSupabaseCliError";
+    this.code = code;
+  }
+}
+
 const LOCAL_DB_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 const ALLOWED_PARENT_ENV = ["PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL"] as const;
 const DENIED_ENV =
@@ -255,12 +311,80 @@ export function buildChildEnv(
   return env as NodeJS.ProcessEnv;
 }
 
-export function readInstalledCliVersion(): string {
-  const result = spawnSync("npx", ["supabase", "--version"], {
+function repoRoot(): string {
+  return process.cwd();
+}
+
+function defaultLocalSupabaseCliPath(): string {
+  return path.join(repoRoot(), "node_modules", ".bin", "supabase");
+}
+
+function assertPathInsideNodeModules(realPath: string): void {
+  const nodeModulesRoot = path.resolve(repoRoot(), "node_modules");
+  const relative = path.relative(nodeModulesRoot, realPath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new LocalSupabaseCliError(
+      "LOCAL_SUPABASE_CLI_OUTSIDE_NODE_MODULES",
+      `realpath ${realPath} is not under ${nodeModulesRoot}; refusing global or cache fallback`,
+    );
+  }
+}
+
+const cliProcessAttempts: Array<{ command: string; args: readonly string[] }> = [];
+
+export function takeCliProcessAttempts(): Array<{ command: string; args: readonly string[] }> {
+  const attempts = cliProcessAttempts.slice();
+  cliProcessAttempts.length = 0;
+  return attempts;
+}
+
+function recordCliProcessAttempt(command: string, args: readonly string[]): void {
+  cliProcessAttempts.push({ command, args });
+}
+
+function readCliVersionFromBinary(realPath: string): string {
+  recordCliProcessAttempt(realPath, ["--version"]);
+  const result = spawnSync(realPath, ["--version"], {
     encoding: "utf8",
-    env: buildChildEnv({ npm_config_yes: "true" }),
+    env: buildChildEnv(),
   });
-  return (result.stdout || result.stderr).trim();
+  if (result.status !== 0) {
+    throw new LocalSupabaseCliError(
+      "LOCAL_SUPABASE_CLI_VERSION_MISMATCH",
+      `repo-local supabase --version failed: ${(result.stderr || result.stdout).trim()}`,
+    );
+  }
+  const version = (result.stdout || result.stderr).trim().split(/\r?\n/u)[0]?.trim() ?? "";
+  if (version !== SPIKE_CLI_VERSION) {
+    throw new LocalSupabaseCliError(
+      "LOCAL_SUPABASE_CLI_VERSION_MISMATCH",
+      `expected ${SPIKE_CLI_VERSION}, got ${version || "<empty>"}`,
+    );
+  }
+  return version;
+}
+
+export function resolveLocalSupabaseCli(options?: {
+  binaryPath?: string;
+}): LocalSupabaseCli {
+  const requestedPath = path.resolve(options?.binaryPath ?? defaultLocalSupabaseCliPath());
+  if (!existsSync(requestedPath)) {
+    throw new LocalSupabaseCliError(
+      "LOCAL_SUPABASE_CLI_MISSING",
+      `expected repo-local binary at ${requestedPath}; refusing to install, use npx, or fall back to a global CLI`,
+    );
+  }
+  const realPath = realpathSync(requestedPath);
+  assertPathInsideNodeModules(realPath);
+  return {
+    requestedPath,
+    realPath,
+    version: readCliVersionFromBinary(realPath),
+  };
+}
+
+export function readInstalledCliVersion(): string {
+  return resolveLocalSupabaseCli().version;
 }
 
 export function assertLocalDbUrl(dbUrl: string, expectedPort?: number): string {
@@ -573,10 +697,12 @@ function applyCli(
     command === "db-push"
       ? ["db", "push", "--db-url", dbUrl, "--yes", "--skip-vault", "--workdir", workdir, ...extra]
       : ["migration", "up", "--db-url", dbUrl, "--yes", "--workdir", workdir, ...extra];
+  const cli = resolveLocalSupabaseCli();
   return new Promise((resolve) => {
-    const child = spawn("npx", ["supabase", ...args], {
+    recordCliProcessAttempt(cli.realPath, args);
+    const child = spawn(cli.realPath, args, {
       cwd: workdir,
-      env: buildChildEnv({ npm_config_yes: "true" }),
+      env: buildChildEnv(),
       stdio: ["ignore", "pipe", "pipe"],
     });
     const stdout: Buffer[] = [];
@@ -679,54 +805,134 @@ async function teardownCluster(
   };
 }
 
-export async function startDisposablePostgres(): Promise<DisposablePostgres> {
+async function cleanupFailedStartup(
+  clusterDir: string | undefined,
+  port: number | undefined,
+  serverStarted: boolean,
+): Promise<TeardownEvidence> {
+  if (!clusterDir) {
+    return {
+      clusterStopped: true,
+      portClosed: port === undefined || !(await portIsOpen(port)),
+      clusterRemoved: true,
+      fixtureWorkdirsRemoved: true,
+    };
+  }
+  const pid = postmasterPid(clusterDir);
+  if (serverStarted || pid !== null) {
+    stopCluster(clusterDir);
+  }
+  if (pid !== null && processExists(pid)) {
+    throw new Error(`startup cleanup left postmaster PID ${pid} running`);
+  }
+  if (port !== undefined && (await portIsOpen(port))) {
+    throw new Error("startup cleanup left the allocated port open");
+  }
+  removeDirConfirmed(clusterDir);
+  if (existsSync(clusterDir)) {
+    throw new Error("startup cleanup left clusterDir in place");
+  }
+  return {
+    clusterStopped: pid === null || !processExists(pid),
+    portClosed: port === undefined || !(await portIsOpen(port)),
+    clusterRemoved: !existsSync(clusterDir),
+    fixtureWorkdirsRemoved: true,
+  };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export async function startDisposablePostgres(
+  options: StartDisposablePostgresOptions = {},
+): Promise<DisposablePostgres> {
   if (!postgresHarnessAvailable()) {
     throw new Error("local PostgreSQL 16 binaries are not available");
   }
   const port = await unusedPort();
-  const clusterDir = mkdtempSync(path.join(tmpdir(), "wr-baseline-atomicity-"));
-  execPg("initdb", [
-    "-D",
-    clusterDir,
-    "-U",
-    "spike",
-    "--auth-local=trust",
-    "--auth-host=trust",
-    "--encoding=UTF8",
-    "--locale=C",
-    "--no-instructions",
-  ]);
-  const confPath = path.join(clusterDir, "postgresql.conf");
-  writeFileSync(
-    confPath,
-    `${readFileSync(confPath, "utf8")}\nlisten_addresses = '127.0.0.1'\nport = ${port}\nunix_socket_directories = '${clusterDir}'\nfsync = off\nsynchronous_commit = off\nfull_page_writes = off\n`,
-  );
-  execPg("pg_ctl", ["-D", clusterDir, "-l", path.join(clusterDir, "pg.log"), "-w", "start"]);
-  const postgresVersion = psql(port, "template1", "show server_version;");
-  let tornDown = false;
-  const handle: DisposablePostgres = {
-    host: "127.0.0.1",
-    port,
-    postgresVersion,
-    createDatabase: () => {
-      const database = `spike_${randomToken()}`;
-      execPg("createdb", ["-h", "127.0.0.1", "-p", String(port), "-U", "spike", database]);
-      return database;
-    },
-    teardown: async (fixtureWorkdirsRemoved = true) => {
-      if (tornDown) {
-        return {
-          clusterStopped: true,
-          portClosed: !(await portIsOpen(port)),
-          clusterRemoved: !existsSync(clusterDir),
-          fixtureWorkdirsRemoved,
-        };
-      }
-      tornDown = true;
-      return teardownCluster(clusterDir, port, fixtureWorkdirsRemoved);
-    },
-  };
-  return handle;
+  let clusterDir: string | undefined;
+  let serverStarted = false;
+  try {
+    clusterDir = mkdtempSync(path.join(tmpdir(), "wr-baseline-atomicity-"));
+    const startedClusterDir = clusterDir;
+    execPg("initdb", [
+      "-D",
+      startedClusterDir,
+      "-U",
+      "spike",
+      "--auth-local=trust",
+      "--auth-host=trust",
+      "--encoding=UTF8",
+      "--locale=C",
+      "--no-instructions",
+    ]);
+    const confPath = path.join(startedClusterDir, "postgresql.conf");
+    writeFileSync(
+      confPath,
+      `${readFileSync(confPath, "utf8")}\nlisten_addresses = '127.0.0.1'\nport = ${port}\nunix_socket_directories = '${startedClusterDir}'\nfsync = off\nsynchronous_commit = off\nfull_page_writes = off\n`,
+    );
+    execPg("pg_ctl", ["-D", startedClusterDir, "-l", path.join(startedClusterDir, "pg.log"), "-w", "start"]);
+    serverStarted = true;
+    if (options.failAfterStart === "version-probe") {
+      throw new Error("SPIKE_VERSION_PROBE_FAIL");
+    }
+    const postgresVersion = psql(port, "template1", "show server_version;");
+    let tornDown = false;
+    const handle: DisposablePostgres = {
+      host: "127.0.0.1",
+      port,
+      postgresVersion,
+      createDatabase: () => {
+        const database = `spike_${randomToken()}`;
+        execPg("createdb", ["-h", "127.0.0.1", "-p", String(port), "-U", "spike", database]);
+        return database;
+      },
+      teardown: async (fixtureWorkdirsRemoved = true) => {
+        if (tornDown) {
+          return {
+            clusterStopped: true,
+            portClosed: !(await portIsOpen(port)),
+            clusterRemoved: !existsSync(startedClusterDir),
+            fixtureWorkdirsRemoved,
+          };
+        }
+        tornDown = true;
+        return teardownCluster(startedClusterDir, port, fixtureWorkdirsRemoved);
+      },
+    };
+    if (options.failAfterStart === "before-return") {
+      throw new Error("SPIKE_HANDLE_INIT_FAIL");
+    }
+    return handle;
+  } catch (startupError) {
+    let cleanup: TeardownEvidence | null = null;
+    let cleanupError: unknown;
+    try {
+      cleanup = await cleanupFailedStartup(clusterDir, port, serverStarted);
+    } catch (error) {
+      cleanupError = error;
+    }
+    const startupMessage = errorMessage(startupError);
+    if (cleanupError) {
+      throw new DisposablePostgresStartupError(
+        `${startupMessage}; cleanup: ${errorMessage(cleanupError)}`,
+        {
+          startupError,
+          cleanupError,
+          cleanup,
+          clusterDir: clusterDir ?? null,
+          port,
+        },
+      );
+    }
+    throw new DisposablePostgresStartupError(startupMessage, {
+      startupError,
+      cleanup,
+      clusterDir: clusterDir ?? null,
+      port,
+    });
+  }
 }
 
 export async function withDisposablePostgres<T>(

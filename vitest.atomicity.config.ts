@@ -6,9 +6,11 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: "node",
-    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+    include: ["tests/persistence/dedicated-baseline-history-atomicity.integration.test.ts"],
     restoreMocks: true,
-    testTimeout: 20000,
+    testTimeout: 20_000,
+    hookTimeout: 60_000,
+    teardownTimeout: 180_000,
   },
   resolve: {
     alias: {

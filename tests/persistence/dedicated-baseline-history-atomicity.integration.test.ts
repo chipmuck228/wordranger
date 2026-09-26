@@ -1,28 +1,34 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   assertLocalDbUrl,
   buildChildEnv,
   classifyCase,
   classifyFormalCase,
+  confirmPortClosed,
+  DisposablePostgresStartupError,
   FORMAL_BASELINE_FILE,
   FORMAL_BASELINE_NAME,
   FORMAL_BASELINE_PATH,
   FORMAL_BASELINE_SHA256,
   fixtureMentionsArchive,
   leftoverReport,
+  LocalSupabaseCliError,
   postgresHarnessAvailable,
   readInstalledCliVersion,
   REQUIRED_CORE_TABLES,
   REQUIRED_FUNCTIONS,
   REQUIRED_INDEXES,
   REQUIRED_TRIGGERS,
+  resolveLocalSupabaseCli,
   runAtomicitySpike,
   runFormalBaselineAtomicityMatrix,
   SPIKE_BASELINE_VERSION,
   SPIKE_CLI_VERSION,
   startDisposablePostgres,
+  takeCliProcessAttempts,
   type CaseResult,
   type DisposablePostgres,
   type FormalCaseResult,
@@ -138,11 +144,12 @@ describe("Dedicated Baseline V0 history atomicity spike", () => {
       process.env[key] = "1";
     }
     try {
-      const env = buildChildEnv({ npm_config_yes: "true" });
+      const env = buildChildEnv({ SPIKE_MARKER: "1" });
       for (const key of keys) {
         expect(Object.hasOwn(env, key)).toBe(false);
       }
-      expect(env.npm_config_yes).toBe("true");
+      expect(env.SPIKE_MARKER).toBe("1");
+      expect(env.npm_config_yes).toBeUndefined();
       expect(env.PATH).toBeTypeOf("string");
     } finally {
       for (const key of keys) {
@@ -152,8 +159,32 @@ describe("Dedicated Baseline V0 history atomicity spike", () => {
     }
   });
 
-  it("uses the installed Supabase CLI 2.118.0", () => {
+  it("uses the repo-local Supabase CLI 2.118.0", () => {
+    const cli = resolveLocalSupabaseCli();
+    const nodeModulesRoot = path.resolve(process.cwd(), "node_modules");
+    expect(cli.requestedPath).toBe(path.join(nodeModulesRoot, ".bin", "supabase"));
+    expect(cli.realPath.startsWith(`${nodeModulesRoot}${path.sep}`)).toBe(true);
+    expect(cli.version).toBe(SPIKE_CLI_VERSION);
     expect(readInstalledCliVersion()).toBe(SPIKE_CLI_VERSION);
+  });
+
+  it("does not install or fall back when the local CLI binary is missing", () => {
+    const missing = path.join(
+      process.cwd(),
+      "node_modules",
+      ".bin",
+      `supabase-missing-${createHash("sha256").update("atomicity-cli").digest("hex").slice(0, 12)}`,
+    );
+    expect(existsSync(missing)).toBe(false);
+    takeCliProcessAttempts();
+    expect(() => resolveLocalSupabaseCli({ binaryPath: missing })).toThrow(LocalSupabaseCliError);
+    expect(() => resolveLocalSupabaseCli({ binaryPath: missing })).toThrow(
+      /LOCAL_SUPABASE_CLI_MISSING/,
+    );
+    const attempts = takeCliProcessAttempts();
+    expect(attempts).toEqual([]);
+    expect(attempts.some((attempt) => /npx|npm/.test(attempt.command))).toBe(false);
+    expect(attempts.some((attempt) => attempt.args.includes("supabase"))).toBe(false);
   });
 });
 
@@ -311,4 +342,46 @@ describe.skipIf(!LIVE)("local PostgreSQL CLI apply matrix", () => {
     expect(evidence.fixtureWorkdirsRemoved).toBe(true);
     teardown = evidence;
   });
+});
+
+describe.skipIf(!LIVE)("disposable postgres startup failure cleanup", () => {
+  async function expectStartupCleanup(failAfterStart: "version-probe" | "before-return") {
+    try {
+      await startDisposablePostgres({ failAfterStart });
+      throw new Error(`expected ${failAfterStart} startup failure`);
+    } catch (error) {
+      expect(error).toBeInstanceOf(DisposablePostgresStartupError);
+      const startupError = error as DisposablePostgresStartupError;
+      expect(startupError.cleanupError).toBeNull();
+      expect(startupError.cleanup).not.toBeNull();
+      expect(startupError.cleanup?.clusterStopped).toBe(true);
+      expect(startupError.cleanup?.portClosed).toBe(true);
+      expect(startupError.cleanup?.clusterRemoved).toBe(true);
+      expect(startupError.clusterDir === null || !existsSync(startupError.clusterDir)).toBe(true);
+      if (startupError.port !== null) {
+        expect(await confirmPortClosed(startupError.port)).toBe(true);
+      }
+      return startupError;
+    }
+  }
+
+  it(
+    "stops process, closes port, and removes the directory after a version probe failure",
+    async () => {
+      const error = await expectStartupCleanup("version-probe");
+      expect(error.message).toContain("SPIKE_VERSION_PROBE_FAIL");
+      expect(error.message).not.toContain("; cleanup:");
+    },
+    60_000,
+  );
+
+  it(
+    "stops process, closes port, and removes the directory after a handle-return failure",
+    async () => {
+      const error = await expectStartupCleanup("before-return");
+      expect(error.message).toContain("SPIKE_HANDLE_INIT_FAIL");
+      expect(error.message).not.toContain("; cleanup:");
+    },
+    60_000,
+  );
 });
