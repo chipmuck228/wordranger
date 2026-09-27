@@ -25,7 +25,7 @@ async function upsertBatch(
       batchStart + VOCABULARY_IMPORT_BATCH_SIZE,
     );
     try {
-      const { error } = await client.from(table).upsert(slice);
+      const { error, status } = await client.from(table).upsert(slice);
       if (error) {
         throw new VocabularyImportBatchError({
           table,
@@ -33,6 +33,7 @@ async function upsertBatch(
           batchStart,
           batchSize: slice.length,
           cause: error,
+          httpStatus: status,
         });
       }
     } catch (error) {

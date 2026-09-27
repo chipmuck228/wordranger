@@ -82,24 +82,15 @@ export function sanitizeProviderCode(value: unknown): string | null {
   return typeof value === "string" && SAFE_CODE.test(value) ? value : null;
 }
 
-function readHttpStatus(error: unknown): number | null {
-  const record = readRecord(error);
-  for (const key of ["status", "statusCode", "status_code"] as const) {
-    const value = record[key];
-    if (typeof value === "number" && Number.isInteger(value)) {
-      return value;
-    }
-    if (typeof value === "string" && /^\d{3}$/.test(value)) {
-      return Number(value);
-    }
-  }
-  return null;
-}
-
 export function classifyHttpStatusClass(
-  error: unknown,
+  httpStatus?: unknown,
 ): VocabularyImportStatusClass {
-  const status = readHttpStatus(error);
+  let status: number | null = null;
+  if (typeof httpStatus === "number" && Number.isInteger(httpStatus)) {
+    status = httpStatus;
+  } else if (typeof httpStatus === "string" && /^\d{3}$/.test(httpStatus)) {
+    status = Number(httpStatus);
+  }
   if (status !== null && status >= 400 && status <= 499) {
     return "HTTP_4XX";
   }
@@ -127,6 +118,7 @@ export class VocabularyImportBatchError extends Error {
     batchStart: number;
     batchSize: number;
     cause?: unknown;
+    httpStatus?: unknown;
   }) {
     super(
       `Vocabulary import failed during ${input.operation} on ${input.table} at batchStart=${input.batchStart}`,
@@ -139,7 +131,7 @@ export class VocabularyImportBatchError extends Error {
     this.batchStart = input.batchStart;
     this.batchSize = input.batchSize;
     this.providerCode = sanitizeProviderCode(readRecord(input.cause).code);
-    this.statusClass = classifyHttpStatusClass(input.cause);
+    this.statusClass = classifyHttpStatusClass(input.httpStatus);
   }
 
   toJSON(): VocabularyImportBatchErrorJson {

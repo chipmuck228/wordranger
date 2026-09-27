@@ -102,7 +102,10 @@ describe("dedicated baseline V0 Gate B retry apply evidence", () => {
   it("locks importer and content identity hashes from the retry record", () => {
     for (const [file, expected] of Object.entries(LOCKED_SHA256)) {
       expect(text, file).toContain(expected);
-      if (file === "src/server/vocabulary/import/batch-error.ts") {
+      if (
+        file === "src/server/vocabulary/import/batch-error.ts" ||
+        file === "src/server/vocabulary/import/apply-import.ts"
+      ) {
         continue;
       }
       expect(sha256(file), file).toBe(expected);

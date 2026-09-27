@@ -35,11 +35,11 @@ const LOCKED_SHA256 = {
   [BASELINE]:
     "7f62b1818cae5045b5d74e2dd286a510f21da650ff6dea42357ac3e4d8f9a0fe",
   [APPLY_IMPORT]:
-    "22ec38aa8a0ac163c56503470662eb652c71621e535d7cb426a7bc0cbafef74f",
+    "3b65732cafc8d03e306b75b82654c56ac0fdb6afbdc1f55d71b436a7d7731b53",
   "src/server/vocabulary/import/import-rows.ts":
     "44226a3722c14c51bc76f9c3da05674e166a2dffa7cf409e4ce5ba9844ff6d36",
   [BATCH_ERROR]:
-    "f36361f763a04cc5682841bb1c856fc2cc130506d236f6216ebfb656091b807b",
+    "2558791095682ee404232277954c0f542156f2bc0af645b70adb2fc29efd4ce6",
 } as const;
 
 const IMPORTER_FIELDS = [
@@ -121,6 +121,19 @@ describe("dedicated Gate B source-entries diagnosis", () => {
     expect(text).toContain("HTTP_4XX");
     expect(text).toContain("HTTP_5XX");
     expect(text).toContain("NO_STATUS");
+    expect(text).toContain("sibling `status` field");
+    expect(text).toContain("not read from the inner");
+    expect(text).toContain("two historical Dedicated `--apply` failures still have no");
+    expect(text).toContain("not prove that a retry would succeed");
+    expect(text).toContain(
+      "22ec38aa8a0ac163c56503470662eb652c71621e535d7cb426a7bc0cbafef74f",
+    );
+    expect(text).toContain(
+      "f36361f763a04cc5682841bb1c856fc2cc130506d236f6216ebfb656091b807b",
+    );
+    expect(text).toContain(
+      "70a088d0a096593bc4f407606eb080344539d82f8a8014066e256627cc8d6c01",
+    );
     expect(text).toContain("json_to_recordset");
     expect(text).toContain("ON CONFLICT (id)");
     expect(text).toContain("PostgreSQL **16.15**");
@@ -139,6 +152,10 @@ describe("dedicated Gate B source-entries diagnosis", () => {
       expect(sha256(file), file).toBe(expected);
     }
     expect(applyImport).toContain("client.from(table).upsert(slice)");
+    expect(applyImport).toContain(
+      "const { error, status } = await client.from(table).upsert(slice)",
+    );
+    expect(applyImport).toContain("httpStatus: status");
     expect(applyImport).not.toMatch(/onConflict/);
     expect(applyImport).not.toMatch(/returning:/);
     expect(applyImport).not.toMatch(/db:\s*['\"]/);

@@ -30,9 +30,11 @@ schema cache. A third import attempt is not authorized.
 | Baseline SHA-256 | `7f62b1818cae5045b5d74e2dd286a510f21da650ff6dea42357ac3e4d8f9a0fe` |
 | Fingerprint | `9704c2025628676800918e4e7fc0e744c8358c025d8b01ebf43936d8474754cb` |
 | Expected counts | `1600` / `1638` / `716` / `1638` |
-| `apply-import.ts` | `22ec38aa8a0ac163c56503470662eb652c71621e535d7cb426a7bc0cbafef74f` |
+| `apply-import.ts` after sibling-status fix | `3b65732cafc8d03e306b75b82654c56ac0fdb6afbdc1f55d71b436a7d7731b53` |
+| Prior `apply-import.ts` lock | `22ec38aa8a0ac163c56503470662eb652c71621e535d7cb426a7bc0cbafef74f` |
 | `import-rows.ts` | `44226a3722c14c51bc76f9c3da05674e166a2dffa7cf409e4ce5ba9844ff6d36` |
-| `batch-error.ts` after this diagnosis | `f36361f763a04cc5682841bb1c856fc2cc130506d236f6216ebfb656091b807b` |
+| `batch-error.ts` after sibling-status fix | `2558791095682ee404232277954c0f542156f2bc0af645b70adb2fc29efd4ce6` |
+| Prior diagnosis `batch-error.ts` lock | `f36361f763a04cc5682841bb1c856fc2cc130506d236f6216ebfb656091b807b` |
 | Prior evidence `batch-error.ts` lock | `70a088d0a096593bc4f407606eb080344539d82f8a8014066e256627cc8d6c01` |
 
 Remote history, schema, and zero-row counts were re-checked
@@ -199,11 +201,23 @@ mismatch.
 Public CLI remains fail-closed. Provider message, hint, details,
 cause, headers, URL, and payload stay out of public JSON.
 
-The classifier may now also emit an allowlisted `statusClass`:
+`statusClass` is classified only from the sibling `status` field
+on the Supabase upsert response. It is not read from the inner
+provider error object's `status`, `statusCode`, or `status_code`.
+
+Allowlisted public values:
 
 - `HTTP_4XX`
 - `HTTP_5XX`
 - `NO_STATUS`
+
+The public JSON still contains only `statusClass`. The raw HTTP
+status number is not stored or printed.
+
+The two historical Dedicated `--apply` failures still have no
+recoverable status. This change only improves safe observability
+for a later independently authorized probe or attempt. It does
+not prove that a retry would succeed.
 
 It still accepts only SQLSTATE / `PGRSTnnn` as `providerCode`.
 Attack tests keep secret, URL, JWT, email, lemma, and nested row
