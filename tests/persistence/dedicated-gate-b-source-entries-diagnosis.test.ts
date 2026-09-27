@@ -1,18 +1,13 @@
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { toVocabularyImportRows } from "@/server/vocabulary/import/import-rows";
 import { loadVocabularyDataset } from "@/server/vocabulary/load-vocabulary-dataset";
-import {
-  findPostgresBin,
-  postgresHarnessAvailable,
-  withDisposablePostgres,
-} from "./dedicated-baseline-history-atomicity-harness";
 
 const EVIDENCE = "docs/DEDICATED_WORDRANGER_GATE_B_SOURCE_ENTRIES_DIAGNOSIS.md";
+const INTEGRATION =
+  "tests/persistence/dedicated-gate-b-source-entries-diagnosis.integration.test.ts";
 const ORIGIN_MAIN = "a031be4ba791af9ac68aad93e8aba9f3437128cf";
 const INSPECTED_HEAD = "db6cc6552b280f7b137d88e28888f000cc9aa2db";
 const EVIDENCE_HEAD = "a6cd97997115ae6e0b914b41077e58fad1de0e9a";
@@ -55,6 +50,8 @@ const IMPORTER_FIELDS = [
 ] as const;
 
 const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DOC_UUID_RE =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
 
 function sha256(file: string): string {
@@ -63,41 +60,29 @@ function sha256(file: string): string {
     .digest("hex");
 }
 
-function psql(port: number, database: string, sql: string): string {
-  const bin = findPostgresBin("psql");
-  if (!bin) {
-    throw new Error("psql missing");
+function category(value: unknown): string {
+  if (value === undefined) {
+    return "undefined";
   }
-  const result = spawnSync(
-    bin,
-    [
-      "-h",
-      "127.0.0.1",
-      "-p",
-      String(port),
-      "-U",
-      "spike",
-      "-d",
-      database,
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-At",
-      "-c",
-      sql,
-    ],
-    { encoding: "utf8" },
-  );
-  if (result.status !== 0) {
-    const text = `${result.stderr || ""} ${result.stdout || ""}`;
-    const state = text.match(/SAFE_FAIL state=([0-9A-Z]{5})|SQLSTATE[:\s]+([0-9A-Z]{5})/);
-    throw new Error(`PSQL_FAILED ${state?.[1] ?? state?.[2] ?? "NO_SQLSTATE"}`);
+  if (value === null) {
+    return "null";
   }
-  return (result.stdout || "").trim();
+  if (Array.isArray(value)) {
+    return "array";
+  }
+  if (typeof value === "object") {
+    return "object";
+  }
+  return typeof value;
 }
 
 describe("dedicated Gate B source-entries diagnosis", () => {
   const text = readFileSync(path.join(process.cwd(), EVIDENCE), "utf8");
   const applyImport = readFileSync(path.join(process.cwd(), APPLY_IMPORT), "utf8");
+  const integration = readFileSync(path.join(process.cwd(), INTEGRATION), "utf8");
+  const firstBatch = toVocabularyImportRows(
+    loadVocabularyDataset(),
+  ).sourceEntries.slice(0, 200);
 
   it("locks catalog-match diagnosis without authorizing a third apply", () => {
     expect(text).toMatch(/Candidate \/ Not a Standard/);
@@ -126,7 +111,7 @@ describe("dedicated Gate B source-entries diagnosis", () => {
     expect(text).not.toContain("GATE_B_VOCABULARY_IMPORTED");
     expect(text).not.toMatch(/https?:\/\//i);
     expect(text).not.toMatch(/supabase\.co|eyj|postgres:\/\//i);
-    expect(text).not.toMatch(UUID_RE);
+    expect(text).not.toMatch(DOC_UUID_RE);
     expect(text).not.toMatch(/\/Users\/|\/tmp\/|\/private\/tmp\//);
     expect(text).not.toMatch(/PR #17 was merged/i);
   });
@@ -142,132 +127,84 @@ describe("dedicated Gate B source-entries diagnosis", () => {
     expect(applyImport).not.toMatch(/db:\s*['\"]/);
   });
 
-  it("reproduces the first batch on local PostgreSQL 16 with the PK conflict target", async () => {
-    expect(postgresHarnessAvailable()).toBe(true);
-    const rows = toVocabularyImportRows(loadVocabularyDataset()).sourceEntries.slice(
-      0,
-      200,
+  it("locks the first-batch payload shape without business values", () => {
+    expect(firstBatch).toHaveLength(200);
+    const extraKeys = firstBatch.flatMap((row) =>
+      Object.keys(row).filter(
+        (key) =>
+          !IMPORTER_FIELDS.includes(key as (typeof IMPORTER_FIELDS)[number]),
+      ),
     );
-    expect(rows).toHaveLength(200);
-    expect(Object.keys(rows[0] ?? {}).sort()).toEqual([...IMPORTER_FIELDS].sort());
-    expect(rows.some((row) => Object.values(row).includes(undefined))).toBe(false);
-    const payload = JSON.stringify(rows);
-    expect(payload.includes("$wr_payload$")).toBe(false);
-    const updateSet = IMPORTER_FIELDS.filter((column) => column !== "id")
-      .map((column) => `${column} = EXCLUDED.${column}`)
-      .join(", ");
-    const recordTypes = [
-      "id uuid",
-      "canonical_key text",
-      "source_index integer",
-      "section text",
-      "source_page_start integer",
-      "source_page_end integer",
-      "source_word_raw text",
-      "starred boolean",
-      "source_ipa_raw text",
-      "source_pos_raw text",
-      "source_meaning_raw text",
-      "raw_entry text",
-      "parse_status text",
-      "parse_issues jsonb",
-      "source_review_note text",
-    ].join(", ");
+    const missingKeys = firstBatch.flatMap((row) =>
+      IMPORTER_FIELDS.filter((field) => !Object.hasOwn(row, field)),
+    );
+    const undefinedValues = firstBatch.flatMap((row) =>
+      IMPORTER_FIELDS.filter((field) => row[field] === undefined),
+    );
+    expect(extraKeys).toEqual([]);
+    expect(missingKeys).toEqual([]);
+    expect(undefinedValues).toEqual([]);
 
-    const { result, teardown } = await withDisposablePostgres(async (ctx) => {
-      const database = ctx.createDatabase();
-      psql(
-        ctx.port,
-        database,
-        `
-        do $$
-        begin
-          if not exists (select from pg_roles where rolname = 'anon') then
-            create role anon nologin nosuperuser noinherit;
-          end if;
-          if not exists (select from pg_roles where rolname = 'authenticated') then
-            create role authenticated nologin nosuperuser noinherit;
-          end if;
-          if not exists (select from pg_roles where rolname = 'service_role') then
-            create role service_role nologin nosuperuser noinherit;
-          end if;
-        end
-        $$;
-        `,
-      );
-      const work = mkdtempSync(path.join(tmpdir(), "wr-gateb-local-"));
-      const baselineFile = path.join(work, "baseline.sql");
-      writeFileSync(baselineFile, readFileSync(path.join(process.cwd(), BASELINE)));
-      const apply = spawnSync(
-        findPostgresBin("psql")!,
-        [
-          "-h",
-          "127.0.0.1",
-          "-p",
-          String(ctx.port),
-          "-U",
-          "spike",
-          "-d",
-          database,
-          "-v",
-          "ON_ERROR_STOP=1",
-          "-f",
-          baselineFile,
-        ],
-        { encoding: "utf8" },
-      );
-      rmSync(work, { recursive: true, force: true });
-      expect(apply.status).toBe(0);
-      psql(
-        ctx.port,
-        database,
-        `
-        begin;
-        set role service_role;
-        do $body$
-        declare
-          state text;
-          cons text;
-        begin
-          begin
-            insert into public.vocabulary_source_entries (
-              ${IMPORTER_FIELDS.join(", ")}
-            )
-            select *
-            from json_to_recordset(($wr_payload$${payload}$wr_payload$)::json) as x(${recordTypes})
-            on conflict (id) do update set ${updateSet};
-          exception when others then
-            get stacked diagnostics state = returned_sqlstate, cons = constraint_name;
-            raise exception 'SAFE_FAIL state=% constraint=%', state, coalesce(cons, '');
-          end;
-        end
-        $body$;
-        reset role;
-        commit;
-        `,
-      );
-      return {
-        version: ctx.postgresVersion,
-        count: psql(
-          ctx.port,
-          database,
-          "select count(*) from public.vocabulary_source_entries;",
-        ),
-        createdAtNulls: psql(
-          ctx.port,
-          database,
-          "select count(*) from public.vocabulary_source_entries where created_at is null;",
-        ),
-        learner: psql(ctx.port, database, "select count(*) from public.learning_tasks;"),
-      };
-    });
+    const counts: Record<string, Record<string, number>> = {};
+    const emptyString: Record<string, number> = {};
+    let uuidOk = 0;
+    const parseIssueLengths: Record<string, number> = {};
+    for (const field of IMPORTER_FIELDS) {
+      counts[field] = {};
+      emptyString[field] = 0;
+    }
+    for (const row of firstBatch) {
+      for (const field of IMPORTER_FIELDS) {
+        const value = row[field];
+        const kind = category(value);
+        counts[field][kind] = (counts[field][kind] ?? 0) + 1;
+        if (value === "") {
+          emptyString[field] += 1;
+        }
+        if (field === "id" && typeof value === "string" && UUID_RE.test(value)) {
+          uuidOk += 1;
+        }
+        if (field === "parse_issues" && Array.isArray(value)) {
+          const key = String(value.length);
+          parseIssueLengths[key] = (parseIssueLengths[key] ?? 0) + 1;
+        }
+      }
+    }
 
-    expect(result.version.startsWith("16.")).toBe(true);
-    expect(result.count).toBe("200");
-    expect(result.createdAtNulls).toBe("0");
-    expect(result.learner).toBe("0");
-    expect(teardown.clusterStopped).toBe(true);
-    expect(teardown.clusterRemoved).toBe(true);
-    expect(teardown.portClosed).toBe(true);
-  }, 120_000);
+    expect(counts.id).toEqual({ string: 200 });
+    expect(uuidOk).toBe(200);
+    expect(counts.canonical_key).toEqual({ string: 200 });
+    expect(counts.source_index).toEqual({ number: 200 });
+    expect(counts.section).toEqual({ string: 200 });
+    expect(counts.source_page_start).toEqual({ number: 200 });
+    expect(counts.source_page_end).toEqual({ number: 200 });
+    expect(counts.source_word_raw).toEqual({ string: 200 });
+    expect(counts.starred).toEqual({ boolean: 200 });
+    expect(counts.source_ipa_raw).toEqual({ string: 197, null: 3 });
+    expect(counts.source_pos_raw).toEqual({ string: 200 });
+    expect(counts.source_meaning_raw).toEqual({ string: 200 });
+    expect(counts.raw_entry).toEqual({ string: 200 });
+    expect(counts.parse_status).toEqual({ string: 200 });
+    expect(counts.parse_issues).toEqual({ array: 200 });
+    expect(parseIssueLengths).toEqual({ "0": 197, "1": 3 });
+    expect(counts.source_review_note).toEqual({ null: 198, string: 2 });
+    expect(Object.values(emptyString).every((count) => count === 0)).toBe(true);
+  });
+
+  it("keeps the PostgreSQL reproduction opt-in and out of the default file", () => {
+    const header = readFileSync(
+      path.join(
+        process.cwd(),
+        "tests/persistence/dedicated-gate-b-source-entries-diagnosis.test.ts",
+      ),
+      "utf8",
+    ).split("describe(")[0];
+    expect(header).not.toContain("atomicity-harness");
+    expect(integration).toContain(
+      'process.env.RUN_DEDICATED_GATE_B_SOURCE_ENTRIES_DIAGNOSIS === "1"',
+    );
+    expect(integration).toContain("describe.skipIf(!LIVE)");
+    expect(integration).toContain("LOCAL_POSTGRESQL_16_REQUIRED");
+    expect(integration).toContain("buildChildEnv()");
+  });
 });
