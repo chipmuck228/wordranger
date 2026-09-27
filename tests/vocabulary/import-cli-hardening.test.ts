@@ -10,6 +10,7 @@ import {
   type VocabularyImportBatchErrorJson,
 } from "@/server/vocabulary/import/batch-error";
 import {
+  VOCABULARY_IMPORT_APPLIED,
   VOCABULARY_IMPORT_SERVICE_ROLE_REQUIRED,
   VOCABULARY_IMPORT_UNKNOWN_FAILURE,
   attachVocabularyImportCliHandler,
@@ -543,7 +544,14 @@ describe("vocabulary importer fail-closed hardening", () => {
       },
     );
     expect(result.exitCode).toBe(0);
-    expect(sink.logs[1]?.[0]).toBe("Applied vocabulary import");
+    expect(sink.logs[1]).toHaveLength(1);
+    expect(JSON.parse(String(sink.logs[1]?.[0]))).toEqual({
+      code: VOCABULARY_IMPORT_APPLIED,
+      sourceEntries: 1600,
+      lexemes: 1638,
+      relations: 716,
+      tags: 1638,
+    });
   });
 
   it("binds the CLI to the service-role factory only", () => {
@@ -561,5 +569,7 @@ describe("vocabulary importer fail-closed hardening", () => {
     expect(cli).not.toContain("createSupabaseServerClient");
     expect(script).toContain("attachVocabularyImportCliHandler");
     expect(script).not.toMatch(/void main\s*\(\s*\)/);
+    expect(cli).toContain("VOCABULARY_IMPORT_APPLIED");
+    expect(cli).not.toContain("Applied vocabulary import");
   });
 });

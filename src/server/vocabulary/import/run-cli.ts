@@ -14,6 +14,8 @@ export const VOCABULARY_IMPORT_SERVICE_ROLE_REQUIRED =
   "VOCABULARY_IMPORT_SERVICE_ROLE_REQUIRED" as const;
 export const VOCABULARY_IMPORT_UNKNOWN_FAILURE =
   "VOCABULARY_IMPORT_UNKNOWN_FAILURE" as const;
+export const VOCABULARY_IMPORT_APPLIED =
+  "VOCABULARY_IMPORT_APPLIED" as const;
 
 export type VocabularyImportCliMode =
   | "validate"
@@ -126,12 +128,19 @@ export async function runVocabularyImportCli(
 
   const apply = deps.apply ?? applyVocabularyImport;
   const applied = await apply(dataset, client);
-  io.log("Applied vocabulary import", {
-    sourceEntries: applied.sourceEntries,
-    lexemes: applied.lexemes,
-    relations: applied.relations,
-    tags: applied.tags,
-  });
+  io.log(
+    JSON.stringify(
+      {
+        code: VOCABULARY_IMPORT_APPLIED,
+        sourceEntries: applied.sourceEntries,
+        lexemes: applied.lexemes,
+        relations: applied.relations,
+        tags: applied.tags,
+      },
+      null,
+      2,
+    ),
+  );
   return { exitCode: 0, mode };
 }
 
