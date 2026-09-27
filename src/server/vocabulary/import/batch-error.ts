@@ -11,6 +11,8 @@ export type VocabularyImportErrorKind =
   | "NETWORK_OR_TIMEOUT_ERROR"
   | "UNKNOWN_IMPORT_ERROR";
 
+export type VocabularyImportStatusClass = "HTTP_4XX" | "HTTP_5XX" | "NO_STATUS";
+
 export type VocabularyImportTable =
   | "vocabulary_source_entries"
   | "lexemes"
@@ -36,6 +38,7 @@ export interface VocabularyImportBatchErrorJson {
   batchStart: number;
   batchSize: number;
   providerCode: string | null;
+  statusClass: VocabularyImportStatusClass;
 }
 
 function readRecord(error: unknown): Record<string, unknown> {
@@ -79,6 +82,33 @@ export function sanitizeProviderCode(value: unknown): string | null {
   return typeof value === "string" && SAFE_CODE.test(value) ? value : null;
 }
 
+function readHttpStatus(error: unknown): number | null {
+  const record = readRecord(error);
+  for (const key of ["status", "statusCode", "status_code"] as const) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isInteger(value)) {
+      return value;
+    }
+    if (typeof value === "string" && /^\d{3}$/.test(value)) {
+      return Number(value);
+    }
+  }
+  return null;
+}
+
+export function classifyHttpStatusClass(
+  error: unknown,
+): VocabularyImportStatusClass {
+  const status = readHttpStatus(error);
+  if (status !== null && status >= 400 && status <= 499) {
+    return "HTTP_4XX";
+  }
+  if (status !== null && status >= 500 && status <= 599) {
+    return "HTTP_5XX";
+  }
+  return "NO_STATUS";
+}
+
 export class VocabularyImportBatchError extends Error {
   readonly name = "VocabularyImportBatchError";
   readonly code = "VOCABULARY_IMPORT_BATCH_FAILED" as const;
@@ -89,6 +119,7 @@ export class VocabularyImportBatchError extends Error {
   readonly batchStart: number;
   readonly batchSize: number;
   readonly providerCode: string | null;
+  readonly statusClass: VocabularyImportStatusClass;
 
   constructor(input: {
     table: VocabularyImportTable;
@@ -108,6 +139,7 @@ export class VocabularyImportBatchError extends Error {
     this.batchStart = input.batchStart;
     this.batchSize = input.batchSize;
     this.providerCode = sanitizeProviderCode(readRecord(input.cause).code);
+    this.statusClass = classifyHttpStatusClass(input.cause);
   }
 
   toJSON(): VocabularyImportBatchErrorJson {
@@ -121,6 +153,7 @@ export class VocabularyImportBatchError extends Error {
       batchStart: this.batchStart,
       batchSize: this.batchSize,
       providerCode: this.providerCode,
+      statusClass: this.statusClass,
     };
   }
 }

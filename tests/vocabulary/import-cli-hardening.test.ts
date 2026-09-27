@@ -192,8 +192,10 @@ describe("vocabulary importer fail-closed hardening", () => {
       "name",
       "operation",
       "providerCode",
+      "statusClass",
       "table",
     ]);
+    expect(error.toJSON().statusClass).toBe("NO_STATUS");
     const sink = ioSink();
     await attachVocabularyImportCliHandler(Promise.reject(error), sink.io);
     expect(process.exitCode).toBe(1);
@@ -427,6 +429,7 @@ describe("vocabulary importer fail-closed hardening", () => {
     const email = "attacker@example.com";
     const cause = {
       code: "not a valid code!!!",
+      status: 401,
       message: password,
       hint: url,
       details: {
@@ -448,8 +451,10 @@ describe("vocabulary importer fail-closed hardening", () => {
     });
     expect(error.cause).toBe(cause);
     expect(error.providerCode).toBeNull();
+    expect(error.statusClass).toBe("HTTP_4XX");
     const json = error.toJSON();
     expect(json.providerCode).toBeNull();
+    expect(json.statusClass).toBe("HTTP_4XX");
     expect(json).not.toHaveProperty("providerMessage");
     expect(json).not.toHaveProperty("providerHint");
     expect(json).not.toHaveProperty("providerDetails");
@@ -466,6 +471,8 @@ describe("vocabulary importer fail-closed hardening", () => {
     const { printed, parsed } = parseCliFailure(sink);
     expect(parsed.batch?.operation).toBe("LEXEMES_UPSERT");
     expect(parsed.batch?.providerCode).toBeNull();
+    expect(parsed.batch?.statusClass).toBe("HTTP_4XX");
+    expect(printed).toContain("HTTP_4XX");
     expect(printed).not.toContain(password);
     expect(printed).not.toContain(lemma!);
     expect(printed).not.toContain(url);
@@ -477,6 +484,55 @@ describe("vocabulary importer fail-closed hardening", () => {
     expect(printed).not.toContain('"cause"');
     expect(printed).not.toMatch(/https?:\/\//i);
     expect(printed).not.toMatch(/eyJ/);
+  });
+
+  it("classifies allowlisted HTTP status classes without recovering provider text", () => {
+    const four = new VocabularyImportBatchError({
+      table: "vocabulary_source_entries",
+      operation: "SOURCE_ENTRIES_UPSERT",
+      batchStart: 0,
+      batchSize: VOCABULARY_IMPORT_BATCH_SIZE,
+      cause: {
+        message: "secret body",
+        details: null,
+        status: 400,
+      },
+    });
+    expect(four.kind).toBe("POSTGREST_ERROR");
+    expect(four.providerCode).toBeNull();
+    expect(four.statusClass).toBe("HTTP_4XX");
+    expect(JSON.stringify(four.toJSON())).not.toContain("secret body");
+
+    const five = new VocabularyImportBatchError({
+      table: "vocabulary_source_entries",
+      operation: "SOURCE_ENTRIES_UPSERT",
+      batchStart: 0,
+      batchSize: VOCABULARY_IMPORT_BATCH_SIZE,
+      cause: {
+        code: "PGRST205",
+        statusCode: "503",
+        message: "upstream",
+      },
+    });
+    expect(five.kind).toBe("POSTGREST_ERROR");
+    expect(five.providerCode).toBe("PGRST205");
+    expect(five.statusClass).toBe("HTTP_5XX");
+    expect(JSON.stringify(five.toJSON())).not.toContain("upstream");
+
+    const none = new VocabularyImportBatchError({
+      table: "vocabulary_source_entries",
+      operation: "SOURCE_ENTRIES_UPSERT",
+      batchStart: 0,
+      batchSize: VOCABULARY_IMPORT_BATCH_SIZE,
+      cause: {
+        message: "shape only",
+        details: "",
+      },
+    });
+    expect(none.kind).toBe("POSTGREST_ERROR");
+    expect(none.providerCode).toBeNull();
+    expect(none.statusClass).toBe("NO_STATUS");
+    expect(JSON.stringify(none.toJSON())).not.toContain("shape only");
   });
 
   it("classifies timeout and network failures", async () => {
