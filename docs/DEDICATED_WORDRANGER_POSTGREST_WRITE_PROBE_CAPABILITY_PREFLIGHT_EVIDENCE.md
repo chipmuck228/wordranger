@@ -34,12 +34,19 @@ authorize merge. `WRITE_PROBE_NOT_AUTHORIZED` is unchanged.
 | --- | --- |
 | Active baseline path | `supabase/migrations/202609260001_dedicated_wordranger_baseline_v0.sql` |
 | Baseline SHA-256 | `7f62b1818cae5045b5d74e2dd286a510f21da650ff6dea42357ac3e4d8f9a0fe` |
-| `apply-import.ts` SHA-256 | `3b65732cafc8d03e306b75b82654c56ac0fdb6afbdc1f55d71b436a7d7731b53` |
-| `batch-error.ts` SHA-256 | `2558791095682ee404232277954c0f542156f2bc0af645b70adb2fc29efd4ce6` |
-| `import-rows.ts` SHA-256 | `44226a3722c14c51bc76f9c3da05674e166a2dffa7cf409e4ce5ba9844ff6d36` |
+| `src/server/vocabulary/import/apply-import.ts` SHA-256 | `3b65732cafc8d03e306b75b82654c56ac0fdb6afbdc1f55d71b436a7d7731b53` |
+| `src/server/vocabulary/import/batch-error.ts` SHA-256 | `2558791095682ee404232277954c0f542156f2bc0af645b70adb2fc29efd4ce6` |
+| `src/server/vocabulary/import/import-rows.ts` SHA-256 | `44226a3722c14c51bc76f9c3da05674e166a2dffa7cf409e4ce5ba9844ff6d36` |
 | Vocabulary `algorithmVersion` | `vocabulary-content-v1` |
 | Vocabulary fingerprint | `9704c2025628676800918e4e7fc0e744c8358c025d8b01ebf43936d8474754cb` |
 | Counts | 1600 / 1638 / 716 / 1638 |
+
+The four file SHA-256 values above are content identity
+recorded at remote capability GET inspected head
+`61c755e06f94a8817a2453f4b21575c106318c04`.
+They describe that inspected tree. They are not a live lock
+of the current worktree. A later legitimate importer change
+does not require rewriting this historical record.
 
 `apply-import.ts` remains a persisting upsert with no
 `tx=rollback`. Reusing `--apply` stays

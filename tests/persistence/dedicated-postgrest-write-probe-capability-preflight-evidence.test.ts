@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -12,7 +11,7 @@ const FINGERPRINT =
 const PRODUCTION_ALIAS_FULL =
   "782ffcca670c8272a3ba7ca07bedaef4debdc95f";
 
-const LOCKED_SHA256 = {
+const CAPTURED_SHA256 = {
   "supabase/migrations/202609260001_dedicated_wordranger_baseline_v0.sql":
     "7f62b1818cae5045b5d74e2dd286a510f21da650ff6dea42357ac3e4d8f9a0fe",
   "src/server/vocabulary/import/apply-import.ts":
@@ -25,12 +24,6 @@ const LOCKED_SHA256 = {
 
 const UUID_RE =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
-
-function sha256(file: string): string {
-  return createHash("sha256")
-    .update(readFileSync(path.join(process.cwd(), file)))
-    .digest("hex");
-}
 
 describe("dedicated PostgREST write-probe capability preflight evidence", () => {
   const text = readFileSync(path.join(process.cwd(), EVIDENCE), "utf8");
@@ -96,11 +89,24 @@ describe("dedicated PostgREST write-probe capability preflight evidence", () => 
     expect(text).not.toContain("third import executed");
   });
 
-  it("locks Content identity and keeps apply-import persisting", () => {
-    for (const [file, digest] of Object.entries(LOCKED_SHA256)) {
-      expect(sha256(file)).toBe(digest);
-      expect(text).toContain(digest);
+  it("locks captured Content identity from the inspected head, not the live worktree", () => {
+    expect(text).toContain(`Remote GET inspected commit:`);
+    expect(text).toContain(INSPECTED_HEAD);
+    expect(text).toContain(
+      "recorded at remote capability GET inspected head",
+    );
+    expect(text).toContain("They are not a live lock");
+    expect(text).toContain("does not require rewriting this historical record");
+    expect(text).toContain("vocabulary-content-v1");
+    expect(text).toContain(FINGERPRINT);
+    expect(text).toContain("1600");
+    expect(text).toContain("1638");
+    expect(text).toContain("716");
+    for (const [file, digest] of Object.entries(CAPTURED_SHA256)) {
+      expect(text, file).toContain(file);
+      expect(text, file).toContain(digest);
     }
+    expect(text).not.toContain("sha256(file)");
     expect(text).toContain("IMPORTER_APPLY_PATH_REJECTED");
     expect(text).toContain("Write probe was not executed.");
     expect(text).toContain("`--apply` was not executed against Dedicated.");
