@@ -170,3 +170,10 @@ Dedicated schema was not dropped.
 - Gate C/D remain unauthorized.
 - This document does not authorize a retry, delete, repair, or Gate B
   re-run.
+
+## 11. Follow-on diagnosis
+
+A later local diagnosis and importer fail-closed hardening is recorded
+in `docs/DEDICATED_WORDRANGER_BASELINE_V0_GATE_B_IMPORT_DIAGNOSIS.md`.
+That work does not change this incident classification and does not
+authorize a Gate B retry.
