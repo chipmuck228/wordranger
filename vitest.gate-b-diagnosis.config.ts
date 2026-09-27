@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: [
-      "tests/persistence/dedicated-gate-b-source-entries-diagnosis.integration.test.ts",
+      "tests/persistence/dedicated-gate-b-source-entries-diagnosis.live.ts",
     ],
     restoreMocks: true,
     testTimeout: 120_000,

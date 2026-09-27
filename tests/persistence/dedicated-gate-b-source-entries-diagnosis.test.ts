@@ -1,12 +1,23 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { toVocabularyImportRows } from "@/server/vocabulary/import/import-rows";
 import { loadVocabularyDataset } from "@/server/vocabulary/load-vocabulary-dataset";
+import {
+  GATE_B_SOURCE_ENTRIES_DIAGNOSIS_LIVE_FLAG,
+  isDedicatedGateBSourceEntriesDiagnosisLive,
+  requireLocalPostgresql16,
+} from "./dedicated-gate-b-source-entries-diagnosis-live-gate";
 
 const EVIDENCE = "docs/DEDICATED_WORDRANGER_GATE_B_SOURCE_ENTRIES_DIAGNOSIS.md";
-const INTEGRATION =
+const LIVE_FILE =
+  "tests/persistence/dedicated-gate-b-source-entries-diagnosis.live.ts";
+const LIVE_CONFIG = "vitest.gate-b-diagnosis.config.ts";
+const DEFAULT_VITEST = "vitest.config.ts";
+const STATIC_FILE =
+  "tests/persistence/dedicated-gate-b-source-entries-diagnosis.test.ts";
+const RETIRED_INTEGRATION =
   "tests/persistence/dedicated-gate-b-source-entries-diagnosis.integration.test.ts";
 const ORIGIN_MAIN = "a031be4ba791af9ac68aad93e8aba9f3437128cf";
 const INSPECTED_HEAD = "db6cc6552b280f7b137d88e28888f000cc9aa2db";
@@ -79,7 +90,13 @@ function category(value: unknown): string {
 describe("dedicated Gate B source-entries diagnosis", () => {
   const text = readFileSync(path.join(process.cwd(), EVIDENCE), "utf8");
   const applyImport = readFileSync(path.join(process.cwd(), APPLY_IMPORT), "utf8");
-  const integration = readFileSync(path.join(process.cwd(), INTEGRATION), "utf8");
+  const live = readFileSync(path.join(process.cwd(), LIVE_FILE), "utf8");
+  const liveConfig = readFileSync(path.join(process.cwd(), LIVE_CONFIG), "utf8");
+  const defaultVitest = readFileSync(
+    path.join(process.cwd(), DEFAULT_VITEST),
+    "utf8",
+  );
+  const staticSource = readFileSync(path.join(process.cwd(), STATIC_FILE), "utf8");
   const firstBatch = toVocabularyImportRows(
     loadVocabularyDataset(),
   ).sourceEntries.slice(0, 200);
@@ -191,20 +208,62 @@ describe("dedicated Gate B source-entries diagnosis", () => {
     expect(Object.values(emptyString).every((count) => count === 0)).toBe(true);
   });
 
-  it("keeps the PostgreSQL reproduction opt-in and out of the default file", () => {
-    const header = readFileSync(
-      path.join(
-        process.cwd(),
-        "tests/persistence/dedicated-gate-b-source-entries-diagnosis.test.ts",
-      ),
-      "utf8",
-    ).split("describe(")[0];
-    expect(header).not.toContain("atomicity-harness");
-    expect(integration).toContain(
-      'process.env.RUN_DEDICATED_GATE_B_SOURCE_ENTRIES_DIAGNOSIS === "1"',
+  it("keeps the PostgreSQL reproduction undiscovered by the default suite", () => {
+    expect(LIVE_FILE.endsWith(".test.ts")).toBe(false);
+    expect(LIVE_FILE.endsWith(".test.tsx")).toBe(false);
+    expect(LIVE_FILE.endsWith(".spec.ts")).toBe(false);
+    expect(LIVE_FILE.endsWith(".spec.tsx")).toBe(false);
+    expect(LIVE_FILE.endsWith(".live.ts")).toBe(true);
+    expect(existsSync(path.join(process.cwd(), RETIRED_INTEGRATION))).toBe(
+      false,
     );
-    expect(integration).toContain("describe.skipIf(!LIVE)");
-    expect(integration).toContain("LOCAL_POSTGRESQL_16_REQUIRED");
-    expect(integration).toContain("buildChildEnv()");
+    expect(defaultVitest).toContain(
+      'include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"]',
+    );
+    expect(defaultVitest).not.toContain("gate-b-source-entries-diagnosis");
+    expect(defaultVitest).not.toContain("exclude");
+    expect(liveConfig).toContain(`"${LIVE_FILE}"`);
+    expect(liveConfig).not.toContain(".integration.test.ts");
+    expect(liveConfig).toMatch(
+      /include:\s*\[\s*"tests\/persistence\/dedicated-gate-b-source-entries-diagnosis\.live\.ts",\s*\]/,
+    );
+    const harnessModule = ["dedicated-baseline-history", "atomicity", "harness"].join(
+      "-",
+    );
+    expect(staticSource.split("describe(")[0]).not.toContain(harnessModule);
+    expect(live).toContain(`from "./${harnessModule}"`);
+    expect(live).toContain(
+      "isDedicatedGateBSourceEntriesDiagnosisLive()",
+    );
+    expect(
+      readFileSync(
+        path.join(
+          process.cwd(),
+          "tests/persistence/dedicated-gate-b-source-entries-diagnosis-live-gate.ts",
+        ),
+        "utf8",
+      ),
+    ).toContain(`"${GATE_B_SOURCE_ENTRIES_DIAGNOSIS_LIVE_FLAG}"`);
+    expect(live).toContain("describe.skipIf(!LIVE)");
+    expect(live).toContain("requireLocalPostgresql16(postgresHarnessAvailable())");
+    expect(live).toContain("isolatedChildEnv()");
+    expect(live).toContain("assertIsolatedChildEnv(env)");
+    expect(live).toContain("assertIsolatedChildEnv(applyEnv)");
+    expect(live).toContain('"PGSERVICEFILE"');
+    expect(live).toContain('"PGPASSFILE"');
+    expect(live).toContain('"PGSSLMODE"');
+    expect(live).toContain('"PGAPPNAME"');
+    expect(live).toContain('"PGREQUIRESSL"');
+    expect(live).toContain('"PGSSLROOTCERT"');
+    expect(isDedicatedGateBSourceEntriesDiagnosisLive({})).toBe(false);
+    expect(
+      isDedicatedGateBSourceEntriesDiagnosisLive({
+        [GATE_B_SOURCE_ENTRIES_DIAGNOSIS_LIVE_FLAG]: "1",
+      }),
+    ).toBe(true);
+    expect(() => requireLocalPostgresql16(false)).toThrow(
+      "LOCAL_POSTGRESQL_16_REQUIRED",
+    );
+    expect(() => requireLocalPostgresql16(true)).not.toThrow();
   });
 });

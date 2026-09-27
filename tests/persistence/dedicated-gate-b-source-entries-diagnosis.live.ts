@@ -6,13 +6,17 @@ import { describe, expect, it } from "vitest";
 import { toVocabularyImportRows } from "@/server/vocabulary/import/import-rows";
 import { loadVocabularyDataset } from "@/server/vocabulary/load-vocabulary-dataset";
 import {
+  isDedicatedGateBSourceEntriesDiagnosisLive,
+  requireLocalPostgresql16,
+} from "./dedicated-gate-b-source-entries-diagnosis-live-gate";
+import {
   buildChildEnv,
   findPostgresBin,
   postgresHarnessAvailable,
   withDisposablePostgres,
 } from "./dedicated-baseline-history-atomicity-harness";
 
-const LIVE = process.env.RUN_DEDICATED_GATE_B_SOURCE_ENTRIES_DIAGNOSIS === "1";
+const LIVE = isDedicatedGateBSourceEntriesDiagnosisLive();
 const BASELINE =
   "supabase/migrations/202609260001_dedicated_wordranger_baseline_v0.sql";
 const IMPORTER_FIELDS = [
@@ -48,29 +52,44 @@ const DENIED_CHILD_ENV = [
   "PGUSER",
   "PGPASSWORD",
   "PGSERVICE",
+  "PGSERVICEFILE",
+  "PGPASSFILE",
+  "PGSSLMODE",
   "PGOPTIONS",
+  "PGAPPNAME",
+  "PGREQUIRESSL",
+  "PGSSLROOTCERT",
   "VERCEL_ORG_ID",
 ] as const;
+const DENIED_CHILD_ENV_PREFIXES = [
+  "SUPABASE_",
+  "NEXT_PUBLIC_SUPABASE_",
+  "POSTGRES_",
+  "VERCEL_",
+] as const;
 
-function childEnv(): NodeJS.ProcessEnv {
-  return buildChildEnv();
+function isolatedChildEnv(): NodeJS.ProcessEnv {
+  const env = buildChildEnv();
+  assertIsolatedChildEnv(env);
+  return env;
 }
 
 function assertIsolatedChildEnv(env: NodeJS.ProcessEnv): void {
-  for (const key of DENIED_CHILD_ENV) {
-    expect(env[key], key).toBeUndefined();
-  }
+  const leaked = [
+    ...DENIED_CHILD_ENV.filter((key) => Object.hasOwn(env, key)),
+    ...Object.keys(env).filter((key) =>
+      DENIED_CHILD_ENV_PREFIXES.some((prefix) => key.startsWith(prefix)),
+    ),
+  ];
+  expect(leaked).toEqual([]);
 }
 
 function psql(port: number, database: string, sql: string): string {
   const bin = findPostgresBin("psql");
-  if (!bin) {
-    throw new Error("LOCAL_POSTGRESQL_16_REQUIRED");
-  }
-  const env = childEnv();
-  assertIsolatedChildEnv(env);
+  requireLocalPostgresql16(bin !== null);
+  const env = isolatedChildEnv();
   const result = spawnSync(
-    bin,
+    bin!,
     [
       "-h",
       "127.0.0.1",
@@ -102,9 +121,7 @@ describe.skipIf(!LIVE)(
   "dedicated Gate B source-entries diagnosis local PostgreSQL 16",
   () => {
     it("reproduces the first batch with the service-role model and PK conflict target", async () => {
-      if (!postgresHarnessAvailable()) {
-        throw new Error("LOCAL_POSTGRESQL_16_REQUIRED");
-      }
+      requireLocalPostgresql16(postgresHarnessAvailable());
 
       const rows = toVocabularyImportRows(
         loadVocabularyDataset(),
@@ -161,8 +178,12 @@ describe.skipIf(!LIVE)(
           baselineFile,
           readFileSync(path.join(process.cwd(), BASELINE)),
         );
+        const applyBin = findPostgresBin("psql");
+        requireLocalPostgresql16(applyBin !== null);
+        const applyEnv = buildChildEnv();
+        assertIsolatedChildEnv(applyEnv);
         const apply = spawnSync(
-          findPostgresBin("psql")!,
+          applyBin!,
           [
             "-h",
             "127.0.0.1",
@@ -177,7 +198,7 @@ describe.skipIf(!LIVE)(
             "-f",
             baselineFile,
           ],
-          { encoding: "utf8", env: childEnv() },
+          { encoding: "utf8", env: applyEnv },
         );
         rmSync(work, { recursive: true, force: true });
         expect(existsSync(work)).toBe(false);
