@@ -24,7 +24,7 @@ export type VocabularyImportOperation =
   | "RELATIONS_UPSERT"
   | "TAGS_UPSERT";
 
-const SAFE_CODE = /^[A-Z0-9_]{2,32}$/;
+const SAFE_CODE = /^(?:[0-9A-Z]{5}|PGRST[0-9]{3})$/;
 
 export interface VocabularyImportBatchErrorJson {
   name: "VocabularyImportBatchError";

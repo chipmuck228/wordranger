@@ -385,6 +385,37 @@ describe("vocabulary importer fail-closed hardening", () => {
     expect(parseCliFailure(abbrevSink).printed).not.toContain("LEXEMES_UPSERT");
   });
 
+  it("accepts only SQLSTATE and PostgREST providerCode shapes", async () => {
+    const cases = [
+      { code: "SERVICE_ROLE_SECRET", expected: null },
+      { code: "N9Q2F8K1P4X7", expected: null },
+      { code: "PGRST205", expected: "PGRST205" },
+      { code: "23505", expected: "23505" },
+      { code: "42P01", expected: "42P01" },
+    ] as const;
+    for (const { code, expected } of cases) {
+      const error = new VocabularyImportBatchError({
+        table: "lexemes",
+        operation: "LEXEMES_UPSERT",
+        batchStart: 0,
+        batchSize: VOCABULARY_IMPORT_BATCH_SIZE,
+        cause: { code, message: "provider text must stay out of CLI" },
+      });
+      expect(error.providerCode).toBe(expected);
+      const sink = ioSink();
+      await attachVocabularyImportCliHandler(Promise.reject(error), sink.io);
+      process.exitCode = undefined;
+      const { printed, parsed } = parseCliFailure(sink);
+      expect(parsed.batch?.providerCode).toBe(expected);
+      if (expected === null) {
+        expect(printed).not.toContain(code);
+      } else {
+        expect(printed).toContain(code);
+      }
+      expect(printed).not.toContain("provider text must stay out of CLI");
+    }
+  });
+
   it("omits provider prose, row values, and Error.cause from CLI output", async () => {
     const dataset = loadVocabularyDataset();
     const lemma = dataset.lexemes.find((row) => row.lemma.length >= 8)?.lemma;
