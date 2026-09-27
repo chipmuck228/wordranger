@@ -159,6 +159,18 @@ describe("Dedicated Baseline V0 history atomicity spike", () => {
     }
   });
 
+  it("declares an exact supabase CLI 2.118.0 devDependency", () => {
+    const declared = (
+      JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
+        devDependencies?: { supabase?: string };
+      }
+    ).devDependencies?.supabase;
+    expect(declared).toBe(SPIKE_CLI_VERSION);
+    expect(declared).toBe("2.118.0");
+    expect(declared).not.toMatch(/^[~^]|latest|\|\|| - /);
+    expect(/^\d+\.\d+\.\d+$/.test(declared ?? "")).toBe(true);
+  });
+
   it("uses the repo-local Supabase CLI 2.118.0", () => {
     const cli = resolveLocalSupabaseCli();
     const nodeModulesRoot = path.resolve(process.cwd(), "node_modules");
