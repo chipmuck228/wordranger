@@ -28,7 +28,11 @@ describe("dedicated baseline V0 Gate A apply evidence", () => {
 
   it("locks apply identities and success classifications without secrets", () => {
     expect(text).toMatch(/Candidate \/ Not a Standard/);
-    expect(text).toContain("Local apply evidence only");
+    expect(text).toContain(
+      "Local evidence record of one authorized remote Gate A apply",
+    );
+    expect(text).toContain("remote Gate A apply");
+    expect(text).toContain("evidence commit is local and unpushed");
     expect(text).toContain("GATE_A_BASELINE_APPLIED");
     expect(text).toContain("SCHEMA_AND_HISTORY_POSTCONDITIONS_VERIFIED");
     expect(text).toContain("VOCABULARY_NOT_IMPORTED");
@@ -61,9 +65,13 @@ describe("dedicated baseline V0 Gate A apply evidence", () => {
     expect(text).toContain("SHARED_AND_OPTIONAL_OBJECTS_ABSENT");
     expect(text).toContain("TEMP_DELETED");
     expect(text).toContain("WORKTREE_REMOVED");
+    expect(text).toContain("POST_APPLY_FIRST_QUERY_FAILED");
+    expect(text).toContain("SELECT_ONLY_RECONCILIATION_VERIFIED");
     expect(text).not.toMatch(/https?:\/\//i);
     expect(text).not.toMatch(/supabase\.co|eyj|postgres:\/\//i);
     expect(text).not.toMatch(UUID_RE);
+    expect(text).not.toMatch(/local Gate A apply/);
+    expect(text).not.toMatch(/local-only apply/);
     expect(text).not.toMatch(/PR #17 was merged/i);
     expect(text).not.toMatch(/this document authorizes import/i);
     expect(text).not.toMatch(/Gate B was authorized/i);
@@ -79,6 +87,12 @@ describe("dedicated baseline V0 Gate A apply evidence", () => {
     expect(text).toContain("--include-seed");
     expect(text).toContain("--include-roles");
     expect(text).toContain("Executed exactly once");
+    expect(text).toContain("first automated postcondition query failed");
+    expect(text).toContain("apply was not retried");
+    expect(text).toContain("batched SELECT-only reconciliation");
+    expect(text).toContain("no DDL or DML");
+    expect(text).toContain("no migration repair");
+    expect(text).toContain("no manual history insert");
     expect(text).toContain("Vocabulary was not imported.");
     expect(text).toContain("Learner data was not written.");
     expect(text).toContain("`/train` was not started.");

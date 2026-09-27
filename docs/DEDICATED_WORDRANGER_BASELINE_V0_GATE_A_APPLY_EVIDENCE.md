@@ -1,9 +1,14 @@
 # Dedicated WordRanger Baseline V0 Gate A Apply Evidence
 
-Candidate / Not a Standard. **Local apply evidence only.**
+Candidate / Not a Standard. **Local evidence record of one authorized remote Gate A apply.**
 
-This file records one authorized Gate A apply of the reviewed
-baseline schema through the locally proven Supabase CLI channel.
+The remote Gate A apply happened on the Dedicated remote target
+through the locally proven Supabase CLI channel. Remote schema and
+history now exist. Vocabulary remains empty. Runtime and Production
+are not activated. This evidence commit is local and unpushed. The
+commit is not itself the apply head and must not be pushed as a
+new PR head.
+
 It does not authorize vocabulary import, learner writes, `/train`,
 PR merge, Vercel env changes, Production deployment, or Gate B.
 
@@ -15,8 +20,6 @@ PR merge, Vercel env changes, Production deployment, or Gate B.
   `migration/dedicated-wordranger-baseline-candidate-v0`
 - Authorized PR / isolated worktree head:
   `8a3362e6f3eb9d56101cafe315522a07e9ceb863`
-- This evidence commit is a later local record. It is not itself
-  the apply head and must not be pushed as a new PR head.
 - Production alias remains
   `782ffcca670c8272a3ba7ca07bedaef4debdc95f`
 
@@ -107,7 +110,23 @@ Intended migration list contained only:
 | `migration repair` | not used |
 | Manual history insert | not used |
 
-## 5. Migration history postcondition
+## 5. Post-apply verification recovery
+
+Baseline apply ran exactly once. CLI apply exited 0. The
+first automated postcondition query failed. The apply was not retried.
+Verification continued using batched SELECT-only reconciliation.
+The reconciliation performed no DDL or DML. There was
+no migration repair and no manual history insert. The
+reconciliation verified the exact schema, history, security and
+zero-row postconditions. The query failure was a
+verification-query failure, not evidence of a second or failed
+apply. No error message, cause, or status code was recorded
+beyond that classification.
+
+- `POST_APPLY_FIRST_QUERY_FAILED`
+- `SELECT_ONLY_RECONCILIATION_VERIFIED`
+
+## 6. Migration history postcondition
 
 SELECT-only. The CLI wrote the history row. No handwritten insert.
 
@@ -123,7 +142,7 @@ SELECT-only. The CLI wrote the history row. No handwritten insert.
 - Other versions: none
 - Classification: **`HISTORY_POSTCONDITION_VERIFIED`**
 
-## 6. Formal schema inventory
+## 7. Formal schema inventory
 
 Classification: **`COMPLETE`**
 
@@ -135,7 +154,7 @@ Classification: **`COMPLETE`**
 | 18 named indexes | 18 present |
 | `pgcrypto` | installed |
 
-## 7. Initial data state
+## 8. Initial data state
 
 Count-only. No row payloads were selected. No vocabulary import
 and no learner writes were performed.
@@ -155,7 +174,7 @@ and no learner writes were performed.
 
 Classification: **`ALL_REQUIRED_TABLES_ZERO_ROWS`**.
 
-## 8. Vocabulary privilege matrix
+## 9. Vocabulary privilege matrix
 
 Classification: **`VOCAB_SERVICE_ROLE_SUI_NO_DELETE`**.
 
@@ -168,7 +187,7 @@ Applies identically to the four vocabulary tables.
 | authenticated | no | no | no | no | no | no | no |
 | service_role | yes | yes | yes | no | no | no | no |
 
-## 9. Learner security matrix
+## 10. Learner security matrix
 
 Classification: **`LEARNER_RLS_ENABLE_NOT_FORCE_NO_CLIENT_POLICIES`**
 and **`LEARNER_SERVICE_ROLE_DML_CLIENTS_DENIED`**.
@@ -188,14 +207,14 @@ Applies identically to the six learner tables.
 | authenticated | no | no | no | no |
 | service_role | yes | yes | yes | yes |
 
-## 10. Evidence protection
+## 11. Evidence protection
 
 - Append-only function `public.prevent_learning_evidence_mutation` exists
 - Trigger `learning_evidence_no_update` exists
 - No mutation probe used real learner rows
 - No test Evidence was inserted
 
-## 11. Contamination exclusions
+## 12. Contamination exclusions
 
 Classification: **`SHARED_AND_OPTIONAL_OBJECTS_ABSENT`**.
 
@@ -204,7 +223,7 @@ Classification: **`SHARED_AND_OPTIONAL_OBJECTS_ABSENT`**.
 - No test-only cleanup RPC
 - `learning_sessions` was not created
 
-## 12. Operational safety
+## 13. Operational safety
 
 - Production alias still
   `782ffcca670c8272a3ba7ca07bedaef4debdc95f`
@@ -217,7 +236,7 @@ Classification: **`SHARED_AND_OPTIONAL_OBJECTS_ABSENT`**.
 - Auto-merge was not enabled
 - Gate B was not authorized and was not started
 
-## 13. Cleanup
+## 14. Cleanup
 
 Temporary credential snapshot and isolated worktree were removed
 after verification. Dedicated schema was not dropped or altered
@@ -226,7 +245,7 @@ after the successful apply. Blaze was not touched.
 - **`TEMP_DELETED`**
 - **`WORKTREE_REMOVED`**
 
-## 14. Conclusion
+## 15. Conclusion
 
 `GATE_A_BASELINE_APPLIED`;
 `SCHEMA_AND_HISTORY_POSTCONDITIONS_VERIFIED`;
@@ -234,7 +253,7 @@ after the successful apply. Blaze was not touched.
 `PR_17_REMAINS_UNMERGED`;
 `PRODUCTION_REMAINS_ON_782FFCC`
 
-## 15. Non-claims
+## 16. Non-claims
 
 - Vocabulary was not imported.
 - Learner data was not written.
