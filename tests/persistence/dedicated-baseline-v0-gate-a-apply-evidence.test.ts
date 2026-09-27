@@ -32,7 +32,12 @@ describe("dedicated baseline V0 Gate A apply evidence", () => {
       "Local evidence record of one authorized remote Gate A apply",
     );
     expect(text).toContain("remote Gate A apply");
-    expect(text).toContain("evidence commit is local and unpushed");
+    expect(text).toContain("At the time this evidence was captured");
+    expect(text).toContain("evidence commit was local and unpushed");
+    expect(text).toContain("It was not the authorized apply head");
+    expect(text).toContain(
+      "later push of this evidence record does not rerun or alter the remote apply",
+    );
     expect(text).toContain("GATE_A_BASELINE_APPLIED");
     expect(text).toContain("SCHEMA_AND_HISTORY_POSTCONDITIONS_VERIFIED");
     expect(text).toContain("VOCABULARY_NOT_IMPORTED");
@@ -72,6 +77,8 @@ describe("dedicated baseline V0 Gate A apply evidence", () => {
     expect(text).not.toMatch(UUID_RE);
     expect(text).not.toMatch(/local Gate A apply/);
     expect(text).not.toMatch(/local-only apply/);
+    expect(text).not.toMatch(/must not be pushed as a new PR head/);
+    expect(text).not.toContain("evidence commit is local and unpushed");
     expect(text).not.toMatch(/PR #17 was merged/i);
     expect(text).not.toMatch(/this document authorizes import/i);
     expect(text).not.toMatch(/Gate B was authorized/i);

@@ -5,12 +5,14 @@ Candidate / Not a Standard. **Local evidence record of one authorized remote Gat
 The remote Gate A apply happened on the Dedicated remote target
 through the locally proven Supabase CLI channel. Remote schema and
 history now exist. Vocabulary remains empty. Runtime and Production
-are not activated. This evidence commit is local and unpushed. The
-commit is not itself the apply head and must not be pushed as a
-new PR head.
+are not activated.
 
-It does not authorize vocabulary import, learner writes, `/train`,
-PR merge, Vercel env changes, Production deployment, or Gate B.
+At the time this evidence was captured, the evidence commit was local and unpushed.
+It was not the authorized apply head. The authorized remote Gate A
+apply used commit `8a3362e6f3eb9d56101cafe315522a07e9ceb863`. A
+later push of this evidence record does not rerun or alter the remote apply.
+Inclusion of the evidence in PR #17 does not authorize vocabulary
+import, runtime activation, merge, Production deployment or Gate B.
 
 - Date: **2026-09-27**
 - `origin/main` / merge-base:
