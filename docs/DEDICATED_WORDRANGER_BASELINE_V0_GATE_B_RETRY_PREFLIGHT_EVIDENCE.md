@@ -1,12 +1,19 @@
 # Dedicated WordRanger Baseline V0 Gate B Retry Preflight Evidence
 
-Candidate / Not a Standard. **Local read-only retry preflight.
-This is not a Gate B retry and not a successful import.**
+Candidate / Not a Standard. **Local evidence record of one authorized remote read-only Gate B retry preflight.**
+This is not a Gate B retry and not a successful import.
+
+The remote read-only preflight inspected Dedicated against
+commit `d6da81039e51086f19a0d11c97e370777a56863f`. This evidence
+commit is a later local record. It is not the inspected head.
+A later push of this evidence record does not rerun or alter
+the remote preflight. This task performed no remote write.
 
 This file records whether Dedicated currently has the read-only
 preconditions for a separately authorized Gate B retry. It does
 not retry the importer. It does not run `--apply`. It does not
-write the remote database. It does not authorize merge.
+authorize merge. `RETRY_REQUIRES_SEPARATE_AUTHORIZATION` is
+unchanged.
 
 The original Gate B failure cause remains unknown.
 `HISTORICAL_OPAQUE_FAILURE_CAUSE_NOT_RECOVERABLE` is unchanged.
@@ -19,10 +26,10 @@ write would succeed.
 - PR: **#17** remains OPEN and unmerged
 - Inspected source branch:
   `migration/dedicated-wordranger-baseline-candidate-v0`
-- Inspected PR / branch head:
+- Remote read-only preflight inspected commit:
   `d6da81039e51086f19a0d11c97e370777a56863f`
-- This evidence commit is a later local record. It is not itself
-  a retry authorization.
+- This evidence commit is a later local record. It is not the
+  inspected head and is not itself a retry authorization.
 - Production alias remains
   `782ffcca670c8272a3ba7ca07bedaef4debdc95f`
 
@@ -49,6 +56,7 @@ Importer and row-mapper hashes at this preflight:
 | `src/server/vocabulary/import/batch-error.ts` | `70a088d0a096593bc4f407606eb080344539d82f8a8014066e256627cc8d6c01` |
 | `src/server/vocabulary/import/import-rows.ts` | `44226a3722c14c51bc76f9c3da05674e166a2dffa7cf409e4ce5ba9844ff6d36` |
 | `src/server/vocabulary/import/rebuild-contract.ts` | `b39ea86209bee55c7659a3ad1f4261bb708ed23fd9d104cf120f07b63ea825cb` |
+| `src/server/vocabulary/import/plan-import.ts` | `63bca2c8a7f265da69fd03c8a455b7d10827cce1f702ca906efbd4a8cbc00b08` |
 
 Source vocabulary assets:
 
@@ -230,6 +238,7 @@ Current importer identity:
 - Auto-merge was not enabled
 - Gate B retry was not executed
 - `--apply` was not run
+- This task performed no remote write
 - Schema cache was not refreshed
 - Grants and RLS were not modified
 
