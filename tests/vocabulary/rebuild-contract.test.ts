@@ -119,10 +119,13 @@ describe("vocabulary empty-target seed contract", () => {
       path.join(process.cwd(), "scripts/import-vocabulary.ts"),
       "utf8",
     );
-    expect(script).toContain("--fingerprint");
-    expect(script).toContain("buildVocabularySeedManifest");
-    expect(script).toMatch(
-      /if \(mode === "fingerprint"\)[\s\S]*return;[\s\S]*createSupabaseServerClient/,
+    const cli = readFileSync(
+      path.join(process.cwd(), "src/server/vocabulary/import/run-cli.ts"),
+      "utf8",
     );
+    expect(cli).toContain("--fingerprint");
+    expect(cli).toContain("buildVocabularySeedManifest");
+    expect(script).toContain("createSupabaseServiceRoleClient");
+    expect(script).not.toContain("createSupabaseServerClient");
   });
 });

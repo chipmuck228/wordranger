@@ -1,20 +1,47 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { VocabularyDataset } from "../load-vocabulary-dataset";
-import { planVocabularyImport, type ImportPlan } from "./plan-import";
+import {
+  VOCABULARY_IMPORT_BATCH_SIZE,
+  VocabularyImportBatchError,
+  type VocabularyImportTable,
+} from "./batch-error";
 import { toVocabularyImportRows } from "./import-rows";
-
-const BATCH = 200;
+import { planVocabularyImport, type ImportPlan } from "./plan-import";
 
 async function upsertBatch(
   client: SupabaseClient,
-  table: string,
+  table: VocabularyImportTable,
   rows: Record<string, unknown>[],
 ): Promise<void> {
-  for (let index = 0; index < rows.length; index += BATCH) {
-    const slice = rows.slice(index, index + BATCH);
-    const { error } = await client.from(table).upsert(slice);
-    if (error) {
-      throw error;
+  for (
+    let batchStart = 0;
+    batchStart < rows.length;
+    batchStart += VOCABULARY_IMPORT_BATCH_SIZE
+  ) {
+    const slice = rows.slice(
+      batchStart,
+      batchStart + VOCABULARY_IMPORT_BATCH_SIZE,
+    );
+    try {
+      const { error } = await client.from(table).upsert(slice);
+      if (error) {
+        throw new VocabularyImportBatchError({
+          table,
+          batchStart,
+          batchSize: slice.length,
+          cause: error,
+        });
+      }
+    } catch (error) {
+      if (error instanceof VocabularyImportBatchError) {
+        throw error;
+      }
+      throw new VocabularyImportBatchError({
+        table,
+        batchStart,
+        batchSize: slice.length,
+        cause: error,
+      });
     }
   }
 }

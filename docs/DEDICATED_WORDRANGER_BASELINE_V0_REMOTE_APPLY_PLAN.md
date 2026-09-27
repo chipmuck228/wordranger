@@ -95,7 +95,7 @@ Importer file hashes, Content identity:
 | `src/server/vocabulary/import/import-rows.ts` | `44226a3722c14c51bc76f9c3da05674e166a2dffa7cf409e4ce5ba9844ff6d36` |
 | `src/server/vocabulary/import/rebuild-contract.ts` | `b39ea86209bee55c7659a3ad1f4261bb708ed23fd9d104cf120f07b63ea825cb` |
 | `src/server/vocabulary/import/plan-import.ts` | `63bca2c8a7f265da69fd03c8a455b7d10827cce1f702ca906efbd4a8cbc00b08` |
-| `scripts/import-vocabulary.ts` | `660faf1e2bc8f1502249a998ed9ef15caeb644a807d56192d48e6f46a9109a84` |
+| `scripts/import-vocabulary.ts` | `6c3a1beb3d7ca80a50db5ab050cea86faea8a11ad6c7f509730d79efcfedc4f8` |
 
 ### 1.2 Review identity — checked externally immediately before apply
 

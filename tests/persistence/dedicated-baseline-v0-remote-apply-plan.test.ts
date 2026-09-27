@@ -30,7 +30,7 @@ const IMPORTER_FILES = {
   "src/server/vocabulary/import/plan-import.ts":
     "63bca2c8a7f265da69fd03c8a455b7d10827cce1f702ca906efbd4a8cbc00b08",
   "scripts/import-vocabulary.ts":
-    "660faf1e2bc8f1502249a998ed9ef15caeb644a807d56192d48e6f46a9109a84",
+    "6c3a1beb3d7ca80a50db5ab050cea86faea8a11ad6c7f509730d79efcfedc4f8",
 } as const;
 
 const UUID_RE =
