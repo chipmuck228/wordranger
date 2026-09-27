@@ -28,13 +28,16 @@ The reviewed importer that ran during the incident used this chain:
 → `upsertBatch()`
 → Supabase / PostgREST `upsert`
 
-Batch order, then and now:
+Batch order, then and now. The current importer names each
+write with a closed operation so the two `lexemes` stages
+are not ambiguous:
 
-1. `vocabulary_source_entries`
-2. `lexemes`
-3. lexeme abbreviation updates on `lexemes`
-4. `lexeme_relations`
-5. `lexeme_tags`
+1. `vocabulary_source_entries` / `SOURCE_ENTRIES_UPSERT`
+2. `lexemes` / `LEXEMES_UPSERT`
+3. lexeme abbreviation updates on `lexemes` /
+   `LEXEME_ABBREVIATIONS_UPDATE`
+4. `lexeme_relations` / `RELATIONS_UPSERT`
+5. `lexeme_tags` / `TAGS_UPSERT`
 
 The first possible remote write was `vocabulary_source_entries`
 `batchStart=0`, `batchSize=200`. The opaque historical failure does
@@ -111,15 +114,25 @@ four vocabulary tables and all six learner tables at zero rows.
 - Anon key does not satisfy apply mode.
 - Fingerprint, validate, and dry-run remain usable without
   credentials.
-- `VocabularyImportBatchError` preserves table, phase, batchStart,
-  batchSize, and safe provider fields only.
+- `VocabularyImportBatchError` preserves table, operation,
+  batchStart, and batchSize. Those four fields locate the write
+  stage. The closed operations are
+  `SOURCE_ENTRIES_UPSERT`,
+  `LEXEMES_UPSERT`,
+  `LEXEME_ABBREVIATIONS_UPDATE`,
+  `RELATIONS_UPSERT`,
+  and `TAGS_UPSERT`.
+- Public JSON and CLI output keep only a strictly validated
+  `providerCode`. Provider message, details, and hint are not
+  retained. `Error.cause` stays in-process and is not printed.
 - Error kinds:
   `POSTGREST_ERROR`,
   `NETWORK_OR_TIMEOUT_ERROR`,
   `UNKNOWN_IMPORT_ERROR`.
 - Top-level rejection handler sets `process.exitCode = 1` and
   prints one sanitized summary. Unknown objects become
-  `VOCABULARY_IMPORT_UNKNOWN_FAILURE`.
+  `VOCABULARY_IMPORT_UNKNOWN_FAILURE` with a fixed safe sentence.
+- Hardening does not prove that a later retry would succeed.
 - Student `/train` clients still use `createSupabaseServerClient()`
   and were not changed.
 

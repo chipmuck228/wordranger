@@ -35,6 +35,15 @@ describe("dedicated baseline V0 Gate B import diagnosis", () => {
     expect(text).toContain("threw the raw PostgREST error object");
     expect(text).toContain("VOCABULARY_IMPORT_SERVICE_ROLE_REQUIRED");
     expect(text).toContain("VocabularyImportBatchError");
+    expect(text).toContain("SOURCE_ENTRIES_UPSERT");
+    expect(text).toContain("LEXEMES_UPSERT");
+    expect(text).toContain("LEXEME_ABBREVIATIONS_UPDATE");
+    expect(text).toContain("RELATIONS_UPSERT");
+    expect(text).toContain("TAGS_UPSERT");
+    expect(text).toContain("providerCode");
+    expect(text).toContain("Provider message, details, and hint are not");
+    expect(text).toContain("Hardening does not prove that a later retry would succeed.");
+    expect(text).not.toContain("safe provider fields");
     expect(text).toContain("CURRENT_POSTGREST_READ_PATH_NOT_FULLY_AVAILABLE");
     expect(text).toContain("HISTORICAL_OPAQUE_FAILURE_CAUSE_NOT_RECOVERABLE");
     expect(text).toContain("POSTGREST_OTHER_SAFE_ERROR");

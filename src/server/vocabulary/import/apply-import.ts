@@ -3,6 +3,7 @@ import type { VocabularyDataset } from "../load-vocabulary-dataset";
 import {
   VOCABULARY_IMPORT_BATCH_SIZE,
   VocabularyImportBatchError,
+  type VocabularyImportOperation,
   type VocabularyImportTable,
 } from "./batch-error";
 import { toVocabularyImportRows } from "./import-rows";
@@ -11,6 +12,7 @@ import { planVocabularyImport, type ImportPlan } from "./plan-import";
 async function upsertBatch(
   client: SupabaseClient,
   table: VocabularyImportTable,
+  operation: VocabularyImportOperation,
   rows: Record<string, unknown>[],
 ): Promise<void> {
   for (
@@ -27,6 +29,7 @@ async function upsertBatch(
       if (error) {
         throw new VocabularyImportBatchError({
           table,
+          operation,
           batchStart,
           batchSize: slice.length,
           cause: error,
@@ -38,6 +41,7 @@ async function upsertBatch(
       }
       throw new VocabularyImportBatchError({
         table,
+        operation,
         batchStart,
         batchSize: slice.length,
         cause: error,
@@ -59,11 +63,26 @@ export async function applyVocabularyImport(
 
   const rows = toVocabularyImportRows(dataset);
 
-  await upsertBatch(client, "vocabulary_source_entries", rows.sourceEntries);
-  await upsertBatch(client, "lexemes", rows.lexemes);
-  await upsertBatch(client, "lexemes", rows.lexemeAbbreviationUpdates);
-  await upsertBatch(client, "lexeme_relations", rows.relations);
-  await upsertBatch(client, "lexeme_tags", rows.tags);
+  await upsertBatch(
+    client,
+    "vocabulary_source_entries",
+    "SOURCE_ENTRIES_UPSERT",
+    rows.sourceEntries,
+  );
+  await upsertBatch(client, "lexemes", "LEXEMES_UPSERT", rows.lexemes);
+  await upsertBatch(
+    client,
+    "lexemes",
+    "LEXEME_ABBREVIATIONS_UPDATE",
+    rows.lexemeAbbreviationUpdates,
+  );
+  await upsertBatch(
+    client,
+    "lexeme_relations",
+    "RELATIONS_UPSERT",
+    rows.relations,
+  );
+  await upsertBatch(client, "lexeme_tags", "TAGS_UPSERT", rows.tags);
 
   return plan;
 }
