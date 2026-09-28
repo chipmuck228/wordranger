@@ -22,10 +22,19 @@ Status:
 Do not store a later PR head SHA here. That is an impossible
 self-reference.
 
-This candidate stops using the following as the vocabulary
-initialization path. It does not delete those historical documents
-or code:
+`DIRECT_POSTGRES_REMOTE_RUNNER_PATH_RETIRED`.
+`EMPTY_TARGET_DASHBOARD_SEED_IS_CURRENT_CANDIDATE`.
 
+This candidate is the selected vocabulary initialization path.
+The remote direct-Postgres runner and raw TLS identity probe
+were removed from this PR's scope. Historical Gate B, capability
+GET, and IPv6 TLS-reset facts remain historical. They are not
+rewritten as if they never happened.
+
+This candidate does not use the following as the vocabulary
+initialization path:
+
+- remote direct-Postgres runner / TLS preflight
 - direct IPv6 TLS channel
 - Supavisor Session Pooler Candidate
 - PostgREST rollback write probe

@@ -32,9 +32,14 @@ This is not a third PostgREST `--apply`. Historical window-1
 proof that Dedicated rejected `vocabulary_source_entries`.
 Local PostgreSQL 16 success is not remote readiness.
 
-The reviewed live-test harness is not the one-shot runner.
-The runner candidate is documented separately and still keeps
-`--apply` hard-closed.
+`DIRECT_POSTGRES_REMOTE_RUNNER_PATH_RETIRED`.
+`EMPTY_TARGET_DASHBOARD_SEED_IS_CURRENT_CANDIDATE`.
+
+A later one-shot remote runner and raw TLS identity probe were
+authored, then removed from this PR's selected path. That
+removal does not rewrite the historical Gate B, TLS-reset, or
+local PostgreSQL 16 facts below. It does not authorize a
+Dashboard seed apply.
 
 ## 1. Why this candidate
 
@@ -119,12 +124,12 @@ PostgREST importer, or `/train`. Human review is required.
 
 ## 4. Credential and TLS boundary
 
-Future remote execution, if separately authorized, may use only
-a one-shot Vercel Production snapshot or an equivalent
-Dedicated-only source.
+This section is a historical local-candidate deny list. It is
+not an execution path and does not authorize a later remote
+runner.
 
-Required classes: `DEDICATED_API_AND_DB_MATCH`,
-`LEGACY_SOURCE_EXCLUDED`.
+Required classes, if a later task is separately authorized:
+`DEDICATED_API_AND_DB_MATCH`, `LEGACY_SOURCE_EXCLUDED`.
 
 Forbidden: `.env.local`, ambient Supabase / Postgres / Vercel
 variables, `--linked`, composing a REST URL into a DB URL,
@@ -133,14 +138,15 @@ committing credentials, `sslmode=disable`,
 `rejectUnauthorized: false`, `NODE_TLS_REJECT_UNAUTHORIZED=0`,
 `curl -k`.
 
-Remote direct PostgreSQL must verify certificates.
 Temporary files stay outside git and end as `TEMP_DELETED`.
 
 The local PostgreSQL 16 harness stays on loopback with its
 existing isolation. Remote environment variables must not enter
 the child process.
 
-This task does not pull remote credentials.
+This task does not pull remote credentials. The remote
+direct-Postgres runner path is retired. Empty-target Dashboard
+seed is the current candidate.
 
 ## 5. Still closed
 

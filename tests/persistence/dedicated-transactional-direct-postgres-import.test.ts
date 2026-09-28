@@ -119,6 +119,8 @@ describe("dedicated transactional direct-Postgres import candidate", () => {
       expect(doc).toContain("THIRD_IMPORT_ATTEMPT_NOT_AUTHORIZED");
       expect(doc).toContain("PR_17_REMAINS_UNMERGED");
       expect(doc).toContain("PRODUCTION_REMAINS_ON_782FFCC");
+      expect(doc).toContain("DIRECT_POSTGRES_REMOTE_RUNNER_PATH_RETIRED");
+      expect(doc).toContain("EMPTY_TARGET_DASHBOARD_SEED_IS_CURRENT_CANDIDATE");
       expect(doc).toContain(ORIGIN_MAIN);
       expect(doc).toContain(PRODUCTION_ALIAS_FULL);
       expect(doc).toContain(EVIDENCE_HEAD);
