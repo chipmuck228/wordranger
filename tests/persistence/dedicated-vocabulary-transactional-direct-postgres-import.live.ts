@@ -29,14 +29,20 @@ import {
   REMOTE_TRANSACTIONAL_IMPORT_NOT_AUTHORIZED,
   actionsAfterReconciliationFailed,
   actionsAfterUnknownCommit,
+  assertDifferentBackendPid,
   assertSameTransactionConnection,
-  classifyCommitAck,
+  classifyCommitExecutorEvent,
   classifyReconciliation,
   normalizeObservedVocabularyRows,
+  parseBackendPid,
+  parseReadonlyBoundaryProbe,
+  plannedBackendPidSql,
   plannedCountAndLearnerGuardSql,
   plannedInitialEmptyGuardSql,
   plannedPrivilegeProbeSql,
   plannedReadbackSql,
+  plannedReadonlyBoundaryProbeSql,
+  plannedReadonlyReconcilePrefix,
   plannedTransactionPrefix,
   plannedVocabularyUpserts,
   refuseRemoteTransactionalImport,
@@ -195,6 +201,8 @@ function applyBaseline(port: number, database: string): void {
 
 class PsqlSession {
   readonly connectionId: string;
+  backendPid: string | null = null;
+  private commitCommandWritten = false;
   private readonly child: ChildProcessWithoutNullStreams;
   private stdout = "";
   private stderr = "";
@@ -240,6 +248,16 @@ class PsqlSession {
 
   private write(sql: string): void {
     this.child.stdin.write(sql.endsWith("\n") ? sql : `${sql}\n`);
+  }
+
+  private writeAndFlush(sql: string): Promise<void> {
+    const payload = sql.endsWith("\n") ? sql : `${sql}\n`;
+    return new Promise((resolve, reject) => {
+      this.child.stdin.write(payload, (error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
   }
 
   private async waitToken(token: string): Promise<void> {
@@ -289,21 +307,87 @@ class PsqlSession {
     return readFileSync(dest, "utf8").trim();
   }
 
-  async end(sql: "commit" | "rollback"): Promise<void> {
+  async captureBackendPid(dest: string): Promise<string> {
+    const pid = parseBackendPid(
+      await this.queryToFile(plannedBackendPidSql(), dest),
+    );
+    this.backendPid = pid;
+    return pid;
+  }
+
+  async assertBackendPidUnchanged(dest: string): Promise<void> {
+    if (!this.backendPid) {
+      throw new Error("TRANSACTION_CONNECTION_MISMATCH");
+    }
+    const pid = parseBackendPid(
+      await this.queryToFile(plannedBackendPidSql(), dest),
+    );
+    assertSameTransactionConnection(this.backendPid, pid);
+  }
+
+  async end(sql: "commit" | "rollback"): Promise<
+    ReturnType<typeof classifyCommitExecutorEvent> | "ROLLBACK_CONFIRMED"
+  > {
     try {
+      if (sql === "commit") this.commitCommandWritten = true;
       await this.exec(`${sql};`);
+      if (sql === "commit") {
+        return classifyCommitExecutorEvent({ kind: "commit_ack_received" });
+      }
+      return "ROLLBACK_CONFIRMED";
+    } catch (error) {
+      if (sql === "commit") {
+        return classifyCommitExecutorEvent({
+          kind: this.commitCommandWritten
+            ? "commit_written_confirmation_lost"
+            : "commit_not_written_session_lost",
+        });
+      }
+      throw error;
     } finally {
       this.child.stdin.end();
       await this.closed;
     }
   }
 
-  async abort(): Promise<void> {
+  async endCommitLosingAck(
+    waitUntilServerCommitVisible: () => Promise<void>,
+  ): Promise<ReturnType<typeof classifyCommitExecutorEvent>> {
+    this.commitCommandWritten = true;
+    await this.writeAndFlush("COMMIT;\n");
+    await waitUntilServerCommitVisible();
+    const suppressedToken = `OK_${randomBytes(4).toString("hex")}`;
+    const confirmation = this.waitToken(suppressedToken);
+    this.child.stdin.end();
+    this.child.kill("SIGKILL");
+    try {
+      await confirmation;
+      throw new Error("COMMIT_ACK_UNEXPECTEDLY_RECEIVED");
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "COMMIT_ACK_UNEXPECTEDLY_RECEIVED"
+      ) {
+        throw error;
+      }
+      await this.closed;
+      return classifyCommitExecutorEvent({
+        kind: "commit_written_confirmation_lost",
+      });
+    }
+  }
+
+  async abort(): Promise<ReturnType<typeof classifyCommitExecutorEvent>> {
     if (this.child.exitCode === null) {
       this.child.stdin.end();
       this.child.kill("SIGTERM");
     }
     await this.closed;
+    return classifyCommitExecutorEvent({
+      kind: this.commitCommandWritten
+        ? "commit_written_confirmation_lost"
+        : "commit_not_written_session_lost",
+    });
   }
 }
 
@@ -311,58 +395,200 @@ async function reconcileReadonly(
   port: number,
   database: string,
   dest: string,
+  transactionBackendPid: string,
 ): Promise<{
   connectionId: string;
+  backendPid: string | null;
   class: ReturnType<typeof classifyReconciliation>;
 }> {
   const session = new PsqlSession(port, database);
-  const countLine = await session.queryToFile(
-    `
-    select
-      cast((select count(*) from public.vocabulary_source_entries) as text) || ',' ||
-      cast((select count(*) from public.lexemes) as text) || ',' ||
-      cast((select count(*) from public.lexeme_relations) as text) || ',' ||
-      cast((select count(*) from public.lexeme_tags) as text) || ',' ||
-      cast((
-        (select count(*) from public.learning_tasks) +
-        (select count(*) from public.game_sessions) +
-        (select count(*) from public.learning_evidence) +
-        (select count(*) from public.student_lexeme_models) +
-        (select count(*) from public.student_lexeme_skill_states) +
-        (select count(*) from public.student_lexeme_weaknesses)
-      ) as text)
-    `,
-    `${dest}.counts`,
-  );
-  const [source, lexemes, relations, tags, learner] = countLine.split(",");
-  let fingerprint = "UNREAD";
-  if (source === "0" && lexemes === "0" && relations === "0" && tags === "0") {
-    fingerprint = "0".repeat(64);
-  } else {
-    const raw = await session.queryToFile(plannedReadbackSql(), dest);
-    const parsed = JSON.parse(raw) as {
-      sourceEntries: Record<string, unknown>[];
-      lexemes: Record<string, unknown>[];
-      relations: Record<string, unknown>[];
-      tags: Record<string, unknown>[];
+  try {
+    await session.exec(plannedReadonlyReconcilePrefix());
+    const probe = parseReadonlyBoundaryProbe(
+      await session.queryToFile(
+        plannedReadonlyBoundaryProbeSql(),
+        `${dest}.readonly-probe`,
+      ),
+    );
+    if (!probe.serviceRole || !probe.readOnly) {
+      await session.end("rollback");
+      return {
+        connectionId: session.connectionId,
+        backendPid: session.backendPid,
+        class: classifyReconciliation({
+          sourceEntries: -1,
+          lexemes: -1,
+          relations: -1,
+          tags: -1,
+          fingerprintVersion: EXPECTED_FINGERPRINT_VERSION,
+          fingerprint: "UNREAD",
+          learner: -1,
+          readonlyBoundary: false,
+        }),
+      };
+    }
+    const backendPid = await session.captureBackendPid(`${dest}.pid`);
+    assertDifferentBackendPid(transactionBackendPid, backendPid);
+    const countLine = await session.queryToFile(
+      `
+      select
+        cast((select count(*) from public.vocabulary_source_entries) as text) || ',' ||
+        cast((select count(*) from public.lexemes) as text) || ',' ||
+        cast((select count(*) from public.lexeme_relations) as text) || ',' ||
+        cast((select count(*) from public.lexeme_tags) as text) || ',' ||
+        cast((
+          (select count(*) from public.learning_tasks) +
+          (select count(*) from public.game_sessions) +
+          (select count(*) from public.learning_evidence) +
+          (select count(*) from public.student_lexeme_models) +
+          (select count(*) from public.student_lexeme_skill_states) +
+          (select count(*) from public.student_lexeme_weaknesses)
+        ) as text)
+      `,
+      `${dest}.counts`,
+    );
+    const [source, lexemes, relations, tags, learner] = countLine.split(",");
+    let fingerprint = "UNREAD";
+    if (source === "0" && lexemes === "0" && relations === "0" && tags === "0") {
+      fingerprint = "0".repeat(64);
+    } else {
+      const raw = await session.queryToFile(plannedReadbackSql(), dest);
+      const parsed = JSON.parse(raw) as {
+        sourceEntries: Record<string, unknown>[];
+        lexemes: Record<string, unknown>[];
+        relations: Record<string, unknown>[];
+        tags: Record<string, unknown>[];
+      };
+      fingerprint = fingerprintVocabularyImportRows(
+        normalizeObservedVocabularyRows(parsed),
+      ).fingerprint;
+    }
+    await session.end("rollback");
+    return {
+      connectionId: session.connectionId,
+      backendPid,
+      class: classifyReconciliation({
+        sourceEntries: Number(source),
+        lexemes: Number(lexemes),
+        relations: Number(relations),
+        tags: Number(tags),
+        fingerprintVersion: EXPECTED_FINGERPRINT_VERSION,
+        fingerprint,
+        learner: Number(learner),
+        readonlyBoundary: true,
+        identityMatch: backendPid !== transactionBackendPid,
+      }),
     };
-    fingerprint = fingerprintVocabularyImportRows(
-      normalizeObservedVocabularyRows(parsed),
-    ).fingerprint;
+  } catch {
+    await session.abort();
+    return {
+      connectionId: session.connectionId,
+      backendPid: session.backendPid,
+      class: classifyReconciliation({
+        sourceEntries: -1,
+        lexemes: -1,
+        relations: -1,
+        tags: -1,
+        fingerprintVersion: EXPECTED_FINGERPRINT_VERSION,
+        fingerprint: "UNREAD",
+        learner: -1,
+        readable: false,
+        readonlyBoundary: false,
+      }),
+    };
   }
-  await session.abort();
-  return {
-    connectionId: session.connectionId,
-    class: classifyReconciliation({
-      sourceEntries: Number(source),
-      lexemes: Number(lexemes),
-      relations: Number(relations),
-      tags: Number(tags),
-      fingerprintVersion: EXPECTED_FINGERPRINT_VERSION,
-      fingerprint,
-      learner: Number(learner),
+}
+
+async function waitUntilCompleteVisible(
+  port: number,
+  database: string,
+): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 15_000) {
+    const counts = vocabCounts(port, database);
+    if (
+      counts.source === String(EXPECTED_SOURCE_ENTRIES) &&
+      counts.lexemes === String(EXPECTED_LEXEMES) &&
+      counts.relations === String(EXPECTED_RELATIONS) &&
+      counts.tags === String(EXPECTED_TAGS) &&
+      counts.learner === "0"
+    ) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("SERVER_COMMIT_NOT_VISIBLE");
+}
+
+async function importThroughPrecommit(
+  session: PsqlSession,
+  rows: ReturnType<typeof toVocabularyImportRows>,
+  work: string,
+  label: string,
+): Promise<string> {
+  await session.exec(plannedTransactionPrefix());
+  const backendPid = await session.captureBackendPid(
+    path.join(work, `${label}-pid-begin.txt`),
+  );
+  const probe = await session.queryToFile(
+    plannedPrivilegeProbeSql(),
+    path.join(work, `${label}-probe.txt`),
+  );
+  expect(
+    probe.startsWith("spike|service_role|t") ||
+      probe.startsWith("spike|service_role|true"),
+  ).toBe(true);
+  await session.assertBackendPidUnchanged(
+    path.join(work, `${label}-pid-role.txt`),
+  );
+  await session.exec(plannedInitialEmptyGuardSql());
+  await session.assertBackendPidUnchanged(
+    path.join(work, `${label}-pid-guard.txt`),
+  );
+  await session.execFile(
+    plannedVocabularyUpserts(rows),
+    path.join(work, `${label}-upserts.sql`),
+  );
+  await session.assertBackendPidUnchanged(
+    path.join(work, `${label}-pid-upsert.txt`),
+  );
+  await session.exec(
+    plannedCountAndLearnerGuardSql({
+      sourceEntries: 1600,
+      lexemes: 1638,
+      relations: 716,
+      tags: 1638,
     }),
+  );
+  const raw = await session.queryToFile(
+    plannedReadbackSql(),
+    path.join(work, `${label}-readback.json`),
+  );
+  const parsed = JSON.parse(raw) as {
+    sourceEntries: Record<string, unknown>[];
+    lexemes: Record<string, unknown>[];
+    relations: Record<string, unknown>[];
+    tags: Record<string, unknown>[];
   };
+  expect(
+    fingerprintVocabularyImportRows(normalizeObservedVocabularyRows(parsed))
+      .fingerprint,
+  ).toBe(EXPECTED_CONTENT_FINGERPRINT);
+  await session.assertBackendPidUnchanged(
+    path.join(work, `${label}-pid-fingerprint.txt`),
+  );
+  await session.exec(
+    plannedCountAndLearnerGuardSql({
+      sourceEntries: 1600,
+      lexemes: 1638,
+      relations: 716,
+      tags: 1638,
+    }),
+  );
+  await session.assertBackendPidUnchanged(
+    path.join(work, `${label}-pid-precommit.txt`),
+  );
+  return backendPid;
 }
 
 function vocabCounts(port: number, database: string): {
@@ -414,6 +640,7 @@ describe.skipIf(!LIVE)(
         const columnFailDb = ctx.createDatabase();
         const fingerprintFailDb = ctx.createDatabase();
         const learnerFailDb = ctx.createDatabase();
+        const lostAckCompleteDb = ctx.createDatabase();
         const lostAckRollbackDb = ctx.createDatabase();
         const partialDb = ctx.createDatabase();
         for (const database of [
@@ -421,6 +648,7 @@ describe.skipIf(!LIVE)(
           columnFailDb,
           fingerprintFailDb,
           learnerFailDb,
+          lostAckCompleteDb,
           lostAckRollbackDb,
           partialDb,
         ]) {
@@ -428,45 +656,15 @@ describe.skipIf(!LIVE)(
         }
 
         const work = mkdtempSync(path.join(tmpdir(), "wr-tx-session-"));
-        const readbackFile = path.join(work, "readback.json");
 
         const success = new PsqlSession(ctx.port, successDb);
-        await success.exec(plannedTransactionPrefix());
-        const probe = await success.queryToFile(
-          plannedPrivilegeProbeSql(),
-          path.join(work, "probe.txt"),
+        const txBackendPid = await importThroughPrecommit(
+          success,
+          rows,
+          work,
+          "success",
         );
-        expect(probe.startsWith("spike|service_role|t") || probe.startsWith("spike|service_role|true")).toBe(
-          true,
-        );
-        await success.exec(plannedInitialEmptyGuardSql());
-        const txConnection = success.connectionId;
-        assertSameTransactionConnection(txConnection, success.connectionId);
-        await success.execFile(
-          plannedVocabularyUpserts(rows),
-          path.join(work, "success-upserts.sql"),
-        );
-        await success.exec(
-          plannedCountAndLearnerGuardSql({
-            sourceEntries: 1600,
-            lexemes: 1638,
-            relations: 716,
-            tags: 1638,
-          }),
-        );
-        const raw = await success.queryToFile(plannedReadbackSql(), readbackFile);
-        const parsed = JSON.parse(raw) as {
-          sourceEntries: Record<string, unknown>[];
-          lexemes: Record<string, unknown>[];
-          relations: Record<string, unknown>[];
-          tags: Record<string, unknown>[];
-        };
-        const observed = fingerprintVocabularyImportRows(
-          normalizeObservedVocabularyRows(parsed),
-        );
-        expect(observed.fingerprint).toBe(EXPECTED_CONTENT_FINGERPRINT);
-        await success.end("commit");
-        const commitClass = classifyCommitAck("ok");
+        const commitClass = await success.end("commit");
         expect(commitClass).toBe(COMMIT_CONFIRMED);
 
         const afterSuccess = vocabCounts(ctx.port, successDb);
@@ -481,9 +679,12 @@ describe.skipIf(!LIVE)(
           ctx.port,
           successDb,
           path.join(work, "success-reconcile.json"),
+          txBackendPid,
         );
         expect(confirmedReconcile.class).toBe(COMMIT_RECONCILED_COMPLETE);
-        expect(confirmedReconcile.connectionId).not.toBe(txConnection);
+        expect(confirmedReconcile.backendPid).toBeTruthy();
+        assertDifferentBackendPid(txBackendPid, confirmedReconcile.backendPid!);
+        expect(confirmedReconcile.connectionId).not.toBe(success.connectionId);
         expect(
           psqlOnce(
             ctx.port,
@@ -608,7 +809,16 @@ describe.skipIf(!LIVE)(
           learner: "0",
         });
 
-        const lostAckSucceeded = classifyCommitAck("transport_error");
+        const lostAckComplete = new PsqlSession(ctx.port, lostAckCompleteDb);
+        const lostAckPid = await importThroughPrecommit(
+          lostAckComplete,
+          rows,
+          work,
+          "lost-ack-complete",
+        );
+        const lostAckSucceeded = await lostAckComplete.endCommitLosingAck(
+          () => waitUntilCompleteVisible(ctx.port, lostAckCompleteDb),
+        );
         expect(lostAckSucceeded).toBe(COMMIT_OUTCOME_UNKNOWN);
         expect(refuseRetryAfterUnknownCommit()).toBe(
           "RETRY_AFTER_UNKNOWN_COMMIT_REJECTED",
@@ -618,26 +828,33 @@ describe.skipIf(!LIVE)(
         expect(actionsAfterUnknownCommit().requireNewConnection).toBe(true);
         const unknownComplete = await reconcileReadonly(
           ctx.port,
-          successDb,
+          lostAckCompleteDb,
           path.join(work, "unknown-complete.json"),
+          lostAckPid,
         );
         expect(unknownComplete.class).toBe(COMMIT_RECONCILED_COMPLETE);
-        expect(unknownComplete.connectionId).not.toBe(txConnection);
+        expect(unknownComplete.backendPid).toBeTruthy();
+        assertDifferentBackendPid(lostAckPid, unknownComplete.backendPid!);
+        expect(unknownComplete.connectionId).not.toBe(lostAckComplete.connectionId);
 
         const lostRollback = new PsqlSession(ctx.port, lostAckRollbackDb);
-        await lostRollback.exec(plannedTransactionPrefix());
-        await lostRollback.execFile(
-          plannedVocabularyUpserts(rows),
-          path.join(work, "lost-rollback-upserts.sql"),
+        const lostRollbackPid = await importThroughPrecommit(
+          lostRollback,
+          rows,
+          work,
+          "lost-ack-rollback",
         );
-        await lostRollback.abort();
-        expect(classifyCommitAck("transport_error")).toBe(COMMIT_OUTCOME_UNKNOWN);
+        const lostRollbackOutcome = await lostRollback.abort();
+        expect(lostRollbackOutcome).toBe(COMMIT_OUTCOME_UNKNOWN);
         const unknownRolledBack = await reconcileReadonly(
           ctx.port,
           lostAckRollbackDb,
           path.join(work, "unknown-rollback.json"),
+          lostRollbackPid,
         );
         expect(unknownRolledBack.class).toBe(COMMIT_RECONCILED_ROLLED_BACK);
+        expect(unknownRolledBack.backendPid).toBeTruthy();
+        assertDifferentBackendPid(lostRollbackPid, unknownRolledBack.backendPid!);
         expect(unknownRolledBack.connectionId).not.toBe(lostRollback.connectionId);
         expect(vocabCounts(ctx.port, lostAckRollbackDb)).toEqual({
           source: "0",
@@ -665,6 +882,7 @@ describe.skipIf(!LIVE)(
           ctx.port,
           partialDb,
           path.join(work, "partial-reconcile.json"),
+          txBackendPid,
         );
         expect(failedReconcile.class).toBe(COMMIT_RECONCILIATION_FAILED);
         expect(actionsAfterReconciliationFailed().retryImport).toBe(false);
@@ -687,6 +905,6 @@ describe.skipIf(!LIVE)(
       expect(teardown.portClosed).toBe(true);
       expect(teardown.clusterRemoved).toBe(true);
       expect(teardown.fixtureWorkdirsRemoved).toBe(true);
-    }, 180_000);
+    }, 240_000);
   },
 );

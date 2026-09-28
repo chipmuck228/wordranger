@@ -33,20 +33,28 @@ import {
   STALE_ROW_DELETE_REJECTED,
   THIRD_IMPORT_ATTEMPT_NOT_AUTHORIZED,
   TRANSACTION_CONNECTION_MISMATCH,
+  COMMIT_ACK_LOSS_INJECTION_STEPS,
   TRANSACTION_STEPS,
   VOCABULARY_TABLES,
   actionsAfterReconciliationFailed,
   actionsAfterUnknownCommit,
+  assertDifferentBackendPid,
   assertSameTransactionConnection,
   classifyCommitAck,
+  classifyCommitExecutorEvent,
   classifyCredentialSource,
   classifyDedicatedTarget,
   classifyReconciliation,
   classifyRemoteTls,
   currentTransactionalImportAuthorization,
+  parseBackendPid,
+  parseReadonlyBoundaryProbe,
+  plannedBackendPidSql,
   plannedCountAndLearnerGuardSql,
   plannedInitialEmptyGuardSql,
   plannedPrivilegeProbeSql,
+  plannedReadonlyBoundaryProbeSql,
+  plannedReadonlyReconcilePrefix,
   plannedTransactionPrefix,
   plannedVocabularyUpserts,
   refusePooledTransactionQuery,
@@ -146,6 +154,27 @@ describe("dedicated transactional direct-Postgres import candidate", () => {
     expect(classifyCommitAck("ok")).toBe(COMMIT_CONFIRMED);
     expect(classifyCommitAck("transport_error")).toBe(COMMIT_OUTCOME_UNKNOWN);
     expect(
+      classifyCommitExecutorEvent({ kind: "commit_ack_received" }),
+    ).toBe(COMMIT_CONFIRMED);
+    expect(
+      classifyCommitExecutorEvent({
+        kind: "commit_written_confirmation_lost",
+      }),
+    ).toBe(COMMIT_OUTCOME_UNKNOWN);
+    expect(
+      classifyCommitExecutorEvent({
+        kind: "commit_not_written_session_lost",
+      }),
+    ).toBe(COMMIT_OUTCOME_UNKNOWN);
+    expect(COMMIT_ACK_LOSS_INJECTION_STEPS).toEqual([
+      "write_commit",
+      "wait_until_server_commit_visible_on_other_connection",
+      "suppress_client_confirmation_token",
+      "wait_for_confirmation_throws",
+      "classify_unknown_from_caught_io",
+      "reconcile_on_new_connection",
+    ]);
+    expect(
       classifyReconciliation({
         sourceEntries: EXPECTED_SOURCE_ENTRIES,
         lexemes: EXPECTED_LEXEMES,
@@ -201,6 +230,30 @@ describe("dedicated transactional direct-Postgres import candidate", () => {
         readable: false,
       }),
     ).toBe(COMMIT_RECONCILIATION_FAILED);
+    expect(
+      classifyReconciliation({
+        sourceEntries: EXPECTED_SOURCE_ENTRIES,
+        lexemes: EXPECTED_LEXEMES,
+        relations: EXPECTED_RELATIONS,
+        tags: EXPECTED_TAGS,
+        fingerprintVersion: EXPECTED_FINGERPRINT_VERSION,
+        fingerprint: EXPECTED_CONTENT_FINGERPRINT,
+        learner: 0,
+        readonlyBoundary: false,
+      }),
+    ).toBe(COMMIT_RECONCILIATION_FAILED);
+    expect(
+      classifyReconciliation({
+        sourceEntries: EXPECTED_SOURCE_ENTRIES,
+        lexemes: EXPECTED_LEXEMES,
+        relations: EXPECTED_RELATIONS,
+        tags: EXPECTED_TAGS,
+        fingerprintVersion: EXPECTED_FINGERPRINT_VERSION,
+        fingerprint: EXPECTED_CONTENT_FINGERPRINT,
+        learner: 0,
+        identityMatch: false,
+      }),
+    ).toBe(COMMIT_RECONCILIATION_FAILED);
     const unknown = actionsAfterUnknownCommit();
     expect(unknown.retryImport).toBe(false);
     expect(unknown.resendCommit).toBe(false);
@@ -224,9 +277,32 @@ describe("dedicated transactional direct-Postgres import candidate", () => {
   it("locks connection discipline, role contract, and TLS/credential denies", () => {
     expect(TRANSACTION_STEPS[0]).toBe("acquire_one_dedicated_connection");
     expect(TRANSACTION_STEPS[2]).toBe("set_local_role_service_role");
+    expect(TRANSACTION_STEPS).toContain("capture_backend_pid");
+    expect(TRANSACTION_STEPS).toContain("verify_backend_pid_before_commit");
     expect(plannedTransactionPrefix()).toContain("set local role service_role");
     expect(plannedPrivilegeProbeSql()).toContain("session_user");
     expect(plannedPrivilegeProbeSql()).toContain("current_user");
+    expect(plannedBackendPidSql()).toContain("pg_backend_pid");
+    expect(plannedReadonlyReconcilePrefix()).toMatch(/begin read only/i);
+    expect(plannedReadonlyReconcilePrefix()).toContain(
+      "set local role service_role",
+    );
+    expect(plannedReadonlyBoundaryProbeSql()).toContain("current_user");
+    expect(plannedReadonlyBoundaryProbeSql()).toContain(
+      "transaction_read_only",
+    );
+    expect(parseBackendPid("12345")).toBe("12345");
+    expect(() => parseBackendPid("not-a-pid")).toThrow(
+      TRANSACTION_CONNECTION_MISMATCH,
+    );
+    expect(parseReadonlyBoundaryProbe("t|t")).toEqual({
+      serviceRole: true,
+      readOnly: true,
+    });
+    expect(parseReadonlyBoundaryProbe("f|t")).toEqual({
+      serviceRole: false,
+      readOnly: true,
+    });
     expect(SET_LOCAL_ROLE_REQUIRED).toBe("SET LOCAL ROLE service_role");
     expect(refusePooledTransactionQuery()).toBe(
       POOLED_TRANSACTION_QUERY_REJECTED,
@@ -237,7 +313,11 @@ describe("dedicated transactional direct-Postgres import candidate", () => {
     expect(() => assertSameTransactionConnection("a", "b")).toThrow(
       TRANSACTION_CONNECTION_MISMATCH,
     );
-    assertSameTransactionConnection("conn-1", "conn-1");
+    assertSameTransactionConnection("12345", "12345");
+    expect(() => assertDifferentBackendPid("12345", "12345")).toThrow(
+      TRANSACTION_CONNECTION_MISMATCH,
+    );
+    assertDifferentBackendPid("12345", "67890");
     expect(
       classifyRemoteTls({
         sslmode: "verify-full",
@@ -338,5 +418,15 @@ describe("dedicated transactional direct-Postgres import candidate", () => {
     expect(live).toContain("COMMIT_RECONCILED_ROLLED_BACK");
     expect(live).toContain("COMMIT_RECONCILIATION_FAILED");
     expect(live).toContain("connectionId");
+    expect(live).toContain("endCommitLosingAck");
+    expect(live).toContain("plannedBackendPidSql");
+    expect(live).toContain("plannedReadonlyReconcilePrefix");
+    expect(live).toContain("classifyCommitExecutorEvent");
+    expect(live).not.toMatch(/classifyCommitAck\("transport_error"\)/);
+    expect(text).toContain("pg_backend_pid");
+    expect(text).toContain("BEGIN READ ONLY");
+    expect(text).toContain("executor I/O boundary");
+    expect(runbook).toContain("pg_backend_pid");
+    expect(runbook).toContain("BEGIN READ ONLY");
   });
 });

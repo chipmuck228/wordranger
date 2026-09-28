@@ -47,6 +47,12 @@ Pooled checkout of a second connection is
 `POOLED_TRANSACTION_QUERY_REJECTED`. `Promise.all` across
 transaction queries is `PROMISE_ALL_IN_TRANSACTION_REJECTED`.
 
+Backend identity is `SELECT pg_backend_pid()`, captured after
+`BEGIN` and re-checked after the role probe, initial guard,
+upserts, fingerprint readback, and the pre-commit guard.
+A JavaScript wrapper id may appear in logs only. It is not
+backend identity.
+
 Order:
 
 1. Acquire one dedicated connection
@@ -72,17 +78,29 @@ No schema, grant, RLS, or Vercel change.
 
 | Client observation | Class |
 | --- | --- |
-| COMMIT returns | `COMMIT_CONFIRMED` — no reconciliation |
-| Connection or transport error after COMMIT is sent | `COMMIT_OUTCOME_UNKNOWN` |
+| COMMIT returns and the executor receives the confirmation token | `COMMIT_CONFIRMED` — no reconciliation |
+| Executor writes COMMIT, the server commits, then the client confirmation token is suppressed or the session dies before that token arrives | `COMMIT_OUTCOME_UNKNOWN` |
+
+`COMMIT_OUTCOME_UNKNOWN` is classified only from that
+executor I/O boundary. Calling a classifier after a normal
+COMMIT ACK is not proof.
 
 On `COMMIT_OUTCOME_UNKNOWN`:
 
 - Do not retry import
 - Do not resend COMMIT
 - Do not DELETE / TRUNCATE / repair
-- Open a **new** read-only connection
-- Read only counts, fingerprint columns, learner counts,
-  and optional schema/history identity
+- Open a **new** connection
+- On that connection, in order:
+  `BEGIN READ ONLY;`
+  `SET LOCAL ROLE service_role;`
+  then verify `current_user = 'service_role'` and
+  `current_setting('transaction_read_only') = 'on'`
+- Verify `pg_backend_pid()` differs from the transaction
+- Read only counts, fingerprint columns, and learner counts
+- `ROLLBACK`
+- Any boundary or read failure is
+  `COMMIT_RECONCILIATION_FAILED`
 
 Reconciliation classes:
 

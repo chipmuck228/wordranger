@@ -238,6 +238,41 @@ select session_user as login_role,
 `.trim();
 }
 
+export function plannedBackendPidSql(): string {
+  return "select pg_backend_pid()";
+}
+
+export function plannedReadonlyReconcilePrefix(): string {
+  return ["begin read only", "set local role service_role"].join(";\n") + ";";
+}
+
+export function plannedReadonlyBoundaryProbeSql(): string {
+  return `
+select
+  current_user = 'service_role' as service_role_active,
+  current_setting('transaction_read_only') = 'on' as transaction_read_only
+`.trim();
+}
+
+export function parseBackendPid(raw: string): string {
+  const pid = raw.trim();
+  if (!/^\d+$/.test(pid)) {
+    throw new Error(TRANSACTION_CONNECTION_MISMATCH);
+  }
+  return pid;
+}
+
+export function parseReadonlyBoundaryProbe(raw: string): {
+  serviceRole: boolean;
+  readOnly: boolean;
+} {
+  const [userOk, readOnlyOk] = raw.trim().split(/[|,]/);
+  return {
+    serviceRole: userOk === "t" || userOk === "true",
+    readOnly: readOnlyOk === "t" || readOnlyOk === "true",
+  };
+}
+
 export function plannedCountAndLearnerGuardSql(expected: {
   sourceEntries: number;
   lexemes: number;
@@ -418,17 +453,32 @@ export const TRANSACTION_STEPS = [
   "begin",
   "set_local_role_service_role",
   "verify_current_user_service_role",
+  "capture_backend_pid",
   "verify_vocabulary_initial_state",
   "verify_learner_tables_zero",
+  "verify_backend_pid_after_role_probe",
+  "verify_backend_pid_after_initial_guard",
   "upsert_vocabulary_source_entries",
   "upsert_lexemes",
   "update_lexeme_abbreviations",
   "upsert_lexeme_relations",
   "upsert_lexeme_tags",
+  "verify_backend_pid_after_upsert",
   "readback_counts_same_connection",
   "readback_fingerprint_same_connection",
+  "verify_backend_pid_after_fingerprint",
   "verify_learner_tables_zero_again",
+  "verify_backend_pid_before_commit",
   "commit_or_rollback",
+] as const;
+
+export const COMMIT_ACK_LOSS_INJECTION_STEPS = [
+  "write_commit",
+  "wait_until_server_commit_visible_on_other_connection",
+  "suppress_client_confirmation_token",
+  "wait_for_confirmation_throws",
+  "classify_unknown_from_caught_io",
+  "reconcile_on_new_connection",
 ] as const;
 
 export const FORBIDDEN_TLS_MARKERS = [
@@ -464,16 +514,34 @@ export interface ReconciliationObservation {
   learner: number;
   readable?: boolean;
   identityMatch?: boolean;
+  readonlyBoundary?: boolean;
 }
+
+export type CommitExecutorEvent =
+  | { kind: "commit_ack_received" }
+  | { kind: "commit_written_confirmation_lost" }
+  | { kind: "commit_not_written_session_lost" };
 
 export function classifyCommitAck(ack: CommitAck): CommitOutcome {
   return ack === "ok" ? COMMIT_CONFIRMED : COMMIT_OUTCOME_UNKNOWN;
 }
 
+export function classifyCommitExecutorEvent(
+  event: CommitExecutorEvent,
+): CommitOutcome {
+  return event.kind === "commit_ack_received"
+    ? COMMIT_CONFIRMED
+    : COMMIT_OUTCOME_UNKNOWN;
+}
+
 export function classifyReconciliation(
   observed: ReconciliationObservation,
 ): ReconciliationClass {
-  if (observed.readable === false || observed.identityMatch === false) {
+  if (
+    observed.readable === false ||
+    observed.identityMatch === false ||
+    observed.readonlyBoundary === false
+  ) {
     return COMMIT_RECONCILIATION_FAILED;
   }
   const complete =
@@ -550,6 +618,15 @@ export function assertSameTransactionConnection(
   actual: string,
 ): void {
   if (!expected || expected !== actual) {
+    throw new Error(TRANSACTION_CONNECTION_MISMATCH);
+  }
+}
+
+export function assertDifferentBackendPid(
+  transactionPid: string,
+  otherPid: string,
+): void {
+  if (!transactionPid || !otherPid || transactionPid === otherPid) {
     throw new Error(TRANSACTION_CONNECTION_MISMATCH);
   }
 }

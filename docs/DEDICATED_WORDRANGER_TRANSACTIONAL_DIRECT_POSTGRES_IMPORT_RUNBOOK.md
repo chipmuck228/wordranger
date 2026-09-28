@@ -47,8 +47,12 @@ This section is not authorization.
 6. Follow the transaction order in the Candidate document.
 7. On `COMMIT_CONFIRMED`, stop. Do not reconcile.
 8. On `COMMIT_OUTCOME_UNKNOWN`, do not retry, do not resend
-   COMMIT, do not delete. Open a new read-only connection and
-   classify reconciliation.
+   COMMIT, do not delete. That class comes only from the
+   executor I/O boundary after COMMIT is written. Open a new
+   connection, `BEGIN READ ONLY`, `SET LOCAL ROLE service_role`,
+   verify `current_user` and `transaction_read_only`, verify a
+   different `pg_backend_pid()`, classify reconciliation, then
+   `ROLLBACK`.
 9. On `COMMIT_RECONCILIATION_FAILED`, stop for human review.
 10. Delete the temporary snapshot. Record `TEMP_DELETED`.
 
