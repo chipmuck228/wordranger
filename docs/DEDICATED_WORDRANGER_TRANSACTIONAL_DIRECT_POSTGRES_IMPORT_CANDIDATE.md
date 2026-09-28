@@ -1,0 +1,142 @@
+# Dedicated WordRanger Transactional Direct-Postgres Import Candidate
+
+Candidate / Not a Standard. **Local design and PostgreSQL 16 proof only.
+This document does not authorize remote execution.**
+
+Status:
+
+`POSTGREST_IMPORT_PATH_SUSPENDED`;
+`THIRD_IMPORT_ATTEMPT_NOT_AUTHORIZED`;
+`REMOTE_TRANSACTIONAL_IMPORT_NOT_AUTHORIZED`;
+`WRITE_PROBE_NOT_AUTHORIZED`;
+`TX_ROLLBACK_NOT_HONORED`;
+`PR_17_REMAINS_UNMERGED`;
+`PRODUCTION_REMAINS_ON_782FFCC`
+
+- Date: **2026-09-28**
+- `origin/main`: `a031be4ba791af9ac68aad93e8aba9f3437128cf`
+- PR: **#17** remains OPEN and unmerged
+- Historical log-query evidence / remote PR head:
+  `41f53c61a1cdabae93d5976732a0200872bdfdeb`
+- Production alias remains
+  `782ffcca670c8272a3ba7ca07bedaef4debdc95f`
+
+Do not store a final PR head SHA here. That is an impossible self-reference.
+
+Read and obey `docs/CURSOR_WORKING_CONTRACT.md`. Frozen Core,
+Scheduler, TaskEvaluator, Homepage, `/practice`, and Auth are
+unchanged.
+
+This is not a third PostgREST `--apply`. Historical window-1
+`42703` was `TABLE_RELATED_NOT_CONFIRMED` and is not treated as
+proof that Dedicated rejected `vocabulary_source_entries`.
+Local PostgreSQL 16 success is not remote readiness.
+
+## 1. Why this candidate
+
+Two Dedicated PostgREST `--apply` attempts failed on first-batch
+`SOURCE_ENTRIES_UPSERT`. The PostgREST write path is suspended.
+`Prefer: tx=rollback` was not honored. Vocabulary load is a
+deployment operation. One direct-Postgres transaction can give
+all-or-nothing semantics on a dedicated connection.
+
+## 2. Single-connection transaction
+
+One dedicated PostgreSQL connection owns the whole transaction.
+Pooled checkout of a second connection is
+`POOLED_TRANSACTION_QUERY_REJECTED`. `Promise.all` across
+transaction queries is `PROMISE_ALL_IN_TRANSACTION_REJECTED`.
+
+Order:
+
+1. Acquire one dedicated connection
+2. `BEGIN`
+3. `SET LOCAL ROLE service_role`
+4. Verify `current_user = service_role`
+5. `session_user` may be the authorized login role
+6. Verify four vocabulary tables start empty
+7. Verify six learner tables are zero
+8. Deterministic upsert in fixed order
+9. Same connection: counts
+10. Same connection: content fingerprint
+11. Same connection: learner zero again
+12. All checks pass → `COMMIT`
+13. Any check fails → `ROLLBACK`
+
+Business DML runs only after `SET LOCAL ROLE service_role`.
+Owner or superuser bypass of that contract is rejected.
+No `DELETE` / `TRUNCATE` of stale rows. No history write.
+No schema, grant, RLS, or Vercel change.
+
+## 3. COMMIT outcome and reconciliation
+
+| Client observation | Class |
+| --- | --- |
+| COMMIT returns | `COMMIT_CONFIRMED` — no reconciliation |
+| Connection or transport error after COMMIT is sent | `COMMIT_OUTCOME_UNKNOWN` |
+
+On `COMMIT_OUTCOME_UNKNOWN`:
+
+- Do not retry import
+- Do not resend COMMIT
+- Do not DELETE / TRUNCATE / repair
+- Open a **new** read-only connection
+- Read only counts, fingerprint columns, learner counts,
+  and optional schema/history identity
+
+Reconciliation classes:
+
+| Observation | Class |
+| --- | --- |
+| 1600 / 1638 / 716 / 1638, fingerprint `vocabulary-content-v1` / `9704c2025628676800918e4e7fc0e744c8358c025d8b01ebf43936d8474754cb`, learner zero | `COMMIT_RECONCILED_COMPLETE` |
+| All four vocabulary tables zero and learner zero | `COMMIT_RECONCILED_ROLLED_BACK` |
+| Partial counts, fingerprint mismatch, learner non-zero, unread, or identity mismatch | `COMMIT_RECONCILIATION_FAILED` |
+
+`COMMIT_RECONCILIATION_FAILED` stops. No retry, delete, repair,
+PostgREST importer, or `/train`. Human review is required.
+
+## 4. Credential and TLS boundary
+
+Future remote execution, if separately authorized, may use only
+a one-shot Vercel Production snapshot or an equivalent
+Dedicated-only source.
+
+Required classes: `DEDICATED_API_AND_DB_MATCH`,
+`LEGACY_SOURCE_EXCLUDED`.
+
+Forbidden: `.env.local`, ambient Supabase / Postgres / Vercel
+variables, `--linked`, composing a REST URL into a DB URL,
+printing URL / host / ref / user / password / JWT / key,
+committing credentials, `sslmode=disable`,
+`rejectUnauthorized: false`, `NODE_TLS_REJECT_UNAUTHORIZED=0`,
+`curl -k`.
+
+Remote direct PostgreSQL must verify certificates.
+Temporary files stay outside git and end as `TEMP_DELETED`.
+
+The local PostgreSQL 16 harness stays on loopback with its
+existing isolation. Remote environment variables must not enter
+the child process.
+
+This task does not pull remote credentials.
+
+## 5. Still closed
+
+- `POSTGREST_IMPORT_PATH_SUSPENDED`
+- `THIRD_IMPORT_ATTEMPT_NOT_AUTHORIZED`
+- `REMOTE_TRANSACTIONAL_IMPORT_NOT_AUTHORIZED`
+- `WRITE_PROBE_NOT_AUTHORIZED` because `TX_ROLLBACK_NOT_HONORED`
+- `PR_17_REMAINS_UNMERGED`
+- Production remains `782ffcca670c8272a3ba7ca07bedaef4debdc95f`
+
+## 6. Non-claims
+
+- Remote Dedicated was not written.
+- `--apply` was not executed.
+- Write probe was not executed.
+- Vocabulary remains unimported on Dedicated.
+- Learner data was not written.
+- PR #17 was not merged.
+- Production was not deployed.
+- Local PostgreSQL 16 success is not remote authorization.
+- This document does not authorize a remote transactional import.
