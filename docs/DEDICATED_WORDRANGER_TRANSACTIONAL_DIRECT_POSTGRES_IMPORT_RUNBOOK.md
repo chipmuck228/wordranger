@@ -19,8 +19,11 @@ Do not store a final PR head SHA here. That is an impossible self-reference.
 
 ## 1. Local proof only
 
-Default Vitest must not load the live file. To run the
-PostgreSQL 16 suite after `postgresHarnessAvailable()` is true:
+The one-shot runner is
+`scripts/import-vocabulary-direct-postgres.ts`.
+`--apply` is hard-closed. Default Vitest must not load either
+live file. To run the PostgreSQL 16 suite after
+`postgresHarnessAvailable()` is true:
 
 ```
 RUN_DEDICATED_TRANSACTIONAL_DIRECT_POSTGRES_IMPORT=1

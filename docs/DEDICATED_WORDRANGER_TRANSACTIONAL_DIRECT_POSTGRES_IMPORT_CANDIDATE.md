@@ -32,6 +32,10 @@ This is not a third PostgREST `--apply`. Historical window-1
 proof that Dedicated rejected `vocabulary_source_entries`.
 Local PostgreSQL 16 success is not remote readiness.
 
+The reviewed live-test harness is not the one-shot runner.
+The runner candidate is documented separately and still keeps
+`--apply` hard-closed.
+
 ## 1. Why this candidate
 
 Two Dedicated PostgREST `--apply` attempts failed on first-batch

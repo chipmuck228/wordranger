@@ -254,6 +254,159 @@ select
 `.trim();
 }
 
+export function plannedCurrentDatabaseClassSql(): string {
+  return `
+select case
+  when length(current_database()) > 0 then 'CURRENT_DATABASE_PRESENT'
+  else 'CURRENT_DATABASE_ABSENT'
+end
+`.trim();
+}
+
+export const REQUIRED_CORE_TABLES = [
+  ...VOCABULARY_TABLES,
+  ...LEARNER_TABLES,
+] as const;
+
+export const REQUIRED_CORE_INDEXES = [
+  "lexemes_lemma_idx",
+  "lexemes_source_entry_id_idx",
+  "lexemes_source_index_idx",
+  "student_lexeme_models_user_id_idx",
+  "student_lexeme_models_lexeme_id_idx",
+  "student_lexeme_models_next_review_at_idx",
+  "student_lexeme_models_mastery_stage_idx",
+  "student_lexeme_weaknesses_model_idx",
+  "learning_tasks_lexeme_id_idx",
+  "learning_tasks_user_id_idx",
+  "game_sessions_user_id_idx",
+  "game_sessions_game_type_idx",
+  "game_sessions_updated_at_idx",
+  "learning_evidence_user_lexeme_occurred_idx",
+  "learning_evidence_session_id_idx",
+  "learning_evidence_skill_idx",
+  "learning_evidence_outcome_idx",
+  "learning_evidence_task_id_uidx",
+] as const;
+
+export const CONTAMINATION_RELNAMES = [
+  "users",
+  "learning_sessions",
+  "context_lab_runs",
+  "vocabulary_placement_reviews",
+] as const;
+
+export function plannedHistoryIdentitySql(): string {
+  return `
+select case
+  when to_regnamespace('supabase_migrations') is null then '0||ABSENT'
+  when not has_schema_privilege(current_user, 'supabase_migrations', 'USAGE')
+    then '0||UNREADABLE'
+  when to_regclass('supabase_migrations.schema_migrations') is null then '0||ABSENT'
+  else (
+    select
+      cast(count(*) as text) || '|' ||
+      coalesce(max(version), '') || '|' ||
+      coalesce(max(name), '')
+    from supabase_migrations.schema_migrations
+  )
+end
+`.trim();
+}
+
+export function plannedZeroCountSql(): string {
+  return `
+select
+  cast((select count(*) from public.vocabulary_source_entries) as text) || '|' ||
+  cast((select count(*) from public.lexemes) as text) || '|' ||
+  cast((select count(*) from public.lexeme_relations) as text) || '|' ||
+  cast((select count(*) from public.lexeme_tags) as text) || '|' ||
+  cast((
+    (select count(*) from public.learning_tasks) +
+    (select count(*) from public.game_sessions) +
+    (select count(*) from public.learning_evidence) +
+    (select count(*) from public.student_lexeme_models) +
+    (select count(*) from public.student_lexeme_skill_states) +
+    (select count(*) from public.student_lexeme_weaknesses)
+  ) as text)
+`.trim();
+}
+
+export function plannedRequiredCoreInventorySql(): string {
+  const tables = REQUIRED_CORE_TABLES.map(
+    (table) =>
+      `cast((to_regclass('public.${table}') is not null) as int)`,
+  ).join(" + ");
+  const indexes = REQUIRED_CORE_INDEXES.map(
+    (name) =>
+      `cast(exists(select 1 from pg_class where relname = '${name}') as int)`,
+  ).join(" + ");
+  return `
+select
+  cast((${tables}) as text) || '|' ||
+  cast((to_regprocedure('public.prevent_learning_evidence_mutation()') is not null) as text) || '|' ||
+  cast(exists(
+    select 1 from pg_trigger
+    where tgname = 'learning_evidence_no_update'
+  ) as text) || '|' ||
+  cast((${indexes}) as text) || '|' ||
+  cast(exists(select 1 from pg_extension where extname = 'pgcrypto') as text)
+`.trim();
+}
+
+export function plannedContaminationSql(): string {
+  const tables = CONTAMINATION_RELNAMES.map(
+    (name) => `cast((to_regclass('public.${name}') is not null) as int)`,
+  ).join(" + ");
+  return `
+select cast((
+  ${tables} +
+  cast((to_regprocedure('public.cleanup_progress_test_user(uuid)') is not null) as int)
+) as text)
+`.trim();
+}
+
+export function plannedPrivilegeMatrixSql(
+  table: string,
+): string {
+  if (!/^[a-z_]+$/.test(table)) {
+    throw new Error("UNSAFE_IDENTIFIER");
+  }
+  return `
+select
+  cast(has_table_privilege('anon', 'public.${table}', 'SELECT') as text) || '|' ||
+  cast(has_table_privilege('anon', 'public.${table}', 'INSERT') as text) || '|' ||
+  cast(has_table_privilege('anon', 'public.${table}', 'UPDATE') as text) || '|' ||
+  cast(has_table_privilege('anon', 'public.${table}', 'DELETE') as text) || '|' ||
+  cast(has_table_privilege('authenticated', 'public.${table}', 'SELECT') as text) || '|' ||
+  cast(has_table_privilege('authenticated', 'public.${table}', 'INSERT') as text) || '|' ||
+  cast(has_table_privilege('authenticated', 'public.${table}', 'UPDATE') as text) || '|' ||
+  cast(has_table_privilege('authenticated', 'public.${table}', 'DELETE') as text) || '|' ||
+  cast(has_table_privilege('service_role', 'public.${table}', 'SELECT') as text) || '|' ||
+  cast(has_table_privilege('service_role', 'public.${table}', 'INSERT') as text) || '|' ||
+  cast(has_table_privilege('service_role', 'public.${table}', 'UPDATE') as text) || '|' ||
+  cast(has_table_privilege('service_role', 'public.${table}', 'DELETE') as text)
+`.trim();
+}
+
+export function plannedLearnerRlsSql(table: string): string {
+  if (!/^[a-z_]+$/.test(table)) {
+    throw new Error("UNSAFE_IDENTIFIER");
+  }
+  return `
+select
+  cast(c.relrowsecurity as text) || '|' ||
+  cast(c.relforcerowsecurity as text) || '|' ||
+  cast((
+    select count(*) from pg_policy p
+    where p.polrelid = c.oid
+  ) as text)
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relname = '${table}'
+`.trim();
+}
+
 export function parseBackendPid(raw: string): string {
   const pid = raw.trim();
   if (!/^\d+$/.test(pid)) {
@@ -436,6 +589,10 @@ export const TRANSACTION_CONNECTION_MISMATCH =
 export const REMOTE_TLS_REJECTED = "REMOTE_TLS_REJECTED" as const;
 export const REMOTE_TLS_VERIFIED = "REMOTE_TLS_VERIFIED" as const;
 export const CREDENTIAL_SOURCE_REJECTED = "CREDENTIAL_SOURCE_REJECTED" as const;
+export const DIRECT_DB_TLS_IDENTITY_NOT_VERIFIED =
+  "DIRECT_DB_TLS_IDENTITY_NOT_VERIFIED" as const;
+export const CURRENT_DATABASE_PRESENT = "CURRENT_DATABASE_PRESENT" as const;
+export const CURRENT_DATABASE_ABSENT = "CURRENT_DATABASE_ABSENT" as const;
 export const RETRY_AFTER_UNKNOWN_COMMIT_REJECTED =
   "RETRY_AFTER_UNKNOWN_COMMIT_REJECTED" as const;
 export const RESEND_COMMIT_REJECTED = "RESEND_COMMIT_REJECTED" as const;
@@ -657,6 +814,39 @@ export function classifyRemoteTls(input: {
     return REMOTE_TLS_VERIFIED;
   }
   return REMOTE_TLS_REJECTED;
+}
+
+export function classifyDirectDbTlsIdentity(input: {
+  sslmode?: string;
+  rejectUnauthorized?: boolean;
+  hostnameVerified?: boolean;
+  chainVerified?: boolean;
+  nodeTlsRejectUnauthorized?: string;
+  curlInsecure?: boolean;
+}):
+  | typeof REMOTE_TLS_VERIFIED
+  | typeof REMOTE_TLS_REJECTED
+  | typeof DIRECT_DB_TLS_IDENTITY_NOT_VERIFIED {
+  if (
+    input.sslmode === "disable" ||
+    input.rejectUnauthorized === false ||
+    input.nodeTlsRejectUnauthorized === "0" ||
+    input.curlInsecure === true
+  ) {
+    return REMOTE_TLS_REJECTED;
+  }
+  if (input.sslmode === "require") {
+    return DIRECT_DB_TLS_IDENTITY_NOT_VERIFIED;
+  }
+  if (
+    input.sslmode === "verify-full" &&
+    input.rejectUnauthorized === true &&
+    input.hostnameVerified === true &&
+    input.chainVerified === true
+  ) {
+    return REMOTE_TLS_VERIFIED;
+  }
+  return DIRECT_DB_TLS_IDENTITY_NOT_VERIFIED;
 }
 
 export function classifyCredentialSource(input: {
