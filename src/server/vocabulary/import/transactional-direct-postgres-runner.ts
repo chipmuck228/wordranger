@@ -410,15 +410,14 @@ function findPsqlBin(): string | null {
 function isolatedPsqlEnv(
   extra: Record<string, string>,
 ): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {
+  return {
     PATH: process.env.PATH,
     HOME: process.env.HOME,
     TMPDIR: process.env.TMPDIR,
     LANG: "C",
     LC_ALL: "C",
     ...extra,
-  };
-  return env;
+  } as unknown as NodeJS.ProcessEnv;
 }
 
 export class PsqlRunnerSession implements SqlSession {
@@ -765,9 +764,7 @@ export async function runTransactionalDirectPostgresCli(
     io.error(JSON.stringify({ class: className, mode: "apply" }));
     return { exitCode: 1, mode: "apply", class: className };
   }
-  if (applyBypassRejected(env) && mode !== "apply") {
-    // Bypass env cannot authorize apply; other modes still run.
-  }
+  // Bypass env cannot authorize apply; other modes still run.
 
   if (mode === "fingerprint") {
     const report = localContentReport();
