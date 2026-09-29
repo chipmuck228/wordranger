@@ -2,7 +2,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const FILE = "supabase/migrations/202609250001_learner_table_server_only_access.sql";
+const FILE =
+  "supabase/migrations_archive/pre_dedicated_baseline/202609250001_learner_table_server_only_access.sql";
 const LEARNER_TABLES = [
   "game_sessions",
   "learning_tasks",
@@ -113,9 +114,20 @@ describe("learner table server-only access migration", () => {
     expect(new Set(refs)).toEqual(new Set(QUALIFIED));
   });
 
-  it("is the only new learner-hardening file and is not applied by package scripts", () => {
-    const names = readdirSync(path.join(process.cwd(), "supabase/migrations"));
-    expect(names).toContain("202609250001_learner_table_server_only_access.sql");
+  it("stays archived and is not applied by package scripts", () => {
+    const active = readdirSync(path.join(process.cwd(), "supabase/migrations"));
+    const archived = readdirSync(
+      path.join(
+        process.cwd(),
+        "supabase/migrations_archive/pre_dedicated_baseline",
+      ),
+    );
+    expect(active).not.toContain(
+      "202609250001_learner_table_server_only_access.sql",
+    );
+    expect(archived).toContain(
+      "202609250001_learner_table_server_only_access.sql",
+    );
     const pkg = readFileSync(path.join(process.cwd(), "package.json"), "utf8");
     expect(pkg).not.toContain("supabase db push");
     expect(pkg).not.toContain("migration up");

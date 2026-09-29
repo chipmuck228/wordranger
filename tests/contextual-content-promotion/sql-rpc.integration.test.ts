@@ -77,7 +77,7 @@ describe("contextual content batch promotion SQL/RPC integration", () => {
     `);
     await exec(
       readFileSync(
-        path.join(process.cwd(), "supabase/migrations/202609220003_contextual_content_batch_promotions.sql"),
+        path.join(process.cwd(), "supabase/migrations_archive/pre_dedicated_baseline/202609220003_contextual_content_batch_promotions.sql"),
         "utf8",
       ),
     );

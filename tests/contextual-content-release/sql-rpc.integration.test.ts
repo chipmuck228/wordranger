@@ -49,13 +49,13 @@ describe("contextual content release SQL/RPC integration", () => {
     `);
     await exec(
       readFileSync(
-        path.join(process.cwd(), "supabase/migrations/202609220001_contextual_content_releases.sql"),
+        path.join(process.cwd(), "supabase/migrations_archive/pre_dedicated_baseline/202609220001_contextual_content_releases.sql"),
         "utf8",
       ),
     );
     await exec(
       readFileSync(
-        path.join(process.cwd(), "supabase/migrations/202609220002_contextual_content_active_releases.sql"),
+        path.join(process.cwd(), "supabase/migrations_archive/pre_dedicated_baseline/202609220002_contextual_content_active_releases.sql"),
         "utf8",
       ),
     );

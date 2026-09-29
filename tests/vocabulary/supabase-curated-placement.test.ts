@@ -468,7 +468,7 @@ describe("Supabase curated placement persistence", () => {
     const sql = readFileSync(
       path.join(
         process.cwd(),
-        "supabase/migrations/202609170005_vocabulary_placement_reviews.sql",
+        "supabase/migrations_archive/pre_dedicated_baseline/202609170005_vocabulary_placement_reviews.sql",
       ),
       "utf8",
     );
@@ -483,7 +483,7 @@ describe("Supabase curated placement persistence", () => {
     const sql = readFileSync(
       path.join(
         process.cwd(),
-        "supabase/migrations/202609170005_vocabulary_placement_reviews.sql",
+        "supabase/migrations_archive/pre_dedicated_baseline/202609170005_vocabulary_placement_reviews.sql",
       ),
       "utf8",
     );

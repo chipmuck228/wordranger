@@ -41,15 +41,16 @@ Vercel env was not edited.
 | Active production snapshot | `ACTIVE_PRODUCTION_TARGET_NOT_VERIFIED` |
 | Design-branch Preview | has occurred; later pushes may add more; not acceptance |
 | Production redeploy | none |
-| Active migration lineage (future) | one consolidated baseline; twelve current files must leave `supabase/migrations/` |
+| Active migration lineage | one consolidated baseline in `supabase/migrations/`; twelve historical files archived under `supabase/migrations_archive/pre_dedicated_baseline/` |
 
 ## 2. Repository migrations in order
 
 All files are WordRanger-owned. None reference shared Blaze tables.
 None are automatically authorized to apply. A later baseline task
-must move all twelve out of active `supabase/migrations/` before
-the consolidated baseline becomes the only active file. This
-revision does not move them.
+have been Git-moved out of active `supabase/migrations/` into
+`supabase/migrations_archive/pre_dedicated_baseline/`. The
+consolidated baseline is the only active file. Remote apply is
+still unauthorized.
 
 ### `202609160001_vocabulary_domain.sql`
 

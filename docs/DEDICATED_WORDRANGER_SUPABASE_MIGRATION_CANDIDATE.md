@@ -101,8 +101,9 @@ freeze. Do not treat any branch Preview as a runtime gate.
 
 ## 3. Repository migration inventory (summary)
 
-Twelve files under `supabase/migrations/`. File presence is **not**
-authorization to apply. Detail is in
+Twelve historical files now live under
+`supabase/migrations_archive/pre_dedicated_baseline/`. File
+presence is **not** authorization to apply. Detail is in
 `docs/DEDICATED_WORDRANGER_SUPABASE_OBJECT_INVENTORY.md`.
 
 | File | Target class |
@@ -149,8 +150,11 @@ traffic tables.
 **C. Hybrid — one reviewed consolidated baseline becomes the
 Dedicated target's active lineage, then chronological future files.**
 
-This task writes the rule only. It does **not** move migration files
-and does **not** create baseline SQL.
+This design pass wrote the rule only. The later local authoring
+task now lives on `migration/dedicated-wordranger-baseline-candidate-v0`
+and is documented in
+`docs/DEDICATED_WORDRANGER_CONSOLIDATED_BASELINE_CANDIDATE_V0.md`.
+Remote Dedicated apply is still **not** authorized.
 
 Not chosen:
 
@@ -159,13 +163,13 @@ Not chosen:
   files as the active history.
 - **B.** Baseline only, with no archival rule for the twelve files.
 
-### Active vs archival files (later authorized task)
+### Active vs archival files
 
 1. Dedicated target **active** migration lineage starts from **one**
    reviewed consolidated baseline in `supabase/migrations/`.
-2. The existing twelve files **must** leave the active
-   `supabase/migrations/` directory and move to an explicit
-   archival/reference location (path chosen in that later task).
+2. The twelve historical files have left the active
+   `supabase/migrations/` directory and now live in
+   `supabase/migrations_archive/pre_dedicated_baseline/`.
 3. Old files and the consolidated baseline **must not** both remain
    in the active migration directory.
 4. Do **not** copy or invent Blaze `schema_migrations` rows. Blaze
@@ -181,8 +185,9 @@ Not chosen:
 6. `cleanup_progress_test_user` is **not** part of the Dedicated
    production baseline. See §4a.
 
-Current repo tests still read the twelve files in place. They stay
-where they are until the later move+baseline authoring task.
+Local authoring created
+`supabase/migrations/202609260001_dedicated_wordranger_baseline_v0.sql`.
+It has **not** been applied to the Dedicated target.
 
 ### Inputs for that later baseline authoring task
 

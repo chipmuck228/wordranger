@@ -138,7 +138,7 @@ export async function cleanupProgressTestUserByTableDeletes(
   if (evidence.error) {
     if (isAppendOnlyError(evidence.error)) {
       errors.push(
-        "delete learning_evidence: table is append-only. Apply supabase/migrations/202609170004_cleanup_progress_test_user.sql so cleanup_progress_test_user can remove the randomized test user.",
+        "delete learning_evidence: table is append-only. Apply supabase/migrations_archive/pre_dedicated_baseline/202609170004_cleanup_progress_test_user.sql so cleanup_progress_test_user can remove the randomized test user.",
       );
     } else {
       errors.push(`delete learning_evidence: ${evidence.error.message}`);

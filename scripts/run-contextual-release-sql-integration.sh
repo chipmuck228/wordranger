@@ -55,9 +55,9 @@ $$;
 SQL
 
 psql "$CONTEXTUAL_RELEASE_SQL_DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f "$ROOT/supabase/migrations/202609220001_contextual_content_releases.sql"
+  -f "$ROOT/supabase/migrations_archive/pre_dedicated_baseline/202609220001_contextual_content_releases.sql"
 psql "$CONTEXTUAL_RELEASE_SQL_DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f "$ROOT/supabase/migrations/202609220002_contextual_content_active_releases.sql"
+  -f "$ROOT/supabase/migrations_archive/pre_dedicated_baseline/202609220002_contextual_content_active_releases.sql"
 psql "$CONTEXTUAL_RELEASE_SQL_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
 alter function publish_contextual_content_release(text, bigint, jsonb, jsonb, bigint, text, bigint, jsonb) owner to service_role;
 alter function rollback_contextual_content_active_release(text, bigint, text, jsonb) owner to service_role;
