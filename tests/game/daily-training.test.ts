@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { PromptMode } from "@/domain/learning/evidence.types";
+import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
+import { WeaknessType } from "@/domain/learning/weakness.types";
+import { emptySchedulerTrace } from "@/domain/scheduler";
+import { LearningTaskType } from "@/domain/tasks/task-type";
 import { GameSessionError } from "@/server/game-session/ranger-trial-errors";
+import * as planLearningSessionModule from "@/server/scheduler/plan-learning-session";
 import {
   DIRECT_PRACTICE_PRESENTATION_TYPE,
   MATCHING_GAME_ID,
@@ -22,6 +28,7 @@ import {
   confusableChoiceTask,
   createDailyTrainingWorld,
   meaningChoiceTask,
+  RANGER_NOW,
   relationChoiceTask,
   spellingTask,
   trainingIntent,
@@ -83,6 +90,62 @@ describe("Daily Training controller", () => {
     expect(started.session.total).toBe(8);
     expect(started.session.current).toBe(1);
     expect((await world.sessions.get("missing"))).toBeNull();
+  });
+
+  it("starts at 1 / 8 when SLOW_RESPONSE avoids MEANING_CHOICE without a related lexeme", async () => {
+    const world = createDailyTrainingWorld("slow-response-first-need");
+    const lexemes = (await world.vocabulary.listLexemes()).filter(
+      (lexeme) => lexeme.meaningsZh[0],
+    );
+    expect(lexemes.length).toBeGreaterThanOrEqual(8);
+    const needs = lexemes.slice(0, 8).map((lexeme, index) => ({
+      id: `need-${index}`,
+      lexemeId: lexeme.id,
+      targetSkill: VocabularySkill.MEANING_RECOGNITION,
+      priority: 1,
+      reason: index === 0 ? ("WEAKNESS" as const) : ("NEW_WORD" as const),
+      preferredPromptModes: [PromptMode.WORD_TO_MEANING],
+      avoidRecentTaskTypes:
+        index === 0 ? [LearningTaskType.MEANING_CHOICE] : [],
+      ...(index === 0
+        ? {
+            weaknessFocus: {
+              weaknessId: "weak-slow",
+              type: WeaknessType.SLOW_RESPONSE,
+            },
+          }
+        : {}),
+    }));
+    const spy = vi
+      .spyOn(planLearningSessionModule, "planLearningSession")
+      .mockResolvedValue({
+        id: "plan-slow-first",
+        userId: world.userId,
+        createdAt: RANGER_NOW,
+        schedulerPolicyVersion: "v1",
+        requestedNeedCount: 8,
+        needs,
+        trace: emptySchedulerTrace(),
+      });
+    try {
+      const started = await world.controller.start();
+      const record = await world.sessions.get(started.session.sessionId);
+      expect(started.session.current).toBe(1);
+      expect(started.session.total).toBe(8);
+      expect(started.task.taskType).toBe(LearningTaskType.MEANING_CHOICE);
+      expect(record?.currentNeedIndex).toBe(0);
+      expect(record?.items[0]?.status).toBe("READY");
+      expect(record?.generationFailures).toEqual([]);
+      expect(record?.needs[0]?.reason).toBe("WEAKNESS");
+      expect(record?.needs[0]?.weaknessFocus?.type).toBe(
+        WeaknessType.SLOW_RESPONSE,
+      );
+      expect(record?.needs[0]?.avoidRecentTaskTypes).toEqual([
+        LearningTaskType.MEANING_CHOICE,
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("D3: first generated task gets a compatible renderer", async () => {

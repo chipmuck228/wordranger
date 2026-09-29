@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PromptMode } from "@/domain/learning/evidence.types";
 import { VocabularySkill } from "@/domain/learning/vocabulary-skill";
+import { WeaknessType } from "@/domain/learning/weakness.types";
 import { DefaultTaskGenerator } from "@/domain/tasks/default-task-generator";
 import { SeededRandomSource } from "@/domain/tasks/random-source";
 import { LearningTaskType } from "@/domain/tasks/task-type";
@@ -509,6 +510,86 @@ describe("Task Generator", () => {
     ).toBe(false);
     expect(result.value.generationTrace.candidateLexemeIds).toContain(
       otherTypeId,
+    );
+  });
+
+  it("does not promote unfocused CONFUSABLE_CHOICE when SLOW_RESPONSE avoids MEANING_CHOICE", async () => {
+    const local = new InMemoryVocabularyRepository(
+      tinyDataset({
+        lexemes: [
+          { id: "t", lemma: "target", meaningsZh: ["目标"] },
+          { id: "d1", lemma: "delta", meaningsZh: ["一"] },
+          { id: "d2", lemma: "echo", meaningsZh: ["二"] },
+          { id: "d3", lemma: "foxtrot", meaningsZh: ["三"] },
+          { id: "d4", lemma: "golf", meaningsZh: ["四"] },
+        ],
+      }),
+    );
+    const localGenerator = new DefaultTaskGenerator(local);
+    const result = await localGenerator.generate({
+      need: makeNeed({
+        lexemeId: "t",
+        targetSkill: VocabularySkill.MEANING_RECOGNITION,
+        reason: "WEAKNESS",
+        weaknessFocus: {
+          weaknessId: "weak-slow",
+          type: WeaknessType.SLOW_RESPONSE,
+        },
+        preferredPromptModes: [PromptMode.WORD_TO_MEANING],
+        avoidRecentTaskTypes: [LearningTaskType.MEANING_CHOICE],
+      }),
+      desiredDifficulty: 0.45,
+      recentTasks: [],
+      now: NOW,
+      createId: sequentialIdFactory("slow"),
+      random: new SeededRandomSource("slow"),
+    });
+    expect(result.status).toBe("GENERATED");
+    if (result.status !== "GENERATED") {
+      return;
+    }
+    expect(result.value.publicTask.taskType).toBe(
+      LearningTaskType.MEANING_CHOICE,
+    );
+  });
+
+  it("does not promote unfocused CONFUSABLE_CHOICE when LONG_TERM_INSTABILITY avoids MEANING_CHOICE", async () => {
+    const local = new InMemoryVocabularyRepository(
+      tinyDataset({
+        lexemes: [
+          { id: "t", lemma: "target", meaningsZh: ["目标"] },
+          { id: "d1", lemma: "delta", meaningsZh: ["一"] },
+          { id: "d2", lemma: "echo", meaningsZh: ["二"] },
+          { id: "d3", lemma: "foxtrot", meaningsZh: ["三"] },
+          { id: "d4", lemma: "golf", meaningsZh: ["四"] },
+        ],
+      }),
+    );
+    const localGenerator = new DefaultTaskGenerator(local);
+    const result = await localGenerator.generate({
+      need: makeNeed({
+        lexemeId: "t",
+        targetSkill: VocabularySkill.MEANING_RECOGNITION,
+        reason: "WEAKNESS",
+        weaknessFocus: {
+          weaknessId: "weak-lti",
+          type: WeaknessType.LONG_TERM_INSTABILITY,
+        },
+        preferredPromptModes: [PromptMode.WORD_TO_MEANING],
+        avoidRecentTaskTypes: [LearningTaskType.MEANING_CHOICE],
+      }),
+      desiredDifficulty: 0.45,
+      recentTasks: [],
+      now: NOW,
+      createId: sequentialIdFactory("lti"),
+      random: new SeededRandomSource("lti"),
+    });
+    expect(result.status).toBe("GENERATED");
+    if (result.status !== "GENERATED") {
+      return;
+    }
+    expect(result.value.publicTask.taskType).toBe(
+      LearningTaskType.MEANING_CHOICE,
     );
   });
 
