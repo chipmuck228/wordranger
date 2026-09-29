@@ -105,6 +105,8 @@ Honest limitation: V1 does **not** fake atomicity. A later `process_evidence` Po
 
 `npm run import:vocabulary -- --validate` and `--dry-run` never write. `--fingerprint` prints the `vocabulary-content-v1` content-bound canonical hash of every imported business column and does not open a database. `--apply` is empty-target seed plus deterministic upsert by `canonical_key` / deterministic UUID. It does not delete stale rows. It requires Supabase env vars and a later authorization. Student `/train` still reads the bundled dataset. Dedicated V0 does not rely on a fresh Supabase project starting with no `service_role` table grants. It first revokes ALL from PUBLIC / anon / authenticated / `service_role` on the four vocabulary tables, then grants only SELECT/INSERT/UPDATE. The importer does not need DELETE. No vocabulary DELETE / TRUNCATE / REFERENCES / TRIGGER in V0. No vocabulary client RLS policies. Tests use `InMemoryVocabularyRepository` and local JSON only.
 
+Dedicated WordRanger received one authorized empty-target seed apply of `supabase/seeds/dedicated_wordranger_vocabulary_v0.sql` via `psql -f`. Remote counts and learner-zero were verified. `REMOTE_CONTENT_FINGERPRINT_NOT_YET_VERIFIED` remains. That apply is not Production runtime acceptance, not a `/train` smoke, and not authorization to merge PR #17. Production remains on `782ffcc` by the last confirmed record. See `docs/DEDICATED_WORDRANGER_VOCABULARY_EMPTY_TARGET_SEED_APPLY_EVIDENCE.md`.
+
 ## Game sessions
 
 `game_sessions` stores **orchestration state only** so student games can survive serverless cold starts. It does **not** replace `learning_tasks`, `learning_evidence`, or `student_lexeme_models`.

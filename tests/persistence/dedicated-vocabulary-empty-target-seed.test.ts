@@ -150,9 +150,11 @@ describe("dedicated empty-target vocabulary seed candidate", () => {
   it("locks the two proof layers and closed remote apply", () => {
     expect(doc).toMatch(/Candidate \/ Not a Standard/);
     expect(doc).toContain(REMOTE_EMPTY_TARGET_SEED_APPLY_NOT_AUTHORIZED);
+    expect(doc).toContain("REMOTE_SEED_APPLIED_AND_COUNTS_VERIFIED");
     expect(doc).toContain("DIRECT_POSTGRES_REMOTE_RUNNER_PATH_RETIRED");
     expect(doc).toContain("EMPTY_TARGET_DASHBOARD_SEED_IS_CURRENT_CANDIDATE");
     expect(doc).toContain("REMOTE_CONTENT_FINGERPRINT_NOT_YET_VERIFIED");
+    expect(doc).toContain("did **not** use the Dashboard SQL Editor");
     expect(doc).toContain(VOCABULARY_CONTENT_FINGERPRINT_VERSION);
     expect(doc).toContain(EXPECTED_VOCABULARY_CONTENT_FINGERPRINT);
     expect(doc).toContain(String(EXPECTED_SOURCE_ENTRY_COUNT));

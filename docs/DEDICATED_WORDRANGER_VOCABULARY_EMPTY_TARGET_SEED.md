@@ -1,16 +1,23 @@
 # Dedicated WordRanger Empty-Target Vocabulary Seed
 
-Candidate / Not a Standard. **Authored and locally validated only.**
-This document does not authorize a Dashboard apply, a third
-PostgREST `--apply`, a remote direct-Postgres runner, a Production
-switch, or a learner-data migration.
+Candidate / Not a Standard. **Authored locally, then applied once
+on Dedicated by a later authorized `psql -f`.**
+This document does not authorize a second seed, a Production
+switch, `/train`, or merge.
 
 Status:
 
 `REMOTE_EMPTY_TARGET_SEED_APPLY_NOT_AUTHORIZED`;
+`REMOTE_SEED_APPLIED_AND_COUNTS_VERIFIED`;
+`REMOTE_CONTENT_FINGERPRINT_NOT_YET_VERIFIED`;
 `NO_LEARNER_DATA_MIGRATION_REQUIRED`;
 `PR_17_REMAINS_DO_NOT_MERGE`;
 `PRODUCTION_REMAINS_ON_782FFCC`
+
+The committed SQL still contains the authored comment
+`REMOTE_EMPTY_TARGET_SEED_APPLY_NOT_AUTHORIZED`. That is
+generator capture-time identity. The later apply is recorded in
+`docs/DEDICATED_WORDRANGER_VOCABULARY_EMPTY_TARGET_SEED_APPLY_EVIDENCE.md`.
 
 - Date: **2026-09-28**
 - `origin/main` / merge-base:
@@ -158,7 +165,12 @@ Dashboard apply.
 
 ## 5. Future Dashboard apply runbook
 
-All boxes stay unchecked. This task must not execute them.
+The authorized apply did **not** use the Dashboard SQL Editor.
+It used one `psql -f` of the exact committed file. See the apply
+evidence document. These Dashboard boxes stay unchecked so they
+are not rewritten as if that UI path ran.
+
+All boxes stay unchecked. Do not execute them again.
 
 ### Pre-apply
 
