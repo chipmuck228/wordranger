@@ -36,6 +36,14 @@ Needs in this phase are constructed by tests and the Debug Lab. There is no Sche
 - `RELATION_CHOICE` — `SEMANTIC_CONNECTION`, production-approved relations
 - `CONFUSABLE_CHOICE` — meaning choice that prefers an approved confusable distractor
 
+`MEANING_CHOICE` focused weaknesses are `MEANING`, `CONFUSION`,
+`HINT_DEPENDENCY`, `SLOW_RESPONSE`, and `LONG_TERM_INSTABILITY`.
+`CONFUSABLE_CHOICE` is only a focused `CONFUSION` archetype and
+still requires a production-approved confusable relation. Avoiding
+a recent `MEANING_CHOICE` must not select an unfocused
+`CONFUSABLE_CHOICE`. Daily Training may skip one planned need when
+generation returns `UNAVAILABLE` and continue to the next need.
+
 Multiple-choice cannot prove `ACTIVE_RECALL`. Listening and context archetypes are not registered because the dataset has no approved audio or sentences.
 
 ## GeneratedLearningTask

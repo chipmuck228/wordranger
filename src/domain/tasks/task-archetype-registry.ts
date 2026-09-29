@@ -24,6 +24,8 @@ export const TASK_ARCHETYPES: readonly TaskArchetype[] = [
       WeaknessType.MEANING,
       WeaknessType.CONFUSION,
       WeaknessType.HINT_DEPENDENCY,
+      WeaknessType.SLOW_RESPONSE,
+      WeaknessType.LONG_TERM_INSTABILITY,
     ],
     requiredContent: ["MEANING_ZH"],
   },
